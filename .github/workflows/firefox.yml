@@ -1,0 +1,49 @@
+# Signs the Firefox add-on with Mozilla whenever the firefox folder changes, publishes the signed file as a release,
+# and lists it in updates.json so Firefox updates itself. Needs two repository secrets: AMO_JWT_ISSUER and AMO_JWT_SECRET.
+name: Sign Firefox add-on
+on:
+  push:
+    branches: [main]
+    paths: ['firefox/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: sign-firefox
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Read the version
+        id: v
+        run: echo "version=$(node -p "require('./firefox/manifest.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Skip a version that's already signed
+        id: chk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.v.outputs.version }}" >/dev/null 2>&1; then echo "skip=1" >> "$GITHUB_OUTPUT"; fi
+      - name: Sign with Mozilla (unlisted, waits up to 15 minutes for approval)
+        if: steps.chk.outputs.skip != '1'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: npx --yes web-ext@8.3.0 sign --source-dir firefox --artifacts-dir dist --channel unlisted --approval-timeout 900000
+      - name: Publish the signed file and tell Firefox about it
+        if: steps.chk.outputs.skip != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          F=$(ls dist/*.xpi | head -1)
+          cp "$F" "fantasy-copilot-$V.xpi"
+          gh release create "v$V" "fantasy-copilot-$V.xpi" --title "Firefox $V" --notes "Signed by Mozilla. Firefox installs this by itself; to install it by hand, download the .xpi and drag it onto Firefox."
+          node scripts/updates.js "$V"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates.json
+          git commit -m "Firefox $V signed"
+          git push

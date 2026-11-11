@@ -1,0 +1,340 @@
+// Page-aware cards: reads what you're doing on Yahoo (trade, add/drop, player lists) and answers it from live BBM projections.
+(function (root) {
+  const H = root.H2H; const E = root.SEASON;
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const nk = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[.'’`]/g, '').replace(/\b(jr|sr|ii|iii|iv)\b/gi, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const TEAMC = { NOR: 'NOP', NO: 'NOP', PHO: 'PHX', GS: 'GSW', SA: 'SAS', NY: 'NYK', UTAH: 'UTA', WSH: 'WAS', BRK: 'BKN', CHO: 'CHA' };
+  const tc = t => { t = String(t || '').toUpperCase(); return TEAMC[t] || t; };
+  const sur = n => { const w = String(n).split(' ').filter(x => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(x)); return w[w.length - 1] || n; };
+  // values are shown in the league's own currency: extra categories won a week (categories leagues) or win-chance points
+  let UNIT = null; const WWC = () => UNIT ? 'categories won a week' : 'weekly win chance';
+  const pts = v => { if (UNIT) { const r = Math.round(v * UNIT * 100) / 100; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(2); } const r = Math.round(v * 1000) / 10; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(Math.abs(r) >= 10 ? 0 : 1); };
+  const gw = n => n == null ? '' : n === 1 ? '1 game this week' : n + ' games this week';
+  // how much something helps, in words (the number sits in the detail): per-week changes, or totals over the season
+  const GW = (v, season) => { const c = season ? v : UNIT ? v * UNIT : v * 10; const a = Math.abs(c); const T = season ? [0.5, 2, 5] : [0.05, 0.2, 0.5]; const k = a < T[0] ? 0 : a < T[1] ? 1 : a < T[2] ? 2 : 3;
+    if (!k) return ['n', 'About even']; return c > 0 ? ['g', ['', 'Helps you a little', 'Helps you clearly', 'Helps you a lot'][k]] : ['r', ['', 'Costs you a little', 'Costs you clearly', 'Costs you a lot'][k]]; };
+  const GC = (v, season) => { const g = GW(v, season); return `<span class="fk ${g[0]}">${g[1]}</span>`; };
+  const tn = c => ((root.STRAT && root.STRAT.TEAMN) || {})[String(c || '').trim().toUpperCase()] || c || '';
+  const pctTo = c => `${Math.round(c.from * 100)}% → ${Math.round(c.to * 100)}%`;
+  const CHEV = '<svg class="ico caret" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
+  const ago = ts => { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min old' : Math.round(m / 60) + ' h old'; };
+  // a league's categories: the ones Matchup Monster shows for it, else the value columns Basketball Monster keeps for it
+  const CATORDER = ['p', '3', 'r', 'a', 's', 'b', 'fg%', 'ft%', '2d', 'fg', 'ft', 'to'];
+  const addDay = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00Z') - new Date(a + 'T12:00:00Z')) / 864e5);
+
+  // ---- the data model for one league: players (all views), name lookup, teams, free agents ----
+  function model(ST, lid, o) {
+    const bx = ST['bx:' + lid]; if (!bx || !bx.views || !(bx.views.ros || bx.views.rest)) return null;
+    const V = bx.views; const P = {}; const byName = {};
+    new Set(Object.keys(V.rest || {}).concat(Object.keys(V.ros || {}))).forEach(id => { const b = (V.rest || {})[id] || {}, r = (V.ros || {})[id] || {};
+      // rest of season: BBM's totals file (games left to your league's final week) with the value from the Remaining Season view
+      const tot = bx.tot && bx.tot[id]; const rv = (V.ros && V.ros[id]) || (V.rest && V.rest[id]);
+      const ros = tot ? { g: tot.g, m: tot.m || (rv ? rv.m : null), lv: rv ? rv.lv : 0, st: tot.st, cv: rv ? rv.cv : null } : (V.ros && V.ros[id]);
+      const p = { id, n: b.n || r.n, t: tc(b.t || r.t), pos: b.pos || r.pos, inj: b.inj || r.inj, notes: (b.notes || []).concat(r.notes || []), rank: r.rank || b.rank, rest: V.rest && V.rest[id], next: V.next && V.next[id], ros, po: V.po && V.po[id], form: V.form && V.form[id], season: V.season && V.season[id] };
+      if (!p.n) return; P[id] = p; (byName[nk(p.n)] = byName[nk(p.n)] || []).push(id); });
+    // name match, then known nicknames, then surname + team (Cameron/Cam Johnson, Nicolas/Nic Claxton…)
+    const ALIAS = { 'cameron johnson': 'cam johnson', 'nicolas claxton': 'nic claxton', 'herbert jones': 'herb jones', 'alexandre sarr': 'alex sarr', 'kenyon martin': 'kj martin', 'moe wagner': 'moritz wagner' };
+    const last = n => { const w = nk(n).split(' '); return w[w.length - 1]; };
+    const find = (n, t) => { let c = byName[nk(n)] || byName[ALIAS[nk(n)] || ''] || Object.entries(ALIAS).filter(([a, b]) => b === nk(n)).map(([a]) => byName[a]).find(Boolean) || [];
+      if (!c.length && t) c = Object.keys(P).filter(id => P[id].t === tc(t) && last(P[id].n) === last(n));
+      if (c.length <= 1) return c[0] || null; return c.find(id => P[id].t === tc(t)) || c[0]; };
+    const yidmap = Object.assign({}, ST.yidmap || {});
+    const ofYid = (yid, info) => { if (yidmap[yid] && P[yidmap[yid]]) return yidmap[yid]; const id = info ? find(info.n, info.t) : null; if (id) yidmap[yid] = id; return id; };
+    const y = o.yr; const lg = ST['lgscan:' + lid];
+    const teams = (lg && lg.teams || []).map(t => ({ tid: String(t.tid), name: t.name, ids: t.players.map(n => find(n)).filter(Boolean) })).filter(t => t.ids.length >= 5);
+    if (y && y.rows && y.rows.length) { const mine = y.rows.map(r => find(r.name, r.team)).filter(Boolean); const t = teams.find(t => t.tid === String(y.tid)); if (t) t.ids = mine; else teams.push({ tid: String(y.tid), name: y.teamName, ids: mine }); }
+    const taken = new Set(); teams.forEach(t => t.ids.forEach(id => taken.add(id)));
+    const fas = Object.keys(P).filter(id => !taken.has(id) && P[id].ros && P[id].ros.g > 0 && !/out for season/i.test(P[id].inj || ''));
+    const today = o.today; const wkEnd = (y && y.weekEnd) || o.weekEnd || addDay(today, 6 - ((new Date(today + 'T12:00:00Z').getUTCDay() + 6) % 7));
+    const seasonEnd = (o.rules && o.rules.playoffs && o.rules.playoffs.end) || addDay(today, 150);
+    const cvKeys = (() => { const v = V.ros || V.rest || {}; const k = new Set(); Object.values(v).slice(0, 50).forEach(r => Object.keys((r && r.cv) || {}).forEach(c => { if (r.cv[c] != null) k.add(c); })); return CATORDER.filter(c => k.has(c)); })();
+    const cats = (o.cats && o.cats.length ? o.cats : cvKeys.length >= 5 ? cvKeys : ['p', '3', 'r', 'a', 's', 'b', 'fg%', 'ft%', 'to']);
+    const slots = y && y.rows ? Math.max(8, y.rows.filter(r => r.slot !== 'BN' && !/^IL/.test(r.slot)).length) : 10;
+    // playoffs: all three playoff weeks on the real NBA schedule (BBM's own view covers only the first)
+    const PO = o.rules && o.rules.playoffs; const SCH = (ST.nbasched && ST.nbasched.by) || (globalThis.NBA_SCHED && globalThis.NBA_SCHED.by); let poDays = 7, has3 = false;
+    if (PO && SCH) { const key = t => t === 'NOP' ? 'NOR' : t === 'PHX' ? 'PHO' : t; poDays = daysBetween(PO.start, PO.end) + 1;
+      Object.values(P).forEach(p => { const L0 = SCH[key(p.t)] || SCH[p.t]; if (!L0 || !p.ros) return; const g = L0.filter(d => d >= PO.start && d <= PO.end).length; p.po = { g, lv: p.ros.lv, st: p.ros.st }; has3 = true; }); }
+    UNIT = o.obj === 'cats' ? cats.length : null;
+    const ctx = { obj: o.obj === 'cats' ? 'cats' : 'win', P, cats, slots, days: { rest: Math.max(1, daysBetween(today, wkEnd) + 1), next: 7, ros: Math.max(7, daysBetween(today, seasonEnd) + 1), po: has3 ? poDays : 7 }, ddRate: bx.dd || {}, has: { rest: !!V.rest, ros: !!V.ros, po: has3 || !!V.po, next: !!V.next } };
+    // rest of season: the opponents actually left on your schedule
+    const sched = y && y.weeks ? y.weeks.filter(w => w.start > wkEnd && (!PO || w.start < PO.start) && w.oppTid).map(w => String(w.oppTid)) : [];
+    // without the API: the opponents left on your schedule come from Yahoo's league page (read once and kept)
+    if (!sched.length && y) schedOf(ST, lid, y).forEach(r => sched.push(r.opp));
+    const L = { me: y ? String(y.tid) : null, teams, oppNow: y && y.oppTid ? String(y.oppTid) : null, fas, sched: sched.filter(t => teams.some(x => x.tid === t)) };
+    // how much playoffs count: their share of the weeks left
+    const stand = ST['ystand:' + lid], sp = ST['ysetp:' + lid] || {}; const ys = { numPlayoffTeams: sp.poTeams || null, playoffStartWeek: (sp.poWeeks || [])[0] || null }; let standing = null;
+    if (stand && stand.teams && y) { const me = stand.teams.find(t => String(t.tid) === String(y.tid)); const nPO = (ys && ys.numPlayoffTeams) || Math.round(stand.teams.length / 2); const poWeek = (ys && ys.playoffStartWeek) || 18;
+      const phase = Math.max(0, Math.min(1, ((stand.week || 1) - 1) / Math.max(1, poWeek - 1))); const rank = me ? me.rank : null;
+      const secure = rank && phase > 0.3 && rank <= nPO - 2, bubble = rank && phase > 0.3 && Math.abs(rank - nPO) <= 1;
+      // playoff weeks count by their share of the weeks left (3 playoff weeks against the regular-season weeks still to play)
+      const regLeft = Math.max(0, poWeek - (stand.week || 1)); const wpo = 3 / (regLeft + 3);
+      standing = { rank, of: stand.teams.length, nPO, phase, wpo, secure, bubble, rec: me ? me.w + '-' + me.l + (me.t ? '-' + me.t : '') : '' }; ctx.wpo = wpo; }
+    else ctx.wpo = 0.2;
+    // your punt, set in the co-pilot's Settings (Basketball Monster's own punt settings are only offered as a one-off copy)
+    ctx.punt = Array.isArray(o.punt) && o.punt.filter(c => cats.includes(c)).length ? o.punt.filter(c => cats.includes(c)) : null;
+    ctx.puntBbm = bx.punt && !bx.punt.unsure && bx.punt.cats ? bx.punt.cats.filter(c => cats.includes(c)) : null;
+    // self-correction: how sure the model should be, learned from past weeks' forecasts against Yahoo's final results
+    const cal = calibrate(ST, lid); ctx.sdMul = cal.mul;
+    // other managers: who'd grab a player you drop, and who Yahoo is grabbing right now
+    const fasW = fas.map(id => (P[id].ros ? (P[id].ros.lv || 0) * (P[id].ros.g || 0) : -99)).sort((a, b) => b - a); const snapBar = fasW[2] != null ? fasW[2] : -99;
+    const snapRisk = id => { const p = P[id]; return !!(p && p.ros && (p.ros.lv || 0) * (p.ros.g || 0) > snapBar && snapBar > -99); };
+    const TR = (ST['ytrend:' + lid] || {}).players || {}; const trByName = {}; Object.entries(TR).forEach(([n, v]) => trByName[nk(n)] = v); const trend = n => trByName[nk(n)] || null;
+    // one of the 10 most-added free agents on Yahoo today (net adds across all Yahoo leagues), or the API's ownership jump
+    const hot = n => { const t = trend(n); if (!t) return ''; if (t.hot) return 'most added on Yahoo today (+' + t.net.toLocaleString('en-US') + ')'; if (t.delta >= 5) return 'rising: +' + Math.round(t.delta) + '% rostered on Yahoo'; return ''; };
+    const com = (n, t) => (bx.com || {})[nk(n) + '|' + tc(t)] || (bx.com || {})[nk(n) + '|' + String(t || '').toUpperCase()] || Object.entries(bx.com || {}).find(([k]) => k.split('|')[0] === nk(n)) && Object.entries(bx.com || {}).find(([k]) => k.split('|')[0] === nk(n))[1] || null;
+    // Yahoo's ranking for every rostered player (from the team pages), for judging what other managers will accept
+    const yrk = {}; ((lg && lg.teams) || []).forEach(t => Object.entries(t.ranks || {}).forEach(([n, r]) => { const id = find(n); if (id) yrk[id] = r; }));
+    // Yahoo player ids: from the league's team pages, then anything seen on Yahoo pages (players you've looked at, trends)
+    const yidOf = {}; ((lg && lg.teams) || []).forEach(t => Object.entries(t.yids || {}).forEach(([n, y]) => { const id = find(n); if (id) yidOf[id] = y; }));
+    Object.entries(yidmap).forEach(([y, id]) => { if (!yidOf[id]) yidOf[id] = y; }); Object.entries((ST['ytrend:' + lid] || {}).players || {}).forEach(([n, v]) => { const id = v.yid && find(n); if (id && !yidOf[id]) yidOf[id] = v.yid; });
+    return { yid: id => yidOf[id] || null, yrank: id => yrk[id] || null, prof: profiles(ST, lid, cats), bx, P, ctx, L, standing, cal, snapRisk, trend, hot, find, ofYid, yidmap, com, teamName: tid => (teams.find(t => t.tid === String(tid)) || {}).name || ('team ' + tid) };
+  }
+  // ---- the league so far, from Yahoo's final matchup results (raw results only: they don't feed the recommendations) ----
+  const curWeek = (ST, lid, y) => (ST['ylive:' + lid] || {}).week || (y && y.src !== 'page' ? y.week : null) || null;
+  // your remaining regular-season opponents, week by week
+  function schedOf(ST, lid, y, all) { const S = ST['ysched:' + lid]; const w0 = curWeek(ST, lid, y); if (!S || !S.weeks || !w0 || !y) return []; const me = String(y.tid);
+    const ws = [...new Set(Object.keys(S.weeks).concat(Object.keys(S.mine || {})))].map(Number);
+    return ws.filter(w => all ? w >= w0 : w > w0).sort((a, b) => a - b).map(w => { const pr = (S.weeks[w] || []).find(p => p.map(String).includes(me)); if (pr) return { week: w, opp: String(pr[0]) === me ? String(pr[1]) : String(pr[0]) };
+      return S.mine && S.mine[w] ? { week: w, opp: String(S.mine[w]) } : null; }).filter(Boolean); }
+  const VAL = (st, c) => c === 'fg%' ? (st.fga ? st.fg / st.fga : st['fg%']) : c === 'ft%' ? (st.fta ? st.ft / st.fta : st['ft%']) : st[c];
+  // every team: categories won, lost and tied in each category across the finished weeks
+  function profiles(ST, lid, cats) {
+    const wk = Object.keys(ST).filter(k => k.startsWith('lgweek:' + lid + ':') && ST[k] && ST[k].teams).map(k => ST[k]).sort((a, b) => a.week - b.week); if (!wk.length) return null; const T = {};
+    wk.forEach(W => Object.entries(W.teams).forEach(([tid, x]) => { const o = W.teams[x.opp]; if (!o || !x.st || !o.st) return;
+      const t = T[tid] = T[tid] || { tid, name: x.name, weeks: 0, w: 0, l: 0, t: 0, cat: {} }; t.weeks++; t.name = x.name || t.name;
+      cats.forEach(c => { const a = VAL(x.st, c), b = VAL(o.st, c); if (a == null || b == null || isNaN(a) || isNaN(b)) return; const k = t.cat[c] = t.cat[c] || { w: 0, l: 0, t: 0, n: 0, sum: 0 }; k.n++; k.sum += a;
+        if (a === b) { k.t++; t.t++; } else if (c === 'to' ? a < b : a > b) { k.w++; t.w++; } else { k.l++; t.l++; } }); }));
+    return { weeks: wk.map(w => w.week), teams: T };
+  }
+  // freshness line + what needs fetching before a verdict can be trusted
+  function freshness(bx, need) { const ts = bx && bx.ts || {}; const ages = need.map(k => ts[k] ? Date.now() - ts[k] : Infinity); const worst = Math.max(...ages); return { worst, line: isFinite(worst) ? "BBM data " + ago(Date.now() - worst) : "BBM data not loaded" }; }
+
+  const catChips = (cats, cls) => { const ch = cats.filter(c => Math.abs(c.d) >= 0.01).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 7); if (!ch.length) return '<span class="sub">no category moves 1 point or more</span>';
+    return ch.map(c => `<span class="mt plain" title="Chance to win ${esc(c.c)} in a typical week"><b>${esc(c.c)}</b> ${pctTo(c)}</span>`).join(''); };
+  const cls = v => v > 0.6 ? 'cs-a' : v >= 0.45 ? 'cs-c' : 'cs-b';
+  const joshLine = (M, id) => { const p = M.P[id]; if (!p) return ''; const c = M.com(p.n, p.t); const note = (p.notes || []).slice().sort((a, b) => (a.age || 1e9) - (b.age || 1e9))[0];
+    const t = note ? note.text : c ? c.text : ''; if (!t) return ''; return `<div class="nt" title="${esc(t)}"><b>Josh on ${esc(sur(p.n))}:</b> “${esc(t.length > 140 ? t.slice(0, 137) + '…' : t)}”</div>`; };
+  const gThis = (M, id) => M.P[id] && M.P[id].rest ? M.P[id].rest.g : null; const g = (M, id) => M.P[id] && M.P[id].rest ? M.P[id].rest.g : null;
+
+  // ---- one trade, laid out the same everywhere (the deal list, Build, and Yahoo's trade and offer pages) ----
+  // o.tm: Basketball Monster's Trade Monster results ({ by: { yourPlayer: [rows] } }); o.offer: an offer you received
+  function dealView(M, d, o) { o = o || {}; const T = root.TRADE; const ctx = M.ctx;
+    const yr = id => (M.yrank && M.yrank(id)) || null; const bv = id => T && T.leagueValPG ? T.leagueValPG(ctx, id) : null; const gl = id => ((M.P[id] || {}).ros || {}).g;
+    const who = id => { const p = M.P[id] || {}; const r = yr(id); return `<span class="tdp"><b>${esc(p.n || id)}</b><small>${[r ? 'Yahoo rank ' + r : '', gl(id) != null ? gl(id) + ' games left' : ''].filter(Boolean).join(' · ')}</small></span>`; };
+    const nm = id => esc((M.P[id] || {}).n || id);
+    const cs = v => { const r = Math.round(v * 10) / 10; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(1); };
+    const cw = v => { const r = Math.round(v * 100) / 100; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(2); };
+
+    const pills = d.cats.filter(c => Math.abs(c.d) >= 0.01).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 8).map(c => `<span class="mt plain" title="Share of weeks you win ${esc(c.label)}: now, then after the trade"><b>${esc(c.label)}</b> ${pctTo(c)}</span>`).join('') || '<span class="sub">no category changes by 1 point or more</span>';
+    const tc = (d.theirCats || []).filter(c => Math.abs(c.d) >= 0.03).sort((a, b) => b.d - a.d); const up = tc.filter(c => c.d > 0).slice(0, 3).map(c => c.label), dn = tc.filter(c => c.d < 0).slice(-3).reverse().map(c => c.label);
+    // Basketball Monster's own view of a 1-for-1 (Trade Monster), when it has looked at that swap
+    let tmL = ''; if (o.tm && o.tm.by && d.give.length === 1 && d.get.length === 1) { const row = (o.tm.by[d.give[0]] || []).find(x => x.id === d.get[0]);
+      if (row) tmL = `<div class="sub">Basketball Monster's Trade Monster: your win rate ${row.t1 >= 0 ? '+' : ''}${row.t1}%, theirs ${row.t2 >= 0 ? '+' : ''}${row.t2}% · trade value ${row.give} given for ${row.get}.</div>`; }
+    // the season so far next to the projection, for the players in the deal who have played enough to say anything
+    const SL = { m: 'minutes', p: 'points', 3: '3-pointers', r: 'rebounds', a: 'assists', s: 'steals', b: 'blocks' }; const f1 = v => (Math.round(v * 10) / 10).toFixed(1);
+    const trend = id => { const p = M.P[id]; const x = p && p.ros, z = p && p.season; if (!x || !z || !(z.g >= 3) || !x.st || !z.st) return '';
+      const ks = ['p', '3', 'r', 'a', 's', 'b'].filter(k => x.st[k] != null && z.st[k] != null).map(k => ({ k, d: Math.abs(z.st[k] - x.st[k]) / Math.max(0.5, x.st[k]) })).sort((a, b) => b.d - a.d).slice(0, 3).map(o => o.k);
+      const bits = (x.m && z.m ? [`${f1(z.m)} minutes (${f1(x.m)})`] : []).concat(ks.map(k => `${SL[k]} ${f1(z.st[k])} (${f1(x.st[k])})`));
+      return `<div class="sub"><b>${esc(p.n)}</b>, ${z.g} games: ${bits.join(' · ')}</div>`; };
+    const trendH = d.get.concat(d.give).map(trend).join('');
+    const timeH = '';
+    const body = `${timeH}${trendH ? `<div class="label lbl2">This season so far (projection in brackets)</div>${trendH}` : ''}<div class="label lbl2">Your categories, rest of season</div><div class="mts">${pills}</div>
+        <div class="sub"><b>${cs(d.mine.season)}</b> categories over the rest of the season: ${cw(d.mine.ros)} categories a week for the rest of the regular season${d.mine.po != null ? ` · ${cw(d.mine.po)} a week in the playoff weeks` : ''}.${d.cut.length ? ` You'd drop ${d.cut.map(nm).join(', ')} to make room.` : ''}${d.fill.length ? ` Frees ${d.fill.length > 1 ? d.fill.length + ' spots' : 'a spot'}: pick up ${d.fill.map(nm).join(', ')}.` : ''}</div>
+        ${o.offer ? '' : `<div class="label lbl2">Their side</div><div class="sub">${d.theirs.season >= 0.5 ? `Helps them too (${cs(d.theirs.season)} categories this season)` : d.theirs.season > -0.5 ? 'About even for their categories' : `Costs them (${cs(d.theirs.season)} categories this season)`}${up.length ? `, stronger in ${esc(up.join(', '))}` : ''}${dn.length ? `, weaker in ${esc(dn.join(', '))}` : ''}.${d.theirCut.length ? ` They'd drop ${d.theirCut.map(nm).join(', ')}.` : ''}</div>
+        ${tmL}`}`;
+    return `<div class="tdl"><div class="tdl-t"><div class="tdl-sides"><div class="tds"><span class="lab plus">Get</span><span>${d.get.map(who).join('')}</span></div><div class="tds"><span class="lab minus">Give</span><span>${d.give.map(who).join('')}</span></div><div class="sub">${esc(M.teamName(d.tid))} · ${d.give.length}-for-${d.get.length}</div>${(() => { const N = o.needs; if (!N || !N.need.length || o.offer) return ''; const f = [...new Set(d.give.flatMap(id => N.helpOf(id).cats))]; return f.length ? `<div class="sub plus">Covers their need for ${esc(f.map(c => H.LBL[c]).join(', '))}</div>` : ''; })()}</div>
+        <div class="tdl-n">${GC(d.mine.season, true)}<span>rest of season</span>${(() => { const f = M.finish && M.finish(d); return f ? `<span class="fin ${f.to < f.from ? 'plus' : f.to > f.from ? 'minus' : ''}" title="Projected finish in Basketball Monster's standings">${ordinal(f.from)} → ${ordinal(f.to)}</span>` : ''; })()}${d.timing ? `<span class="chip ${d.timing === 'now' ? 'safe' : 'toss-up'}" title="${d.timing === 'now' ? 'The season so far and Basketball Monster\'s projection both back it' : 'The season so far backs it; Basketball Monster\'s projection doesn\'t yet'}">${d.timing === 'now' ? 'Act now' : 'Watch'}</span>` : ''}${!o.offer && d.theirs && d.theirs.season >= 0.5 ? `<span class="chip safe">Helps both teams</span>` : ''}</div></div>
+      ${o.open ? body : `<details class="tdd"><summary>Why</summary>${body}</details>`}${o.link || ''}</div>`; }
+
+  // ---- trade card: the deal on Yahoo's screen, whether you're building it or it was offered to you ----
+  function tradeCard(M, yp) {
+    const ofY = y => M.ofYid(y, (yp.players || {})[y]); const me = M.L.teams.find(t => t.tid === M.L.me);
+    const ownerOf = id => { const t = M.L.teams.find(t => t.ids.includes(id)); return t ? t.tid : null; };
+    // rosters straight from the trade page when it lists them (freshest), only when they clearly are the right team's
+    const overlap = (ids, t) => t && ids.filter(id => t.ids.includes(id)).length >= Math.min(ids.length, t.ids.length) / 2;
+    if (yp.myRoster && yp.myRoster.length && me) { const ids = yp.myRoster.map(ofY).filter(Boolean); if (ids.length >= 8 && overlap(ids, me)) me.ids = ids; }
+    // the other team's id on the page being your own means you're looking at it from the receiving end: an offer to you
+    let them = String(yp.mid2 || ''); const toMe = !!them && them === String(M.L.me); if (toMe) them = '';
+    if (yp.theirRoster && yp.theirRoster.length && them) { const ids = yp.theirRoster.map(ofY).filter(Boolean); const t = M.L.teams.find(t => t.tid === them); if (t && ids.length >= 8 && overlap(ids, t)) t.ids = ids; }
+    // which side each player is on comes from whose roster he's on (an offer you received lists the other manager's side first)
+    const giveY = yp.give || [], getY = yp.get || []; let listed = giveY.map(y => [y, 'give']).concat(getY.map(y => [y, 'get']));
+    const offer = (!!yp.offer && !listed.length) || toMe;
+    if (offer && !listed.length) listed = Object.keys(yp.players || {}).map(y => [y, null]);
+    const miss = [], give = [], get = [];
+    listed.forEach(([y, side]) => { const id = ofY(y); if (!id) { if (side) miss.push((yp.players[y] || {}).n || y); return; } const own = ownerOf(id);
+      if (own === M.L.me || (!own && side === 'give')) { if (!give.includes(id)) give.push(id); } else if (own || side === 'get') { if (!get.includes(id)) get.push(id); } });
+    const owners = [...new Set(get.map(ownerOf).filter(Boolean))]; if (owners.length === 1) them = owners[0];
+    const name = them ? M.teamName(them) : 'another team';
+    const S = root.TRADE && them ? root.TRADE.setup(M.ctx, M.L, M) : null; const N = them && M.needs ? M.needs(them) : null;
+    const L = cs => cs.map(c => (root.STRAT ? root.STRAT.name(c) : H.LBL[c])); const and = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '';
+    const sn = id => esc(sur((M.P[id] || {}).n || id));
+    let h = `<div class="h"><span>${offer ? 'Offer from ' : 'Trade with '}${esc(name)}</span><span class="sub" id="ctxAge"></span></div>`;
+    // first thing to read: what this team needs (and what it's strong in or has given up on)
+    if (N && N.need.length) { h += `<div class="hl">${esc(name)}'s swing categories: <b>${esc(and(L(N.need)))}</b></div>`;
+      const bits = []; if (N.strong.length) bits.push('already winning ' + and(L(N.strong))); if (N.punt.length) bits.push('losing ' + and(L(N.punt)));
+      if (bits.length) h += `<div class="sub hls">${esc(bits.join(' · ').replace(/^./, c => c.toUpperCase()))} (Basketball Monster's team values, your band cut-offs)</div>`; }
+    if (offer && (owners.length > 1 || give.length > 3 || get.length > 3 || !give.length || !get.length)) return h + `<div class="sub">Open a single trade offer to see the verdict on it.</div>`;
+    if (!give.length || !get.length) {
+      if (N && N.helpers.length) h += `<div class="hlp"><span class="label">Your players who help there</span>${N.helpers.map(x => `<span class="hlpr"><b>${sn(x.id)}</b> <span class="muted">${esc(L(x.cats).join(', '))}</span></span>`).join('')}</div>`;
+      return h + `<div class="sub" style="margin-top:6px">Tick players on both sides for the verdict.</div>` + (miss.length ? `<div class="sub minus">Not found in Basketball Monster: ${esc(miss.join(', '))}</div>` : ''); }
+    if (owners.length > 1) return h + `<div class="sub">The players you've ticked are on more than one team.</div>`;
+    const d = S && root.TRADE.evalDeal(S, them, give, get);
+    if (!d) return h + `<div class="sub">Couldn't find ${esc(name)}'s roster yet. It arrives with the next sync.</div>`;
+    // the verdict, in one line, with the same bar the deal list uses (+4 categories over the season, +5 in an 11-category league)
+    const gv = GW(d.mine.season, true); h += `<div class="vd ${{ g: 'good', n: '', r: 'bad' }[gv[0]]}">${gv[1]} over the rest of the season</div>`;
+    // does what you send fill their needs?
+    if (N && N.need.length && !offer) { const fill = [...new Set(give.flatMap(id => N.helpOf(id).cats))];
+      h += `<div class="sub hls">${fill.length ? `What you send is strong in <b>${esc(and(L(fill)))}</b>, ${fill.length > 1 ? 'all swing categories' : 'a swing category'} for them.` : `What you send isn't strong in any of their swing categories.`}</div>`; }
+    h += dealView(M, d, { offer, tm: M.tm, needs: N });
+    if (miss.length) h += `<div class="sub minus">Not found in Basketball Monster, left out: ${esc(miss.join(', '))}</div>`;
+    { const extra = (M.ctx.punt ? `<div class="sub">Ignoring ${M.ctx.punt.map(c => H.LBL[c]).join(', ')} (your punt).</div>` : '') + (M.standing && d.mine.po != null ? `<div class="sub">Playoff weeks count for ${Math.round(S.wpo * 100)}% of the season total: their share of the weeks left.</div>` : '') + get.map(id => joshLine(M, id)).join('');
+      if (extra) h += `<details class="more"><summary>Analyst notes and assumptions</summary>${extra}</details>`; }
+    return h;
+  }
+  // ---- add/drop card ----
+  function addCard(M, yp) {
+    const add = M.ofYid(yp.apid, yp.players[yp.apid]); const an = (yp.players[yp.apid] || {}).n || 'this player';
+    let h = `<div class="h"><span>Pickup</span><span class="sub" id="ctxAge"></span></div>`;
+    if (!add) return h + `<div class="sub">${esc(an)} isn't in BBM's projections, so no verdict.</div>`;
+    const choices = (yp.dropChoices && yp.dropChoices.length ? yp.dropChoices : []).map(y => M.ofYid(y, yp.players[y])).filter(Boolean);
+    const r = H.pickup(M.ctx, M.L, add, choices.length ? choices : null); if (r.err) return h + `<div class="sub">${esc(r.err)}</div>`;
+    const p = M.P[add]; const nm = id => esc(sur(M.P[id].n));
+    const tr0 = M.trend(p.n); h += `<div class="pname plus">+ ${esc(p.n)}</div><div class="when">${esc(tn(p.t))} · ${gw(g(M, add))}${M.hot(p.n) ? ` · <span class="plus">${esc(M.hot(p.n))}</span>` : ''}</div><div style="height:10px"></div>`;
+    const top = r.drops.slice(0, 2); const b0 = top[0];
+    if (b0) { const gR = GW(b0.ros)[0], gW = GW(b0.week)[0]; const v = b0.score < 0 ? ['bad', 'Not worth an add right now'] : gR === 'g' && gW !== 'r' ? ['good', 'Worth adding'] : gR === 'g' ? ['good', 'Worth it long term, costs a little this week'] : gW === 'g' ? ['warn', 'Helps this week only'] : ['', 'Barely changes your team: probably not worth an add'];
+      h += `<div class="vd ${v[0]}">${v[1]}</div>`; }
+    const sm = (lab, v) => `<div class="gn"><span>${lab}</span>${GC(v)}</div>`;
+    h += `<div class="label" style="margin-top:4px">Best drops</div>` + top.map((d, i) => `<div class="drow${i ? '' : ' best'}"><div class="who"><b>${esc(M.P[d.drop].n)}</b><div class="when">${gw(g(M, d.drop))}${M.snapRisk(d.drop) ? ' · <span class="minus">likely snapped up</span>' : ''}</div></div><div class="nums">${sm('This week', d.week)}${sm('Rest of season', d.ros)}</div></div>`).join('');
+    const chosen = yp.dpid && M.ofYid(yp.dpid, yp.players[yp.dpid]);
+    if (chosen) { const c = r.drops.find(d => d.drop === chosen); const b = r.drops[0];
+      if (c && b && c.drop !== b.drop) h += `<div class="warn" style="margin-top:6px">You've picked <b>${nm(chosen)}</b>: dropping <b>${nm(b.drop)}</b> instead is better for your team (${pts(b.score - c.score)} ${WWC()}).</div>`;
+      else if (c) h += `<div class="vd good">${nm(chosen)} is the right drop.</div>`; }
+    h += joshLine(M, add);
+    return h;
+  }
+  // ---- player lists: labels next to each available player + your top 3 ----
+  function listCard(M, yp, o) {
+    // next-week mode: "this week" numbers are for next week's matchup
+    if (o && o.next && o.next.oppTid && M.ctx.has.next) { M.ctx.weekView = 'next'; M.L.oppNext = String(o.next.oppTid); } else M.ctx.weekView = null;
+    try { return listCard0(M, yp, o); } finally { M.ctx.weekView = null; } }
+  function listCard0(M, yp, o) { const NX = M.ctx.weekView === 'next'; const g = NX ? ((M2, id) => (M2.P[id] && M2.P[id].next ? M2.P[id].next.g : null)) : gThis; const gw = n => n == null ? '' : n === 1 ? '1 game ' + (NX ? 'next' : 'this') + ' week' : n + ' games ' + (NX ? 'next' : 'this') + ' week';
+    const me = M.L.teams.find(t => t.tid === M.L.me); if (!me) return { html: '<div class="sub">Your roster isn\'t loaded yet.</div>', labels: {} };
+    const weakest = me.ids.slice().sort((a, b) => H.worth(M.ctx, a, 'ros') - H.worth(M.ctx, b, 'ros')).slice(0, 3);
+    const rows = (yp.rows || []).filter(r => r.avail); const labels = {}; const scored = [];
+    rows.forEach(r => { const id = M.ofYid(r.yid, yp.players[r.yid]); if (!id || me.ids.includes(id)) return; const k = H.pickup(M.ctx, M.L, id, weakest); const b = k.drops && k.drops[0]; if (!b) return;
+      scored.push({ yid: r.yid, id, b, avail: r.avail }); });
+    scored.sort((a, b) => b.b.ros - a.b.ros);
+    scored.forEach((s, i) => { const v = s.b.ros; labels[s.yid] = { t: GW(v)[1].replace(' you', ''), c: { g: 'g', r: 'b', n: 'n' }[GW(v)[0]], top: i < 3 && s.b.score > 0, tip: `For you: ${pts(s.b.ros)} ${WWC()} rest of season, ${pts(s.b.week)} this week (dropping ${M.P[s.b.drop].n}). ${gw(g(M, s.id))}.` }; });
+    const nm = id => esc(M.P[id].n);
+    let html = `<div class="h"><span>Players on this page</span><span class="sub" id="ctxAge"></span></div>`;
+    if (!scored.length) return { html: html + '<div class="sub">No available players on this page to rate. Filter Yahoo\'s list to available players.</div>', labels };
+    const good = scored.filter(s => s.b.score > 0 && GW(s.b.ros)[0] === 'g').length;
+    html += `<div class="hl">${good ? good + ' of ' + scored.length + ' would clearly improve your team' : 'None of these ' + scored.length + ' clearly beats your weakest players'}</div><div class="sub hls">Compared with your weakest players, for the rest of the season. Tap a player for detail.</div><table class="pl">`;
+    // tap a player for the same category pills as the pickups card: this week (live chances) and each week after
+    const open = globalThis.__plOpen || (globalThis.__plOpen = new Set());
+    const wk = ev => { const L = ((ev.rest || {}).cats || []).filter(c => Math.abs(c.to - c.from) >= 0.01); return L.length ? L.map(c => { const d = Math.round((c.to - c.from) * 100); return `<span class="mt plain" title="Chance to win ${esc(c.c)}"><b>${esc(c.c)}</b> ${pctTo(c)}</span>`; }).join('') : '<span class="sub">no category changes by 1 point or more</span>'; };
+    const later = ev => { const L = ((ev.ros || {}).cats || []).filter(c => Math.abs(c.d) >= 0.002).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 6); return L.length ? L.map(c => { const d = c.d * 100; const t = Math.abs(d) >= 1 ? Math.round(Math.abs(d)) : Math.abs(d).toFixed(1); return `<span class="mt plain" title="Change in chance to win ${esc(c.c)} each week"><b>${esc(c.c)}</b> <i class="${d >= 0 ? 'plus' : 'minus'}">${d >= 0 ? '+' : '−'}${t} points</i></span>`; }).join('') : '<span class="sub">even across categories</span>'; };
+    const RH = []; scored.slice(0, 30).forEach((s, i) => { let html = ''; const v = s.b.ros; const good = s.b.score > 0; const on = open.has(s.id);
+      html += `<tr class="plr${i === 0 && good ? ' best' : ''}${on ? ' open' : ''}" data-plr="${esc(s.id)}"><td><b>${nm(s.id)}</b>${CHEV}<div class="sub">${esc(tn(M.P[s.id].t))} · ${gw(g(M, s.id))}${/^W/.test(s.avail) ? ' · on waivers' : ''}${M.hot(M.P[s.id].n) ? ' · <span class="plus">most added on Yahoo</span>' : ''}${good ? ' · drop ' + esc(sur(M.P[s.b.drop].n)) : ''}</div></td><td class="v">${GC(v)}</td></tr>`;
+      html += `<tr class="pld"${on ? '' : ' hidden'} data-pld="${esc(s.id)}"><td colspan="2"><div class="mts"><span class="sub">${NX ? 'Next week' : 'This week'}${s.b.week ? ' (' + pts(s.b.week) + ' ' + WWC() + ')' : ''}</span>${wk(s.b.ev)}</div><div class="mts"><span class="sub">Each week after</span>${later(s.b.ev)}</div><div class="sub" style="margin-top:4px">Compared with dropping ${esc(M.P[s.b.drop].n)}. Rest of season: ${pts(v)} ${WWC()}.</div></td></tr>`; RH.push(html); });
+    html += RH.slice(0, 5).join('') + '</table>' + (RH.length > 5 ? `<details class="more" data-k="plmore"><summary>All ${RH.length} players on this page</summary><table class="pl">${RH.slice(5).join('')}</table></details>` : '');
+    return { html, labels };
+  }
+  function calibrate(ST, lid) {
+    const pairs = []; Object.keys(ST).filter(k => k.startsWith('h2hfc:' + lid + ':')).forEach(k => { const fc = ST[k], res = ST['h2hres:' + lid + ':' + k.split(':').pop()]; if (!fc || !res || !res.me || !res.opp) return;
+      Object.entries(fc.cats || {}).forEach(([c, p]) => { const r = c === 'fg%' ? [res.me.fg / res.me.fga, res.opp.fg / res.opp.fga] : c === 'ft%' ? [res.me.ft / res.me.fta, res.opp.ft / res.opp.fta] : [res.me[c], res.opp[c]]; if (r[0] == null || r[1] == null || isNaN(r[0]) || isNaN(r[1]) || r[0] === r[1]) return;
+        pairs.push([p, (c === 'to' ? r[0] < r[1] : r[0] > r[1]) ? 1 : 0]); }); });
+    if (pairs.length < 25) return { mul: 1, n: pairs.length };
+    const inv = p => { p = Math.min(0.995, Math.max(0.005, p)); let lo = -6, hi = 6; for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; if (H.Phi(m) < p) lo = m; else hi = m; } return (lo + hi) / 2; };
+    let best = { mul: 1, ll: Infinity }; for (let m = 0.6; m <= 1.81; m += 0.05) { let ll = 0; pairs.forEach(([p, y]) => { const q = Math.min(0.995, Math.max(0.005, H.Phi(inv(p) / m))); ll -= y ? Math.log(q) : Math.log(1 - q); }); if (ll < best.ll) best = { mul: +m.toFixed(2), ll }; }
+    return { mul: best.mul, n: pairs.length };
+  }
+  const ordinal = n => n ? n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : n % 10] || 'th') : '–';
+  // ---- trade finder ----
+  // ---- live matchup ----
+  function liveCard(M, ST, lid, y) {
+    const lv = ST['ylive:' + lid]; if (!lv || !y || lv.week !== y.week || !lv.me || !lv.opp) return '';
+    const played = Object.values(lv.me.st || {}).some(v => v > 0) || Object.values(lv.opp.st || {}).some(v => v > 0); if (!played) return '';
+    const me = M.L.teams.find(t => t.tid === M.L.me), op = M.L.teams.find(t => t.tid === String(y.oppTid)); if (!me || !op) return '';
+    const r = H.live(M.ctx, me.ids, op.ids, { me: lv.me.st, opp: lv.opp.st });
+    const now = r.cats.reduce((a, c) => { const d = c.nowMe == null || c.nowOpp == null ? 0 : c.c === 'to' ? c.nowOpp - c.nowMe : c.nowMe - c.nowOpp; if (d > 0) a[0]++; else if (d < 0) a[1]++; else a[2]++; return a; }, [0, 0, 0]);
+    const fmt = (c, v) => v == null ? '–' : c.unit === 'pct' ? v.toFixed(3).replace(/^0/, '') : Math.round(v);
+    const grp = s => r.cats.filter(c => c.state === s);
+    const need = c => c.unit === 'pct' ? (c.gap >= 0 ? 'ahead by ' : 'behind by ') + Math.abs(c.gap).toFixed(3).replace(/^0/, '') : (c.gap >= 0 ? 'up ' : 'down ') + Math.abs(Math.round(c.gap));
+    const vk = r.W >= 0.6 ? 'g' : r.W >= 0.4 ? 'a' : 'r'; const vt = r.W >= 0.6 ? 'Favourite this week' : r.W >= 0.4 ? 'Close week' : 'Underdog this week';
+    const yg = lv.me.games && lv.opp.games ? [lv.me.games.remaining, lv.opp.games.remaining] : null; // Yahoo's own count when available
+    const L3 = (k, t, f) => { const L = r.cats.filter(f).map(c => c.label); return L.length ? `<div class="hl3"><i class="fd ${k}"></i><span><b>${t}</b> ${esc(L.length > 1 ? L.slice(0, -1).join(', ') + ' and ' + L[L.length - 1] : L[0])}</span></div>` : ''; };
+    let h = `<div class="hero hv-${vk} live"><div class="hv">${vt}</div><div class="hero-vs">against <b>${esc(lv.opp.name || y.oppName || 'opponent')}</b> · right now <b>${now[0]}–${now[1]}${now[2] ? '–' + now[2] : ''}</b></div>
+      <div class="hls3">${L3('g', 'Ahead in', c => c.p > 0.6)}${L3('a', 'Close in', c => c.p >= 0.4 && c.p <= 0.6)}${L3('r', 'Behind in', c => c.p < 0.4)}</div>
+      <div class="sub">Games left: <b>${yg ? yg[0] : r.gamesLeft.me}</b> for you, <b>${yg ? yg[1] : r.gamesLeft.opp}</b> for them${yg ? ' (Yahoo)' : ''}.</div>
+      <details class="hwhy" data-k="lwhy"><summary>Why</summary><div class="sub">Banked so far plus what Basketball Monster projects for the games left.</div><table class="stt2 inv"><thead><tr><th></th><th>You now</th><th>Them now</th><th>You at the end</th><th>Them at the end</th></tr></thead><tbody>${r.cats.slice().sort((a, b) => b.p - a.p).map(c => `<tr><td>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</td><td>${fmt(c, c.nowMe)}</td><td>${fmt(c, c.nowOpp)}</td><td>${fmt(c, c.me)}</td><td>${fmt(c, c.opp)}</td></tr>`).join('')}</tbody></table><div class="sub">${Math.round(r.W * 100)}% chance to win the week.</div></details></div>`;
+    // plain instructions
+    const lines = []; const chase = grp('toss').concat(grp('chase')).sort((a, b) => Math.abs(a.p - 0.5) - Math.abs(b.p - 0.5));
+    if (chase.length) lines.push(['warn', 'Swing categories', chase.map(c => `<b>${esc(c.label)}</b> (${need(c)})`).join(', ') + '. Pick up or start players who help these.']);
+    const safe = grp('safe'); if (safe.length) lines.push(['good', 'Safe', safe.map(c => esc(c.label)).join(', ') + ': no need to chase these.']);
+    const lost = grp('lost'); if (lost.length) lines.push(['', 'Gone', lost.map(c => esc(c.label)).join(', ') + ': ignore them when choosing starters.']);
+    const pctC = r.cats.filter(c => c.unit === 'pct' && c.state !== 'safe' && c.state !== 'lost' && c.gap > 0); if (pctC.length) lines.push(['warn', 'Protect', pctC.map(c => esc(c.label)).join(', ') + ': avoid adding inefficient shooters.']);
+    if (lines.length) h += `<div class="card"><div class="h"><span>What to do this week</span></div>${lines.map(l => `<div class="brow"><i class="dot d-${l[0]}"></i><div><b>${l[1]}</b><div class="sub">${l[2]}</div></div></div>`).join('')}</div>`;
+    return h;
+  }
+  // ---- a week Matchup Monster hasn't opened yet (usually next week), built from the same Basketball Monster data:
+  // the Weekly Projections "Next Week" view (per-game stats and projected games), Yahoo rosters and the NBA schedule.
+  // Shaped like a Matchup Monster week so the weekly planner treats it exactly the same way.
+  // a Yahoo roster player Matchup Monster doesn't list at all (BBM's copy of your roster can lag a pickup): built from BBM's
+  // projections for this week and the real NBA schedule, so the lineup still knows the days he plays
+  function fillRows(M, ST, m, rows, side, today) {
+    const V = (M.bx && M.bx.views) || {}; const SCH = (ST.nbasched && ST.nbasched.by) || (globalThis.NBA_SCHED && globalThis.NBA_SCHED.by); if (!SCH || !m || !m.days) return [];
+    const key = t => t === 'NOP' ? 'NOR' : t === 'PHX' ? 'PHO' : t;
+    // (someone BBM has no projection for at all is left out: the lineup card lists him separately as your call)
+    return rows.map(r => { const id = M.find(r.name, r.team); const p = id && M.P[id]; const rv = id && V.rest && V.rest[id]; const vw = rv || (id && V.ros && V.ros[id]); if (!vw) return null;
+      const team = (p && p.t) || tc(r.team); const L0 = SCH[key(team)] || SCH[team] || [];
+      const plays = m.days.map(d => !!(d.date && (!today || d.date >= today) && L0.includes(d.date))); const n = plays.filter(Boolean).length;
+      const st = Object.assign({}, (vw && vw.st) || {}); if (st['2d'] == null && M.bx.dd && id && M.bx.dd[id] != null) st['2d'] = M.bx.dd[id];
+      const g = rv ? rv.g : null; const out = /^(O|OUT|INJ|SUSP)$/i.test(r.inj || '') || (g === 0 && n > 0); const f = n > 0 && g > 0 ? Math.min(1, g / n) : 1;
+      if (f < 1) Object.keys(st).forEach(k => { if (k !== 'fgp' && k !== 'ftp' && typeof st[k] === 'number') st[k] = st[k] * f; });
+      const games = m.days.map((d, i) => plays[i] ? { day: i, opp: '', cb: null, on: false, fin: false, zero: out, val: vw ? vw.lv : null, min: vw ? vw.m : null } : null);
+      return { side, type: /^IL/.test(r.slot || '') ? 'ir' : 'cur', name: r.name, bbm: id || null, team, pos: String((p && p.pos) || r.pos || '').split(/[\s,\/]+/).filter(Boolean), rank: (p && p.rank) || null, leagV: vw ? vw.lv : null, inj: (p && p.inj) || r.inj || '',
+        st, games, sv: p && p.ros ? p.ros.lv : null, sr: (p && p.rank) || null, bars: [], cv: {}, catV: null, notes: (p && p.notes) || [], _filled: true }; }).filter(Boolean); }
+  function weekModel(M, ST, y, cur, wk) {
+    const V = (M.bx && M.bx.views) || {}; const VV = wk && wk.view === 'rest' ? V.rest : V.next; if (!VV || !wk || !wk.oppTid || !wk.start) return null; const from = wk.view === 'rest' ? (wk.today || '') : '';
+    const SCH = (ST.nbasched && ST.nbasched.by) || (globalThis.NBA_SCHED && globalThis.NBA_SCHED.by); if (!SCH) return null;
+    const key = t => t === 'NOP' ? 'NOR' : t === 'PHX' ? 'PHO' : t; const DN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const end = wk.end || addDay(wk.start, 6); const days = [];
+    for (let i = 0; i < 14; i++) { const d = addDay(wk.start, i); if (d > end) break; const dt = new Date(d + 'T12:00:00Z'); days.push({ label: DN[dt.getUTCDay()] + ' ' + dt.getUTCDate(), dom: dt.getUTCDate(), date: d }); }
+    const me = M.L.teams.find(t => t.tid === M.L.me), op = M.L.teams.find(t => t.tid === String(wk.oppTid)); if (!me || !op) return null;
+    const ir = new Set(((y && y.rows) || []).filter(r => /^IL/.test(r.slot)).map(r => M.find(r.name, r.team)).filter(Boolean));
+    const mk = (id, side, type) => { const p = M.P[id]; if (!p) return null; const nx = VV[id];
+      const st = Object.assign({}, (nx && nx.st) || (p.ros && p.ros.st) || {}); if (st['2d'] == null && M.bx.dd && M.bx.dd[id] != null) st['2d'] = M.bx.dd[id];
+      const L0 = SCH[key(p.t)] || SCH[p.t] || []; const plays = days.map(d => L0.includes(d.date) && d.date >= from); const n = plays.filter(Boolean).length;
+      // BBM projecting no games means he's out all week; fewer games than his team plays (rest, minor knocks) is spread across
+      // the week so his weekly total matches BBM's projection exactly
+      const g = (nx && nx.g) || 0; const out = n > 0 && g <= 0; const f = n > 0 && g > 0 ? Math.min(1, g / n) : 1;
+      if (f < 1) Object.keys(st).forEach(k => { if (k !== 'fgp' && k !== 'ftp' && typeof st[k] === 'number') st[k] = st[k] * f; });
+      const games = days.map((d, i) => plays[i] ? { day: i, opp: '', cb: null, on: false, fin: false, zero: out, val: nx ? nx.lv : null, min: nx ? nx.m : null } : null);
+      return { side, type: type || (ir.has(id) ? 'ir' : 'cur'), name: p.n, bbm: id, team: p.t, pos: String(p.pos || '').split(/[\s,\/]+/).filter(Boolean), rank: p.rank || null, leagV: nx ? nx.lv : null, inj: p.inj || '',
+        st, games, sv: p.ros ? p.ros.lv : null, sr: p.rank || null, bars: [], cv: {}, catV: null, notes: p.notes || [] }; };
+    const players = me.ids.map(id => mk(id, 0)).concat(op.ids.map(id => mk(id, 1, 'cur'))).filter(Boolean);
+    M.L.fas.filter(id => VV[id] && VV[id].g > 0).sort((a, b) => (VV[b].lv || -9) - (VV[a].lv || -9)).slice(0, 120).forEach(id => { const x = mk(id, 0, 'fa'); if (x) players.push(x); });
+    const oppName = M.teamName(wk.oppTid);
+    return { league: cur.league, me: cur.me, opp: oppName, t1: { id: String(M.L.me), name: cur.me }, t2: { id: String(wk.oppTid), name: oppName }, start: wk.start, end, cats: cur.cats, totals: {}, bbmWin: {}, teams: [cur.me, oppName], days, players, ts: (M.bx.ts || {})[wk.view === 'rest' ? 'rest' : 'next'] || Date.now(), synthetic: true, from: wk.view === 'rest' ? 'bbm-rest' : 'bbm-next' };
+  }
+  // ---- next week ----
+  function nextCard(M, y) {
+    if (!y || !y.next || !y.next.oppTid || !M.ctx.has.next) return ''; const me = M.L.teams.find(t => t.tid === M.L.me), op = M.L.teams.find(t => t.tid === String(y.next.oppTid)); if (!me || !op) return '';
+    const r = H.nextWeek(M.ctx, me.ids, op.ids); const nm = id => esc(M.P[id].n);
+    const strong = r.cats.filter(c => c.p < 0.4).map(c => c.label), weak = r.cats.filter(c => c.p > 0.6).map(c => c.label);
+    const streams = M.L.fas.filter(id => M.P[id].next && M.P[id].next.g >= 4).sort((a, b) => (M.P[b].next.lv || 0) * M.P[b].next.g - (M.P[a].next.lv || 0) * M.P[a].next.g).slice(0, 3);
+    let h = `<div class="card"><div class="h"><span>Next week vs ${esc(M.teamName(y.next.oppTid))}</span><span class="sub">${esc(y.next.start || '')} to ${esc(y.next.end || '')}</span></div>`;
+    h += `<div class="hl3"><i class="fd ${r.W >= 0.6 ? 'g' : r.W >= 0.4 ? 'a' : 'r'}"></i><span><b>${r.W >= 0.6 ? 'Favourite' : r.W >= 0.4 ? 'Close' : 'Underdog'}</b> on Basketball Monster's projections · <b>${r.games.me}</b> games for you, <b>${r.games.opp}</b> for them</span></div>`;
+    // their actual Yahoo results so far (shown as facts; the forecast above comes from BBM projections only)
+    const pf = M.prof && M.prof.teams[String(y.next.oppTid)];
+    if (pf && pf.weeks) { const lb = c => ((H && H.LBL) || {})[c] || c; const by = M.ctx.cats.filter(c => pf.cat[c] && pf.cat[c].n).map(c => ({ c, r: (pf.cat[c].w + pf.cat[c].t / 2) / pf.cat[c].n }));
+      const won = by.filter(x => x.r > 0.6).map(x => lb(x.c)), lost = by.filter(x => x.r < 0.4).map(x => lb(x.c)); const one = pf.weeks === 1;
+      h += `<div class="sub" style="margin-top:6px">Their Yahoo results so far (${pf.weeks} week${one ? '' : 's'}, ${pf.w}-${pf.l}-${pf.t}):${won.length ? ` ${one ? 'won' : 'won most weeks in'} <b>${esc(won.join(', '))}</b>` : ''}${won.length && lost.length ? ';' : ''}${lost.length ? ` ${one ? 'lost' : 'lost most weeks in'} <b>${esc(lost.join(', '))}</b>` : ''}${!won.length && !lost.length ? ' even across categories' : ''}.</div>`; }
+    if (strong.length) h += `<div class="sub" style="margin-top:6px">They're stronger in <b>${esc(strong.join(', '))}</b>${weak.length ? `; you're stronger in <b>${esc(weak.join(', '))}</b>` : ''}.</div>`;
+    if (streams.length) h += `<div class="label" style="margin-top:10px">Four-game free agents next week</div>` + streams.map(id => `<div class="pr"><b>${nm(id)}</b><span>${M.P[id].next.g} games</span></div>`).join('');
+    return h + '</div>';
+  }
+  root.CTX = { fillRows, profiles, schedOf, curWeek, weekModel, model, freshness, tradeCard, dealView, addCard, listCard, liveCard, nextCard };
+})(typeof window !== 'undefined' ? window : globalThis);

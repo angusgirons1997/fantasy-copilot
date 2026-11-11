@@ -1,0 +1,104 @@
+{
+  "manifest_version": 2,
+  "name": "Fantasy co-pilot",
+  "version": "7.25.0",
+  "description": "Draft: reads Yahoo draft picks live. Season: plans each H2H week from Basketball Monster, syncs in the background and sets your Yahoo lineups.",
+  "permissions": [
+    "storage",
+    "*://basketball.fantasysports.yahoo.com/*",
+    "*://basketballmonster.com/*",
+    "*://www.basketballmonster.com/*",
+    "*://cdn.nba.com/*",
+    "alarms",
+    "unlimitedStorage",
+    "notifications"
+  ],
+  "sidebar_action": {
+    "default_title": "Fantasy co-pilot",
+    "default_panel": "home.html",
+    "open_at_install": true
+  },
+  "commands": {
+    "_execute_sidebar_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      }
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://basketball.fantasysports.yahoo.com/draftclient/*"
+      ],
+      "js": [
+        "data.js",
+        "content.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://basketballmonster.com/matchupmonster.aspx*",
+        "*://www.basketballmonster.com/matchupmonster.aspx*",
+        "*://basketballmonster.com/MatchupMonster.aspx*",
+        "*://www.basketballmonster.com/MatchupMonster.aspx*"
+      ],
+      "js": [
+        "mm.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://basketball.fantasysports.yahoo.com/nba/*"
+      ],
+      "js": [
+        "yroster.js",
+        "ypage.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://basketballmonster.com/*",
+        "*://www.basketballmonster.com/*"
+      ],
+      "js": [
+        "bbmseen.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    "inject.js"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "draft-copilot@maddogs.local",
+      "update_url": "https://raw.githubusercontent.com/angusgirons1997/fantasy-copilot/main/updates.json",
+      "strict_min_version": "109.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "background": {
+    "scripts": [
+      "keep.js",
+      "nbasched.js",
+      "mm.js",
+      "yroster.js",
+      "bbmx.js",
+      "sync.js",
+      "bg.js"
+    ],
+    "persistent": true
+  },
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png",
+    "128": "icons/icon-128.png"
+  }
+}

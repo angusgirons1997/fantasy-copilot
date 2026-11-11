@@ -1,0 +1,5 @@
+if (!globalThis.browser) globalThis.browser = chrome;
+var DATAINFO = { src: 'built-in', version: DATA_VERSION };
+(function () { const go = () => { const b = document.createElement('button'); b.textContent = '◂ Home'; b.title = 'Back to the mode menu'; b.style.cssText = 'position:fixed;bottom:8px;right:8px;z-index:50;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1px 8px;font:600 12px var(--body);color:var(--mute)'; b.onclick = () => { location.href = 'home.html'; }; document.body.appendChild(b); }; if (document.body) go(); else document.addEventListener('DOMContentLoaded', go); })();
+browser.storage.local.get('mdfData').then(r => { const d = r && r.mdfData; if (d && Array.isArray(d.P)) { P = d.P; if (d.YID) YID = Object.assign({}, YID, d.YID); if (d.EMPTYZ11) EMPTYZ11 = d.EMPTYZ11; DATAINFO = { src: 'file', version: d.version || 'unknown' }; } })
+ .catch(() => {}).then(() => { const s = document.createElement('script'); s.src = 'panel.js'; document.body.appendChild(s); });

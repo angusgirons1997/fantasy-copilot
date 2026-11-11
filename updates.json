@@ -1,7 +1,12 @@
 {
   "addons": {
     "draft-copilot@maddogs.local": {
-      "updates": []
+      "updates": [
+        {
+          "version": "7.25.0",
+          "update_link": "https://github.com/angusgirons1997/fantasy-copilot/releases/download/v7.25.0/fantasy-copilot-7.25.0.xpi"
+        }
+      ]
     }
   }
 }

@@ -18,7 +18,16 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // how much a move helps, in words; the number itself sits in the detail underneath
   const gainWord = v => { const c = PPC ? v * PPC : v * 10; const a = Math.abs(c); const k = a < 0.05 ? 0 : a < 0.2 ? 1 : a < 0.5 ? 2 : 3; if (!k) return ['n', 'About the same'];
     return c > 0 ? ['g', ['', 'Helps a little', 'Helps clearly', 'Helps a lot'][k]] : ['r', ['', 'Costs a little', 'Costs clearly', 'Costs a lot'][k]]; };
-  const gainChip = v => { const g = gainWord(v); return `<span class="fk ${g[0]}">${g[1]}</span>`; };
+  const gainChip = v => { const g = gainWord(v); return `<span class="fk ${g[0]}">${g[1]}</span><span class="gnum ${v >= 0 ? 'plus' : 'minus'}">${pp(v)}</span>`; };
+  // per-game projection for the pickup against the drop: the primitive numbers behind the call
+  const statsVs = (add, drop) => { const M = modelFor(league()); if (!M) return ''; const a = M.P[M.find(add)], d = M.P[M.find(drop)]; if (!a || !a.ros || !a.ros.st) return '';
+    const cats = M.ctx.cats; const v = (p, c) => { const st = p && p.ros && p.ros.st; if (!st) return '–'; if (c === 'fg%') return st.fga ? (st.fg / st.fga * 100).toFixed(1) : '–'; if (c === 'ft%') return st.fta ? (st.ft / st.fta * 100).toFixed(1) : '–'; return st[c] == null ? '–' : (+st[c]).toFixed(1); };
+    const ab = { p: 'Points', 3: '3-pointers', r: 'Rebounds', a: 'Assists', s: 'Steals', b: 'Blocks', to: 'Turnovers', 'fg%': 'Field goal %', 'ft%': 'Free throw %', '2d': 'Double-doubles', fg: 'Field goals', ft: 'Free throws' };
+    return `<table class="stt2 svs"><thead><tr><th>Per game, rest of season</th><th>${esc(sur(add))}</th><th>${esc(sur(drop))}</th></tr></thead><tbody>${cats.map(c => { const x = v(a, c), y = v(d, c); const better = x !== '–' && y !== '–' && (c === 'to' ? +x < +y : +x > +y);
+      return `<tr><td>${ab[c] || esc(c)}</td><td class="${better ? 'plus' : ''}">${x}</td><td>${y}</td></tr>`; }).join('')}<tr><td>Games left</td><td>${a.ros.g != null ? a.ros.g : '–'}</td><td>${d && d.ros && d.ros.g != null ? d.ros.g : '–'}</td></tr></tbody></table>`; };
+  const statLine = name => { const M = modelFor(league()); const q = M && M.P[M.find(name)]; const st = q && q.ros && q.ros.st; if (!st) return '';
+    const f = (k, n) => st[k] != null ? `${(+st[k]).toFixed(1)} ${n}` : null; const parts = [f('p', 'points'), f('r', 'rebounds'), f('a', 'assists'), f('3', '3-pointers'), f('s', 'steals'), f('b', 'blocks'), st.fga ? `${(st.fg / st.fga * 100).toFixed(1)}% field goals` : null, st.fta ? `${(st.ft / st.fta * 100).toFixed(1)}% free throws` : null, f('to', 'turnovers')].filter(Boolean);
+    return `<div class="sline">${esc(parts.join(' · '))}${q.ros.g != null ? ` · <b>${q.ros.g}</b> games left` : ''}</div>`; };
   const listW = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '';
   // which categories a move helps or hurts, in words (changes of 2 points of win chance or more)
   const catWords = (list, key) => { const L = (list || []).map(c => ({ c: c.c, d: key === 'd' ? c.d : (c.to - c.from) })).filter(c => Math.abs(c.d) >= 0.02); const up = L.filter(c => c.d > 0).sort((a, b) => b.d - a.d).map(c => c.c), dn = L.filter(c => c.d < 0).sort((a, b) => a.d - b.d).map(c => c.c);
@@ -251,6 +260,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const opts = { live: liveOk ? { me: lv.me.st, opp: lv.opp.st } : null, punt, slots: slotsFrom(y), yahooRows: y ? y.rows : [], addsLeft: A.left, roster: (yNewer || (y && Date.now() - y.ts < 2 * 3600e3)) && !m.synthetic ? y.rows.map(r => ({ name: r.name, team: r.team, pid: r.pid })) : null, idmap,
       rules: { ilSlots: RL.ilSlots, ilUsed, ilEligible, waiverUntil }, sched: ST.nbasched || window.NBA_SCHED || null, obj: objFor(m.league, y, isNext), oppGames: lvG && !isNext ? Object.assign({ util: utilOf(m.league) }, lvG) : null, sdMul: trackCal(m.league).mul, scale: (ST['calib:' + m.league] || {}).scale || null, actual: y ? Object.fromEntries(Object.entries(ST['ylu:' + y.lid] || {}).filter(([d, e]) => e && e.rows && e.rows.length && Date.now() - e.ts < 6 * 3600e3).map(([d, e]) => [d, e.rows.filter(r => r.slot !== 'BN' && !/^IL/.test(r.slot)).map(r => r.name)])) : null, playoffs: RL.playoffs || null, leagueFit, oppAdds, recentAdds: rm.adds, recentDrops: rm.drops, oppMode: s.oppMode || 'max', today: usToday(), dropRank: s.dropRank, protect: s.protect || [], exclude: s.exclude || [], allowDrop: s.allowDrop || [], swap: m.synthetic ? false : !!s.swap, lookAhead: 4, next: isNext ? null : nextModel(m), forceDrop: s.forceDrop || {}, pickAdds: Array.isArray(s.pickAdds) ? {} : s.pickAdds || {}, test: s.test || null, streams: streamOpts(m, y, oppTid, A) };
     { const PK = pickOf(m.league); opts.minGain = PK.min; opts.swapMin = PK.swap; }
+    // rest-of-season facts for every player (Basketball Monster's projected games left and per-game stats), the end of your
+    // playoffs, and how many players the league rosters: what each drop is judged on
+    { const MI = modelFor(m.league); if (MI) { model = Object.assign({}, model, { players: model.players.map(pl => { const id = pl.bbm && MI.P[pl.bbm] ? pl.bbm : MI.find(pl.name, pl.team); const q = id && MI.P[id];
+        return q && q.ros ? Object.assign({}, pl, { ros: { g: q.ros.g, st: q.ros.st }, sr: pl.sr || q.rank || null }) : pl; }) }); }
+      opts.playoffs = RL.playoffs || null; const sp = y && ST['ysetp:' + y.lid]; const nT = ((y && ST['ystand:' + y.lid]) || {}).teams; opts.rostered = sp && sp.slots ? (sp.slots.length + (sp.bench || 0)) * ((nT && nT.length) || (MI && MI.L.teams.length) || 0) : 0; }
     const p = E.plan(model, opts);
     // the lineup always follows the roster you actually have: planned pickups are step 1, and the lineup is re-planned once Yahoo shows them
     if (!isNext && p.moves.length) { try { const p0 = E.plan(model, Object.assign({}, opts, { addsLeft: 0, next: null, lookAhead: 0, pickAdds: {}, forceDrop: {}, test: null, streams: null })); p.nowDays = p0.days; p.nowSlots = p0.slots; } catch (e) { console.error(e); } }
@@ -458,15 +472,14 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const cs = p.cats.slice().sort((a, b) => b.p - a.p); const cls = v => v > 0.6 ? 'cs-a' : v >= 0.45 ? 'cs-c' : 'cs-b';
     const c0 = h.length;
     const catsMode = p.obj === 'cats'; const heroNum = catsMode ? `${(p.Ecats || 0).toFixed(1)}<small>/${p.ncat}</small>` : pct(W);
-    { const Wv = catsMode ? (p.Wmaj || 0) : W; const vk = Wv >= 0.6 ? 'g' : Wv >= 0.4 ? 'a' : 'r'; const vt = Wv >= 0.6 ? 'Favourite this week' : Wv >= 0.4 ? 'Close week' : 'Underdog this week';
-      const ahead = cs.filter(c => c.p > 0.6), close = cs.filter(c => c.p >= 0.4 && c.p <= 0.6), behind = cs.filter(c => c.p < 0.4);
+    { const Wv = catsMode ? (p.Wmaj || 0) : W; const vk = Wv >= 0.6 ? 'g' : Wv >= 0.4 ? 'a' : 'r'; const vt = Wv >= 0.6 ? 'Favourite' : Wv >= 0.4 ? 'Close week' : 'Underdog';
       const fmtT = (c, v) => v == null ? '–' : /%/.test(c.label) ? (v <= 1 ? (v * 100).toFixed(1) : (+v).toFixed(1)) + '%' : (+v).toFixed(v >= 100 ? 0 : 1);
-      const ln = (k, t, L) => L.length ? `<div class="hl3"><i class="fd ${k}"></i><span><b>${t}</b> ${esc(listW(L.map(c => c.label)))}</span></div>` : '';
-      h += `<div class="hero hv-${vk}"><div class="hv">${vt}</div><div class="hero-vs">against <b>${esc(p.opp)}</b>${p.playoffs ? ' · playoff week' : ''}</div>
-      <div class="hls3">${ln('g', 'Ahead in', ahead)}${ln('a', 'Close in', close)}${ln('r', 'Behind in', behind)}</div>
-      <details class="hwhy" data-k="hwhy"><summary>Why</summary><div class="sub">Projected totals for the week from Basketball Monster${p.live ? ' plus games already played' : ''}. ${catsMode ? `You need ${p.need} of ${p.ncat} categories to take the week.` : ''}</div>
-        <table class="stt2 inv"><thead><tr><th></th><th>You</th><th>Them</th><th>Chance</th></tr></thead><tbody>${cs.map(c => `<tr><td>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}${c.label === 'turnovers' ? ' <i>(fewer wins)</i>' : ''}</td><td>${fmtT(c, c.me)}</td><td>${fmtT(c, c.opp)}</td><td>${pct(c.p)}</td></tr>`).join('')}</tbody></table>
-        <div class="sub">${catsMode ? `Expected: ${(p.Ecats || 0).toFixed(1)} of ${p.ncat} categories; ${pct(p.Wmaj || 0)} chance to take the week.` : `${pct(W)} chance to win the week.`}</div></details>
+      const heroNum = catsMode ? `${(p.Ecats || 0).toFixed(1)}<small>/${p.ncat}</small>` : pct(W); const tcls = v => v > 0.6 ? 'cs-a' : v >= 0.4 ? 'cs-c' : 'cs-b';
+      h += `<div class="hero hv-${vk}"><div class="hero-top"><div class="hero-pct">${heroNum}</div><div class="hero-vs">${catsMode ? 'categories expected against' : 'chance to beat'}<br><b>${esc(p.opp)}</b>${p.playoffs ? ' · playoff week' : ''}</div><div class="hvk"><span class="fk ${vk}">${vt}</span>${catsMode ? `<i>${pct(p.Wmaj || 0)} to take the week</i>` : ''}</div></div>
+      <div class="bl">${bottomLine(p)}</div>
+      <div class="h" style="margin-top:10px"><span>Chance to win each category</span><span class="sub">you need ${p.need} of ${p.ncat}</span></div>
+      <div class="cgrid">${cs.map((c, i) => `<div class="tile ${tcls(c.p)}${i === p.need - 1 ? ' line' : ''}" title="${esc(c.label)}: you ${fmtT(c, c.me)}, them ${fmtT(c, c.opp)}"><b>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</b><span>${Math.round(c.p * 100)}%</span><i>${fmtT(c, c.me)} v ${fmtT(c, c.opp)}</i></div>`).join('')}</div>
+      <div class="sub" style="margin-top:6px">Under each: your projected total against theirs for the week${p.live ? ', including games already played' : ''}${cs.some(c => c.label === 'turnovers') ? ' (fewer turnovers wins)' : ''}.</div>
       <div class="omrow"><span class="sub">Their lineup:</span><span class="seg small"><button data-om="max" class="${p.oppMode === 'max' ? 'on' : ''}" title="Assume the opponent fills every start">fills every start</button><button data-om="set" class="${p.oppMode === 'set' ? 'on' : ''}" title="Opponent lineup exactly as set">as set now</button></span></div></div>`; }
     const order = cs.map(c => c.label);
     const miniWeek = list => { const ch = list.filter(c => Math.abs(c.to - c.from) >= 0.01).sort((a, b) => order.indexOf(a.c) - order.indexOf(b.c)); if (!ch.length) return '<span class="sub">no category changes by 1 point of win chance or more</span>';
@@ -504,8 +517,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const o = Object.assign({}, d || { name: x.drop, week: x.week, futWk: x.futWk, next: x.next, games: x.dropGames, addGames: x.games, catWeek: x.catWeek, catLater: x.catLater, date: x.date }); { const lt = ltOf(x.add, o.name); if (lt != null) o.futWk = lt; }
       return `<div class="l1"><div><div class="pname plus">+ ${esc(x.add)}</div><div class="when">${esc(teamN(x.addTeam))} · ${gw(o.addGames != null ? o.addGames : x.games)} · add on ${esc(fmtD(o.date || x.date))}</div>${(() => { const av = availOf(yrFor(lg), x.add); return av ? (av.st === 'W' ? `<div class="when">On waivers on Yahoo${av.wv ? ' until ' + esc(av.wv) : ''}</div>` : '') : `<div class="when muted">Checking on Yahoo that he's still free…</div>`; })()}${M && M.hot(x.add) ? `<div class="when plus">${esc(M.hot(x.add))}: others may add him first</div>` : ''}</div><span class="chip ${v[0]}">${v[1]}</span></div>
         <div class="drops"><span class="sub">Drop</span>${x.dropOpts.map(dd => `<button class="dopt${dd.name === o.name ? ' on' : ''}" data-add="${esc(x.add)}" data-drop="${esc(dd.name)}" title="${dd.injured ? 'Injured now: check his timeline' : ''}">${esc(sur(dd.name))}${dd.injured ? ' (injured)' : ''}<i>${gw(dd.games)}${M && M.find(dd.name) && M.snapRisk(M.find(dd.name)) ? ' · likely snapped up' : ''}</i></button>`).join('')}</div>
+        ${statsVs(x.add, o.name)}
         <div class="gains">${(o.score != null ? o.score : x.score) != null ? `<div><span>Next few weeks, overall</span>${gainChip(o.score != null ? o.score : x.score)}</div>` : ''}<div><span>This week</span>${gainChip(o.week)}</div>${o.next != null ? `<div><span>Next week</span>${gainChip(o.next)}</div>` : ''}<div><span>Each week after</span>${gainChip(o.futWk)}</div></div>
         <div class="sub">${catWords(o.catWeek)}</div>
+        <div class="mts">${miniWeek(o.catWeek)}</div>
+        ${o.why ? `<div class="dwhy"><b>Why ${esc(sur(o.name))}:</b> ${o.why.order ? `the ${o.why.order === 1 ? 'lowest' : nth(o.why.order) + ' lowest'} rest-of-season value of the ${o.why.of} players outside your injured list, for your build` : 'his rest-of-season value for your build is below the pickup\'s'}. ${o.why.gp != null ? `${o.why.gp} games projected from next week to the end of your playoffs${o.why.n != null ? ` (his team plays ${o.why.n})` : ''}` : ''}${o.why.ret ? `; expected back around ${esc(fmtD(o.why.ret))}` : ''}.${o.why.addGp != null ? ` ${esc(sur(x.add))}: ${o.why.addGp} games projected.` : ''}${o.why.rank ? ` Basketball Monster rank ${o.why.rank}.` : ''}${o.why.claim ? ` <span class="minus">Another team is likely to claim him: this drop can't be undone.</span>` : ''}</div>` : ''}
         <details class="more" data-k="mvd${esc(x.add)}"><summary>Why, and other choices</summary>
         <div class="imp"><b>${pp(o.week)}</b> this week${o.next != null ? ` · <b>${pp(o.next)}</b> next week` : ''} · <b>${pp(o.futWk)}</b> each week after ${PPC ? '(categories won)' : '(win chance)'}</div>
         <div class="mts"><span class="sub">This week</span>${miniWeek(o.catWeek)}</div>
@@ -535,7 +551,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         // Basketball Monster's analyst tag, word for word, as a label only (it never changes a player's value)
         { const tg = showTags(lg) && window.STRAT && window.STRAT.tagOf({ notes: x.h.tags || [] }); if (tg) tags.push(['plain', tg.by + ': ' + tg.tag]); }
         if (x.h.po != null) tags.push(['plain', x.h.po + ' playoff games']);
-        h += `<div class="wl"><div class="l1"><span><b>${esc(x.name)}</b> <span class="muted">${esc(teamN(x.team))} · ${gw(x.h.wk)}</span></span>${x.perWk >= 0.005 ? gainChip(x.perWk) : ''}</div><div>${tags.map(t => `<span class="tag ${t[0]}">${esc(t[1])}</span>`).join('')}</div><div class="sub">Each week compared with ${esc(sur(x.drop))}: ${catWords(x.catLater, 'd').replace(/^H/, 'h')}</div><div class="mts"><button class="lnk" data-test="${esc(x.name)}" style="margin-left:auto">Test this swap</button></div>${noteLine(x.h.note, x.name)}</div>`; });
+        h += `<div class="wl"><div class="l1"><span><b>${esc(x.name)}</b> <span class="muted">${esc(teamN(x.team))} · ${gw(x.h.wk)}</span></span><span>${x.perWk >= 0.005 ? gainChip(x.perWk) : ''}</span></div>${statLine(x.name)}<div>${tags.map(t => `<span class="tag ${t[0]}">${esc(t[1])}</span>`).join('')}</div><div class="sub">Each week compared with ${esc(sur(x.drop))}: ${catWords(x.catLater, 'd').replace(/^H/, 'h')}</div><div class="mts"><button class="lnk" data-test="${esc(x.name)}" style="margin-left:auto">Test this swap</button></div>${noteLine(x.h.note, x.name)}</div>`; });
       h += `<div class="sub" style="margin-top:4px">Basketball Monster projections${p.sched ? ' on the real NBA schedule' : ''}, weighted to the categories you can still swing ${p.fitSrc === 'league' ? 'against your league' : '(league scan pending)'}; analyst notes nudge values a little.${p.oppBoost ? ' Opponent expected to stream about ' + p.oppBoost + ' more adds this week.' : ''}</div></details></div>`;
     }
     const c4 = h.length;
@@ -642,7 +658,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const pk = s.pick && PICK[s.pick] ? s.pick : 'std'; const fr = fitRule(lg);
     h += `<div class="card sets" id="set-advice"><div class="h"><span>Advice</span></div>
       <div class="row">Pickups<span class="seg small sortbar" style="margin:0 0 0 auto">${Object.entries(PICK).map(([k, v]) => `<button data-pick="${k}" class="${pk === k ? 'on' : ''}">${v.t}</button>`).join('')}</span></div>
-      <div class="sub">${PICK[pk].w} Any player can be dropped when a free agent is better for your team on the same measure.</div>
+      <div class="sub">${PICK[pk].w} A drop is only suggested when the pickup is also at least as good over the rest of the season, through your playoffs.</div>
       <div class="row" style="margin-top:8px"><label><input type="checkbox" id="spare" ${A.spare ? 'checked' : ''}> Keep one add spare for injuries until Saturday</label></div>
       <details class="more" data-k="fitrule"><summary>Player reads</summary>
         <div class="sub">Basketball Monster rates every player in every category: 0 is an average player, +1 a step above, −1 a step below. A read adds up his ratings across one group of your categories.</div>
@@ -936,6 +952,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <li><i class="fd n"></i><b>Small impact</b>: none of the above.</li></ul>
       <p>"Good at" and "weak in" mean ${sg(0.5)} or ${sg(-0.5)} and beyond in that category.</p>
       <p><b>Pickups</b> (${esc(PK.t)}). ${esc(PK.w)}</p>
+      <p><b>Drops.</b> Every drop is judged over the rest of the season, through the end of your playoffs: the games each player's team plays, counting only the games Basketball Monster expects him to play, times his value per game for your build. An injured player counts as missing his next games and then playing the rest, so a star coming back keeps his value. A pickup can win on timing only if it costs no more than about 0.3 categories over the season. Players in an injured-list spot are never dropped for a pickup (it frees no roster spot), one-week streams only replace your weakest healthy players, and a drop of someone in the top half of all rostered players is flagged because another team will likely claim him.</p>
       <p><b>Trade block.</b> The players listed fit your build or hold your lead, and give you at least as much in your swing categories as the one you're moving, grouped by Basketball Monster's overall rank (stars 1–30, starters 31–75, rotation 76–130, depth after that). Teams "fighting for" a category beat between ${pc(th.dead)}% and ${pc(th.safe)}% of the league in it on Basketball Monster's team values.</p>
       <p><b>Analyst tags</b> (Sell High, Buy Low, Droppable…) are Basketball Monster's view of general fantasy value, not your build. They're shown in grey and never change a read.</p>
       <p><button class="lnk" data-openset="build">Change these in Settings</button></p></div>`; }
@@ -1005,10 +1022,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     back.forEach(r => {
       if (swaps.length) { const s = swaps.shift(); steps.push(`<b>Now:</b> move <b>${nm(s)}</b> (${esc(st(s))}) into the injured-list spot and <b>${nm(r)}</b> to the bench. No drop needed.`); return; }
       if (open > 0) { open--; steps.push(`<b>Now:</b> move <b>${nm(r)}</b> to the bench. You have an open roster spot, so no drop is needed.`); return; }
-      const v = val(r.name); const d = left().concat(v ? [v] : []).sort((x, y) => x.perWk - y.perWk)[0]; drops++;
+      const v = val(r.name); const d = left().concat(v ? [v] : []).sort((x, y) => x.season - y.season)[0]; drops++;
       if (!d) { steps.push(`<b>Now:</b> your roster is full. Drop your least valuable healthy player, then move <b>${nm(r)}</b> to the bench.`); return; }
       if (same(d.name, r.name)) { steps.push(`<b>Now:</b> your roster is full and <b>${nm(r)}</b> is worth less to your team than anyone else on it, so drop <b>${nm(r)}</b> himself.`); return; }
-      dropped.push(d); steps.push(`<b>Now:</b> your roster is full. Drop <b>${esc(d.name)}</b> (your least valuable player for the rest of the season), then move <b>${nm(r)}</b> from the injured list to the bench.`); });
+      dropped.push(d); steps.push(`<b>Now:</b> your roster is full. Drop <b>${esc(d.name)}</b>: the lowest rest-of-season value on your roster for your build${d.gp != null ? ` (${d.gp} games projected from next week)` : ''}. Then move <b>${nm(r)}</b> from the injured list to the bench.`); });
     ready.forEach(r => { const when = firstStart(r.name);
       const lead = `<b>${esc(dayOf(when))}:</b> `;
       if (swaps.length) { const s = swaps.shift(); steps.push(lead + `move <b>${nm(s)}</b> into the injured-list spot and <b>${nm(r)}</b> to the bench. No drop needed.`); return; }

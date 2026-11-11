@@ -280,6 +280,24 @@
     const avgG = pl => { if (!wks.length) return 3.4; const gs = wks.map(w => gamesIn(pl.team, w.a, w.b)); return gs.every(g => g == null) ? 3.4 : gs.reduce((t, g) => t + (g == null ? 3.4 : g), 0) / gs.length; };
     const fwkS = pl => seasonOut(pl) ? 0 : avgG(pl) * pgv(pl); // typical week after this one, on the real schedule
     const PO = opts.playoffs; const poGames = pl => PO ? gamesIn(pl.team, PO.start, PO.end) : null;
+    // ---- rest-of-season value: what every drop is judged on ----
+    // The games his team plays from next week to the end of your playoffs, counting only the games Basketball Monster expects him
+    // to play (its rest-of-season projection already allows for injuries), times his value per game for your build. An injured
+    // player is taken to miss his next games and then play the rest: the weeks he's out count as nothing, nothing more is taken off.
+    const RO = opts.ros || {}; const SEND = (PO && PO.end) || opts.seasonEnd || null; const sFrom = addD(model.start, 7);
+    const vPer = st => { let v = 0; ctx.cats.forEach(c => { let d; if (RATIO[c]) { const [mk, ak] = RATIO[c]; const pt = Aset.m[ak] ? Aset.m[mk] / Aset.m[ak] : 0.47; d = ((st[mk] || 0) - pt * (st[ak] || 0)) / (Aset.m[ak] || 300); } else d = c === 'to' ? -(st.to || 0) : (st[c] || 0); v += wfit[c] * L0 * phi(0) * d / (sdW[c] || 1); }); return v; };
+    const schedOf = team => { const L = SCH && (SCH[tc(team) === 'NOP' ? 'NOR' : tc(team) === 'PHX' ? 'PHO' : tc(team)] || SCH[team]); return L || null; };
+    const SI = new Map();
+    const seasonInfo = pl => { if (SI.has(pl)) return SI.get(pl); const r = pl.ros || RO[key(pl.name)] || null; const L = schedOf(pl.team);
+      const n = SEND && L ? L.filter(d => d >= sFrom && d <= SEND).length : null; // his team's games after this week
+      const thisWk = (pl.games || []).filter(g => g && !g.zero).length;
+      let gp = r && r.g != null ? Math.max(0, r.g - thisWk) : null; if (gp != null && n != null) gp = Math.min(gp, n); if (gp == null && n != null) gp = n * health(pl);
+      const per = r && r.st && Object.keys(r.st).length ? vPer(r.st) : pgv(pl) / (health(pl) || 1);
+      const miss = n != null && gp != null ? Math.max(0, n - gp) : 0; const out = isOut(pl) || /^(O|OUT|INJ)$/i.test(String(pl.inj || '').trim());
+      const ret = out && L && miss >= 1 ? (L.filter(d => d >= sFrom && (!SEND || d <= SEND))[Math.round(miss)] || null) : null;
+      const done = seasonOut(pl) || (out && gp != null && gp < 1) || (out && PO && PO.start && ret && ret >= PO.start);
+      const o = { val: seasonOut(pl) ? 0 : (gp == null ? fwkS(pl) * 10 : gp * per), gp, n, ret, done: !!done, out, per, rank: pl.sr || pl.rank || null }; SI.set(pl, o); return o; };
+    const sVal = pl => seasonInfo(pl).val;
     const fut = R => R.filter(r => r.to === ctx.nd - 1).reduce((t, r) => t + fwH(r.pl), 0);
     const fut1 = R => R.filter(r => r.to === ctx.nd - 1).reduce((t, r) => t + fwH1(r.pl), 0);
     const fwCats = pl => { const st = pl._gs || (pl._gs = gameStats(pl)); const o = {}; ctx.cats.forEach(c => { let d; if (RATIO[c]) { const [mk, ak] = RATIO[c]; const pt = Aset.m[ak] ? Aset.m[mk] / Aset.m[ak] : 0.47; d = (st[mk] - pt * st[ak]) / (Aset.m[ak] || 300); } else d = c === 'to' ? -st.to : st[c]; o[c] = 3.4 * health(pl) * phi(0) * d / (sdW[c] || 1); }); return o; };
@@ -310,8 +328,14 @@
     const waitTill = {}; Object.entries(R0.waiverUntil || {}).forEach(([k, d]) => waitTill[key(k)] = d);
     const dayOK = (f, d) => !waitTill[key(f.name)] || (model.days[d] && model.days[d].date >= waitTill[key(f.name)]);
     // a drop candidate is anyone a free agent beats on the same measure (this week plus the weeks after); no rank cut-off
-    const canDrop = r => r.to === ctx.nd - 1 && !protect.has(key(r.pl.name)) && !r.added;
+    const canDrop = r => r.to === ctx.nd - 1 && !protect.has(key(r.pl.name)) && !r.added && r.pl.type !== 'ir';
+    // a pickup may cost a little over the season if it wins now, but no more than this (about 0.3 categories across the season)
+    const seasonCost = (f, k) => sVal(k) - sVal(f); const SEASON_TOL = 3 * (opts.minGain || 0.03) * ctx.unit;
     const gamesFrom = (pl, d) => pl.games.filter((g, i) => g && i >= d && !g.zero).length;
+    // the reason for a drop, in facts: where he sits on your roster over the rest of the season, his projected games, his return
+    const dropWhy = (pl, f) => { const si = seasonInfo(pl), fi = seasonInfo(f); const mine = roster.filter(r => r.to === ctx.nd - 1 && r.pl.type !== 'ir' && !r.added).map(r => r.pl).sort((a, b) => sVal(a) - sVal(b));
+      const pos = mine.indexOf(pl); const N = (opts.rostered || 0); return { order: pos >= 0 ? pos + 1 : null, of: mine.length, gp: si.gp != null ? Math.round(si.gp) : null, n: si.n, ret: si.ret, out: si.out, rank: si.rank,
+        addGp: fi.gp != null ? Math.round(fi.gp) : null, seasonGain: +(sVal(f) - sVal(pl)).toFixed(3), claim: !!(N && si.rank && si.rank <= N / 2) }; };
     const verdictOf = (fw, nx) => fw >= 0.01 ? 'long' : (fw >= -0.002 || (nx != null && nx >= 0.01)) ? 'few' : 'week';
     const injNow = pl => { const g = pl.games.filter(Boolean); return g.length > 0 && g.every(x => x.zero); };
     const pickAt = opts.pickAdds && !Array.isArray(opts.pickAdds) ? opts.pickAdds : {}; const force = opts.forceDrop || {}; const minGain = (opts.minGain || 0.03) * ctx.unit; // pickAdds: {step: player key} chosen among the options shown for that pickup
@@ -320,7 +344,7 @@
     const roster0 = roster, best0 = best; // the roster and lineup as they stand, before any planned pickup (streams start from here)
     for (let step = 0; step < adds && firstOpen >= 0; step++) {
       // (tried from the lowest long-term value up; the 8 lowest are enough, a free agent doesn't beat the top of your roster)
-      const droppable = roster.filter(canDrop).sort((a, b) => fwkS(a.pl) - fwkS(b.pl)).filter((r, i) => i < 8 || allow.has(key(r.pl.name)));
+      const droppable = roster.filter(canDrop).sort((a, b) => sVal(a.pl) - sVal(b.pl)).filter((r, i) => i < 8 || allow.has(key(r.pl.name)));
       const futNow = fut(roster), fut1Now = fut1(roster);
       const B0 = agg(oppList), A0 = agg(best.list), cp0 = catProbs(ctx, A0, B0), w0 = statWeights(ctx, A0, B0, cp0);
       // shortlist: best overall (this week + later weeks), plus the best streamers for this week alone. The weights come from the
@@ -346,7 +370,7 @@
         const fkRow = fk ? roster.filter(r => r.to === ctx.nd - 1 && !r.added && key(r.pl.name) === fk) : []; const drops = fkRow.length ? fkRow : droppable; // a stale choice (player gone) falls back to the usual pool
         for (const k of drops) for (const d of days) {
           if (k.from > d) continue;
-          if (!fkRow.length && !allow.has(key(k.pl.name)) && !seasonOut(k.pl) && (f.sv != null && k.pl.sv != null) && k.pl.sv - f.sv > seasonTol) continue;
+          if (!fkRow.length && !allow.has(key(k.pl.name)) && seasonCost(f, k.pl) > SEASON_TOL) continue; // the replacement has to hold up over the rest of the season
           keep(evalSwap(f, k, d));
         }
       }
@@ -365,8 +389,8 @@
       const futWk = fwkS(top.f) - fwkS(top.k.pl);
       // two drop options for this pickup, each with its own effect, so switching between them is instant
       const optOf = c => ({ name: c.k.pl.name, score: c.score, week: c.week, futWk: fwkS(top.f) - fwkS(c.k.pl), day: c.d, date: model.days[c.d].date, label: model.days[c.d].label, injured: injNow(c.k.pl), rank: c.k.pl.sr || c.k.pl.rank, games: gamesFrom(c.k.pl, c.d), addGames: gamesFrom(top.f, c.d),
-        catWeek: catWeekOf(c.o), catLater: catDiff(fwCats(top.f), fwCats(c.k.pl)), verdict: verdictOf(fwkS(top.f) - fwkS(c.k.pl), c.nx), next: c.nx, note: noteView(c.k.pl) });
-      const pool = roster.filter(r => canDrop(r) && r !== top.k).sort((a, b) => fwH(a.pl) - fwH(b.pl)).slice(0, 6);
+        catWeek: catWeekOf(c.o), catLater: catDiff(fwCats(top.f), fwCats(c.k.pl)), verdict: verdictOf(fwkS(top.f) - fwkS(c.k.pl), c.nx), next: c.nx, note: noteView(c.k.pl), why: dropWhy(c.k.pl, top.f) });
+      const pool = roster.filter(r => canDrop(r) && r !== top.k && seasonCost(top.f, r.pl) <= SEASON_TOL).sort((a, b) => sVal(a.pl) - sVal(b.pl)).slice(0, 6);
       const others = pool.map(k => { let b2 = null; let dl = []; top.f.games.forEach((g, d) => { if (g && d >= firstOpen && !g.zero && dayOK(top.f, d)) dl.push(d); }); if (!dl.length) dl = [top.d];
         dl.forEach(d => { if (k.from > d) return; const c = evalSwap(top.f, k, d); if (!b2 || c.score > b2.score) b2 = c; }); return b2; }).filter(Boolean).sort((a, b) => b.score - a.score);
       const dropOpts = [optOf(top)].concat(others.filter(c => c.score >= minGain).slice(0, 1).map(optOf)).sort((a, b) => b.score - a.score);
@@ -390,7 +414,7 @@
       const banked = ctx.cats.filter(c => !punted(c) && !inPlay.includes(c) && pOf(c) >= 0.5), gone = ctx.cats.filter(c => !punted(c) && !inPlay.includes(c) && pOf(c) < 0.5);
       const list = []; let R = roster0, B = best0; const usedAdd = new Set(), usedDrop = new Set(); let considered = 0;
       const cap = Math.max(0, SO.cap || 0);
-      const full = R.filter(r => r.to === ctx.nd - 1 && !r.added && !protect.has(key(r.pl.name))).sort((a, b) => fwkS(a.pl) - fwkS(b.pl));
+      const full = R.filter(r => r.to === ctx.nd - 1 && !r.added && !protect.has(key(r.pl.name)) && r.pl.type !== 'ir' && !seasonInfo(r.pl).out).sort((a, b) => sVal(a.pl) - sVal(b.pl));
       const trend = {}; Object.entries(SO.trendDrop || {}).forEach(([n, v]) => { trend[key(n)] = v; }); const half = Math.ceil(full.length / 2);
       const pool0 = full.filter((r, i) => i < 3 || (trend[key(r.pl.name)] && i < half));
       for (let step = 0; step < cap && inPlay.length && firstOpen >= 0; step++) {
@@ -416,11 +440,11 @@
         reason: !cap ? 'adds' : !inPlay.length ? 'none-in-play' : !list.length ? 'below-bar' : null, min: MIN }; }
     // best holds beyond this week (regardless of this week's games)
     const injuredNow = pl => { const g = pl.games.filter(Boolean); return g.length > 0 && g.every(x => x.zero); };
-    const endDrops = roster.filter(r => r.to === ctx.nd - 1 && !protect.has(key(r.pl.name)) && !r.added && !injuredNow(r.pl)); const worst = endDrops.slice().sort((a, b) => fwkS(a.pl) - fwkS(b.pl))[0];
+    const endDrops = roster.filter(r => r.to === ctx.nd - 1 && !protect.has(key(r.pl.name)) && !r.added && !injuredNow(r.pl)); const worst = endDrops.filter(r => r.pl.type !== 'ir').slice().sort((a, b) => sVal(a.pl) - sVal(b.pl))[0];
     const holds = worst ? fas.filter(f => !roster.some(r => r.pl === f) && !f._gone).map(f => ({ f, g: (isOut(f) && ilFree > 0) ? fwkS(f) : fwkS(f) - fwkS(worst.pl) })).filter(x => x.g >= -0.005).sort((a, b) => b.g - a.g).slice(0, 6)
       .map(x => ({ name: x.f.name, team: x.f.team, pos: x.f.pos, perWk: x.g, drop: worst.pl.name, stash: isOut(x.f) && ilFree > 0, h: horizon(x.f), catLater: catDiff(fwCats(x.f), fwCats(worst.pl)) })) : [];
     // every player on your roster now, worth per typical week from here (what a returning injured player is weighed against)
-    const rosVal = roster0.map(r => ({ name: r.pl.name, perWk: +fwkS(r.pl).toFixed(4), out: injuredNow(r.pl), keep: protect.has(key(r.pl.name)) })).sort((a, b) => a.perWk - b.perWk);
+    const rosVal = roster0.map(r => { const si = seasonInfo(r.pl); return { name: r.pl.name, perWk: +fwkS(r.pl).toFixed(4), season: +si.val.toFixed(3), gp: si.gp != null ? Math.round(si.gp) : null, ret: si.ret, done: si.done, out: injuredNow(r.pl), il: r.pl.type === 'ir', keep: protect.has(key(r.pl.name)) }; }).sort((a, b) => a.season - b.season);
     let test = null;
     if (opts.test && opts.test.add && opts.test.drop) {
       const f = P_find(ctx, opts.test.add), k = roster.find(r => key(r.pl.name) === key(opts.test.drop) && r.to === ctx.nd - 1);

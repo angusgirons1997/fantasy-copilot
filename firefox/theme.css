@@ -455,3 +455,16 @@ details.pr>summary{display:block}
 .seg.stabs button{padding-left:8px;padding-right:8px}
 .seg.stabs{flex-wrap:wrap;overflow:visible}.seg.stabs button{flex:1 1 auto}
 .stn .lbl2{flex-wrap:wrap;gap:2px 8px}
+/* v10: numbers back on Week and Players */
+.cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px}
+.cgrid .tile{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 9px;border-radius:12px;min-height:0;text-align:left}
+.cgrid .tile b{font-size:12px;font-weight:500;line-height:1.2;white-space:normal}
+.cgrid .tile span{font:700 18px/1.1 var(--disp)}
+.cgrid .tile i{font-style:normal;font-size:12px;opacity:.8}
+.cgrid .tile.line{box-shadow:inset 0 -3px 0 rgba(255,255,255,.55)}
+.hero-top .hvk{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:4px}.hvk i{font-style:normal;font-size:12px;color:#B8BBC6}
+.gnum{font:600 12px var(--disp);margin-left:6px}
+.gains>div{flex-direction:row;flex-wrap:wrap;align-items:center;column-gap:0}.gains>div>span:first-child{flex-basis:100%;margin-bottom:2px}
+.dwhy{font-size:12px;line-height:1.5;color:var(--ink2);background:var(--soft);border-radius:12px;padding:8px 10px;margin:8px 0}
+table.svs{margin:8px 0 2px}table.svs th:first-child{font-weight:500}table.svs td.plus{font-weight:600}
+.sline{font-size:12px;color:var(--ink2);margin:3px 0 2px;line-height:1.45}

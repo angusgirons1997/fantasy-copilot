@@ -265,8 +265,10 @@
     const vk = r.W >= 0.6 ? 'g' : r.W >= 0.4 ? 'a' : 'r'; const vt = r.W >= 0.6 ? 'Favourite this week' : r.W >= 0.4 ? 'Close week' : 'Underdog this week';
     const yg = lv.me.games && lv.opp.games ? [lv.me.games.remaining, lv.opp.games.remaining] : null; // Yahoo's own count when available
     const L3 = (k, t, f) => { const L = r.cats.filter(f).map(c => c.label); return L.length ? `<div class="hl3"><i class="fd ${k}"></i><span><b>${t}</b> ${esc(L.length > 1 ? L.slice(0, -1).join(', ') + ' and ' + L[L.length - 1] : L[0])}</span></div>` : ''; };
-    let h = `<div class="hero hv-${vk} live"><div class="hv">${vt}</div><div class="hero-vs">against <b>${esc(lv.opp.name || y.oppName || 'opponent')}</b> · right now <b>${now[0]}–${now[1]}${now[2] ? '–' + now[2] : ''}</b></div>
-      <div class="hls3">${L3('g', 'Ahead in', c => c.p > 0.6)}${L3('a', 'Close in', c => c.p >= 0.4 && c.p <= 0.6)}${L3('r', 'Behind in', c => c.p < 0.4)}</div>
+    let h = `<div class="hero hv-${vk} live"><div class="hero-top"><div class="hero-pct">${Math.round(r.W * 100)}%</div><div class="hero-vs">to win, live against<br><b>${esc(lv.opp.name || y.oppName || 'opponent')}</b></div><div class="score"><b>${now[0]}–${now[1]}${now[2] ? '–' + now[2] : ''}</b><span>right now</span></div></div>
+      <div class="hvk" style="margin:4px 0 0"><span class="fk ${vk}">${vt}</span></div>
+      <div class="h" style="margin-top:10px"><span>Chance to win each category</span><span class="sub">at the finish</span></div>
+      <div class="cgrid">${r.cats.slice().sort((a, b) => b.p - a.p).map(c => `<div class="tile ${c.p > 0.6 ? 'cs-a' : c.p >= 0.4 ? 'cs-c' : 'cs-b'}"><b>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</b><span>${Math.round(c.p * 100)}%</span><i>now ${fmt(c, c.nowMe)} v ${fmt(c, c.nowOpp)}</i></div>`).join('')}</div>
       <div class="sub">Games left: <b>${yg ? yg[0] : r.gamesLeft.me}</b> for you, <b>${yg ? yg[1] : r.gamesLeft.opp}</b> for them${yg ? ' (Yahoo)' : ''}.</div>
       <details class="hwhy" data-k="lwhy"><summary>Why</summary><div class="sub">Banked so far plus what Basketball Monster projects for the games left.</div><table class="stt2 inv"><thead><tr><th></th><th>You now</th><th>Them now</th><th>You at the end</th><th>Them at the end</th></tr></thead><tbody>${r.cats.slice().sort((a, b) => b.p - a.p).map(c => `<tr><td>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</td><td>${fmt(c, c.nowMe)}</td><td>${fmt(c, c.nowOpp)}</td><td>${fmt(c, c.me)}</td><td>${fmt(c, c.opp)}</td></tr>`).join('')}</tbody></table><div class="sub">${Math.round(r.W * 100)}% chance to win the week.</div></details></div>`;
     // plain instructions
@@ -326,7 +328,7 @@
     const strong = r.cats.filter(c => c.p < 0.4).map(c => c.label), weak = r.cats.filter(c => c.p > 0.6).map(c => c.label);
     const streams = M.L.fas.filter(id => M.P[id].next && M.P[id].next.g >= 4).sort((a, b) => (M.P[b].next.lv || 0) * M.P[b].next.g - (M.P[a].next.lv || 0) * M.P[a].next.g).slice(0, 3);
     let h = `<div class="card"><div class="h"><span>Next week vs ${esc(M.teamName(y.next.oppTid))}</span><span class="sub">${esc(y.next.start || '')} to ${esc(y.next.end || '')}</span></div>`;
-    h += `<div class="hl3"><i class="fd ${r.W >= 0.6 ? 'g' : r.W >= 0.4 ? 'a' : 'r'}"></i><span><b>${r.W >= 0.6 ? 'Favourite' : r.W >= 0.4 ? 'Close' : 'Underdog'}</b> on Basketball Monster's projections · <b>${r.games.me}</b> games for you, <b>${r.games.opp}</b> for them</span></div>`;
+    h += `<div class="hl3"><i class="fd ${r.W >= 0.6 ? 'g' : r.W >= 0.4 ? 'a' : 'r'}"></i><span><b>${r.W >= 0.6 ? 'Favourite' : r.W >= 0.4 ? 'Close' : 'Underdog'}</b> (${Math.round(r.W * 100)}% to win) on Basketball Monster's projections · <b>${r.games.me}</b> games for you, <b>${r.games.opp}</b> for them</span></div>`;
     // their actual Yahoo results so far (shown as facts; the forecast above comes from BBM projections only)
     const pf = M.prof && M.prof.teams[String(y.next.oppTid)];
     if (pf && pf.weeks) { const lb = c => ((H && H.LBL) || {})[c] || c; const by = M.ctx.cats.filter(c => pf.cat[c] && pf.cat[c].n).map(c => ({ c, r: (pf.cat[c].w + pf.cat[c].t / 2) / pf.cat[c].n }));

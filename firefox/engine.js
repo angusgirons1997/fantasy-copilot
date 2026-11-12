@@ -135,8 +135,10 @@
     const P = model.players.map((p, i) => Object.assign({}, p, { idx: i }));
     // Yahoo is the word on the injured list: a player of yours in an IL spot whom Yahoo still lists as out stays there and is never
     // planned as a starter (BBM can show him as only questionable). He's planned back once Yahoo clears him.
-    { const yIL = new Set((opts.yahooRows || []).filter(r => /^IL/.test(r.slot || '') && /^(O|OUT|INJ|IL|NA|SUSP)$/i.test(String(r.inj || '').trim())).map(r => key(r.name)));
-      if (yIL.size) P.forEach(p => { if (p.side === meSide && p.type !== 'fa' && yIL.has(key(p.name))) p.type = 'ir'; }); }
+    const yIL = new Set((opts.yahooRows || []).filter(r => /^IL/.test(r.slot || '') && /^(O|OUT|INJ|IL|NA|SUSP)$/i.test(String(r.inj || '').trim())).map(r => key(r.name)));
+    const markIL = () => { if (yIL.size) P.forEach(p => { if (p.side === meSide && p.type !== 'fa' && yIL.has(key(p.name))) p.type = 'ir'; }); }; markIL();
+    // anyone in an injured-list spot on Yahoo, whatever his status: dropping him frees no roster spot, so he's never a pickup's drop
+    const ilSlot = new Set((opts.yahooRows || []).filter(r => /^IL/.test(r.slot || '')).map(r => key(r.name)));
     // reconcile with a newer Yahoo roster (BBM can lag hours behind pickups)
     ctx0reconcile: if (opts.roster && opts.roster.length >= 8) {
       const meS = opts.swap ? 1 : 0; const pool = []; const seenK = new Set(); P.filter(p => p.side === meS).sort((a, b) => (a.type === 'fa') - (b.type === 'fa')).forEach(p => { const k = key(p.name); if (!seenK.has(k)) { seenK.add(k); pool.push(p); } });
@@ -151,10 +153,12 @@
       joined.forEach(j => P.filter(p => p.side === meS && key(p.name) === key(j.name)).forEach(p => { p.type = 'cur'; p._joined = true; }));
       P._recon.gone = gone.map(p => p.name); P._recon.joined = joined.map(p => p.name);
     }
+    markIL(); // again, for players BBM didn't yet show on your roster (they come back from the reconcile as 'cur')
     const mine = P.filter(p => p.side === meSide && p.type !== 'fa');
     const opp = P.filter(p => p.side !== meSide && p.type !== 'fa');
     const fas = P.filter(p => p.side === meSide && p.type === 'fa');
     const ctx = { recon: P._recon || null, model, cats, need, nd, slots, eligOf, open, mine, opp, fas, scale: {}, off: [{}, {}], meName: meSide ? model.opp : model.me, oppName: meSide ? model.me : model.opp };
+    ctx.ilSlot = ilSlot;
     ctx.obj = opts.obj === 'cats' ? 'cats' : 'win'; ctx.punt = (opts.punt || []).filter(c => cats.includes(c)); ctx.oppGames = opts.oppGames || null;
     // thresholds (minimum gain for a pickup, tolerance for keeping Yahoo's lineup) are set in win-chance units; in a categories
     // league the same decision is worth less per category, so they're scaled to match
@@ -328,12 +332,12 @@
     const waitTill = {}; Object.entries(R0.waiverUntil || {}).forEach(([k, d]) => waitTill[key(k)] = d);
     const dayOK = (f, d) => !waitTill[key(f.name)] || (model.days[d] && model.days[d].date >= waitTill[key(f.name)]);
     // a drop candidate is anyone a free agent beats on the same measure (this week plus the weeks after); no rank cut-off
-    const canDrop = r => r.to === ctx.nd - 1 && !protect.has(key(r.pl.name)) && !r.added && r.pl.type !== 'ir';
+    const canDrop = r => r.to === ctx.nd - 1 && !protect.has(key(r.pl.name)) && !r.added && r.pl.type !== 'ir' && !ctx.ilSlot.has(key(r.pl.name));
     // a pickup may cost a little over the season if it wins now, but no more than this (about 0.3 categories across the season)
     const seasonCost = (f, k) => sVal(k) - sVal(f); const SEASON_TOL = 3 * (opts.minGain || 0.03) * ctx.unit;
     const gamesFrom = (pl, d) => pl.games.filter((g, i) => g && i >= d && !g.zero).length;
     // the reason for a drop, in facts: where he sits on your roster over the rest of the season, his projected games, his return
-    const dropWhy = (pl, f) => { const si = seasonInfo(pl), fi = seasonInfo(f); const mine = roster.filter(r => r.to === ctx.nd - 1 && r.pl.type !== 'ir' && !r.added).map(r => r.pl).sort((a, b) => sVal(a) - sVal(b));
+    const dropWhy = (pl, f) => { const si = seasonInfo(pl), fi = seasonInfo(f); const mine = roster.filter(r => r.to === ctx.nd - 1 && r.pl.type !== 'ir' && !ctx.ilSlot.has(key(r.pl.name)) && !r.added).map(r => r.pl).sort((a, b) => sVal(a) - sVal(b));
       const pos = mine.indexOf(pl); const N = (opts.rostered || 0); return { order: pos >= 0 ? pos + 1 : null, of: mine.length, gp: si.gp != null ? Math.round(si.gp) : null, n: si.n, ret: si.ret, out: si.out, rank: si.rank,
         addGp: fi.gp != null ? Math.round(fi.gp) : null, seasonGain: +(sVal(f) - sVal(pl)).toFixed(3), claim: !!(N && si.rank && si.rank <= N / 2) }; };
     const verdictOf = (fw, nx) => fw >= 0.01 ? 'long' : (fw >= -0.002 || (nx != null && nx >= 0.01)) ? 'few' : 'week';
@@ -414,7 +418,7 @@
       const banked = ctx.cats.filter(c => !punted(c) && !inPlay.includes(c) && pOf(c) >= 0.5), gone = ctx.cats.filter(c => !punted(c) && !inPlay.includes(c) && pOf(c) < 0.5);
       const list = []; let R = roster0, B = best0; const usedAdd = new Set(), usedDrop = new Set(); let considered = 0;
       const cap = Math.max(0, SO.cap || 0);
-      const full = R.filter(r => r.to === ctx.nd - 1 && !r.added && !protect.has(key(r.pl.name)) && r.pl.type !== 'ir' && !seasonInfo(r.pl).out).sort((a, b) => sVal(a.pl) - sVal(b.pl));
+      const full = R.filter(r => r.to === ctx.nd - 1 && !r.added && !protect.has(key(r.pl.name)) && r.pl.type !== 'ir' && !ctx.ilSlot.has(key(r.pl.name)) && !seasonInfo(r.pl).out).sort((a, b) => sVal(a.pl) - sVal(b.pl));
       const trend = {}; Object.entries(SO.trendDrop || {}).forEach(([n, v]) => { trend[key(n)] = v; }); const half = Math.ceil(full.length / 2);
       const pool0 = full.filter((r, i) => i < 3 || (trend[key(r.pl.name)] && i < half));
       for (let step = 0; step < cap && inPlay.length && firstOpen >= 0; step++) {
@@ -440,7 +444,7 @@
         reason: !cap ? 'adds' : !inPlay.length ? 'none-in-play' : !list.length ? 'below-bar' : null, min: MIN }; }
     // best holds beyond this week (regardless of this week's games)
     const injuredNow = pl => { const g = pl.games.filter(Boolean); return g.length > 0 && g.every(x => x.zero); };
-    const endDrops = roster.filter(r => r.to === ctx.nd - 1 && !protect.has(key(r.pl.name)) && !r.added && !injuredNow(r.pl)); const worst = endDrops.filter(r => r.pl.type !== 'ir').slice().sort((a, b) => sVal(a.pl) - sVal(b.pl))[0];
+    const endDrops = roster.filter(r => r.to === ctx.nd - 1 && !protect.has(key(r.pl.name)) && !r.added && !injuredNow(r.pl)); const worst = endDrops.filter(r => r.pl.type !== 'ir' && !ctx.ilSlot.has(key(r.pl.name))).slice().sort((a, b) => sVal(a.pl) - sVal(b.pl))[0];
     const holds = worst ? fas.filter(f => !roster.some(r => r.pl === f) && !f._gone).map(f => ({ f, g: (isOut(f) && ilFree > 0) ? fwkS(f) : fwkS(f) - fwkS(worst.pl) })).filter(x => x.g >= -0.005).sort((a, b) => b.g - a.g).slice(0, 6)
       .map(x => ({ name: x.f.name, team: x.f.team, pos: x.f.pos, perWk: x.g, drop: worst.pl.name, stash: isOut(x.f) && ilFree > 0, h: horizon(x.f), catLater: catDiff(fwCats(x.f), fwCats(worst.pl)) })) : [];
     // every player on your roster now, worth per typical week from here (what a returning injured player is weighed against)

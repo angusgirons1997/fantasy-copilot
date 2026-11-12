@@ -485,3 +485,6 @@ table.svs{margin:8px 0 2px}table.svs th:first-child{font-weight:500}table.svs td
 .grh2 .gd{display:block;font-size:12px;color:var(--ink2);margin-top:2px}
 .grh2.k-g{border-left-color:var(--good);background:var(--good-soft)}.grh2.k-gr{border-left-color:var(--good);background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
 .grh2.k-a{border-left-color:var(--warn);background:var(--warn-soft)}.grh2.k-r{border-left-color:var(--bad);background:var(--bad-soft)}.grh2.k-n{border-left-color:var(--mute)}
+details.pr .l2 .ln{line-height:1.45}details.pr .l2 .ln span{color:var(--mute)}
+.grh2 .gc{display:block;font-size:12px;font-weight:600;color:var(--ink);margin-top:3px}
+details.pr .l2 .ln{color:var(--ink)}details.pr .l2 .ln span{color:var(--mute);font-weight:500}

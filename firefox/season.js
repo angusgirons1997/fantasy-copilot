@@ -868,17 +868,18 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const injChip = x => { const s = String(x || '').trim(); const k = s.split(/\s+/)[0].toUpperCase(); return INJW[k] ? INJW[k] + s.slice(k.length) : s; };
   // what a player is good and bad at, in words (category values of +0.5 / −0.5 and beyond)
   const goodAt = (cv, cs) => cs.filter(c => (cv[c] || 0) >= 0.5).sort((a, b) => cv[b] - cv[a]), badAt = (cv, cs) => cs.filter(c => (cv[c] || 0) <= -0.5).sort((a, b) => cv[a] - cv[b]);
+  // a player's read as short lines, one statement each: [label, categories]
   function fitWords(r, V, grp) { grp = grp || V.grp; const cv = r.cv; const gl = goodAt(cv, grp.lost), gs = goodAt(cv, grp.swing), gw = goodAt(cv, grp.won), bs = badAt(cv, grp.swing), bw = badAt(cv, grp.won);
-    const parts = [];
-    if (r.kind === 'wasted') parts.push(`Most of his value is in ${andL(gl.map(NN))}, which ${gl.length > 1 ? "don't" : "doesn't"} win you anything.`);
-    if (r.kind === 'fits') parts.push(`Helps your ${andL(gs.map(NN)) || 'swing categories'}.`);
-    if (r.kind === 'holds') parts.push(`Strong in ${andL(gw.map(NN))}, categories you already win.`);
-    if (r.kind === 'costs') parts.push(`Hurts your ${andL(bs.map(NN))}.`);
-    if (r.kind === 'small') parts.push(`Close to average in the categories that matter to you.`);
-    if (r.kind !== 'fits' && gs.length) parts.push(`Also helps your ${andL(gs.map(NN))}.`);
-    if (r.kind !== 'costs' && bs.length) parts.push(`Costs you some ${andL(bs.map(NN))}.`);
-    if (bw.length && r.kind !== 'holds') parts.push(`Weak in ${andL(bw.map(NN))}.`);
-    return parts.join(' '); }
+    const L = (a) => andL(a.map(NN)); const parts = [];
+    if (r.kind === 'wasted') parts.push(['Value in', L(gl) + ' (lost)']);
+    if (r.kind === 'fits') parts.push(['Helps', L(gs) || 'your swing categories']);
+    if (r.kind === 'holds') parts.push(['Strong in', L(gw) + ' (already won)']);
+    if (r.kind === 'costs') parts.push(['Hurts', L(bs)]);
+    if (r.kind === 'small') parts.push(['', 'Close to average where it matters']);
+    if (r.kind !== 'fits' && gs.length) parts.push(['Also helps', L(gs)]);
+    if (r.kind !== 'costs' && bs.length) parts.push(['Costs some', L(bs)]);
+    if (bw.length && r.kind !== 'holds') parts.push(['Weak in', L(bw)]);
+    return parts; }
   // the stats behind a read: Basketball Monster's projection, this season so far and the last two weeks, per game
   function statsTable(p, cats) { const cols = [['Projection', p.ros], ['Season', p.season], ['Last 2 weeks', p.form]].filter(x => x[1] && x[1].st);
     const v = (st, c) => { if (!st) return '–'; if (c === 'fg%') return st.fga ? (st.fg / st.fga * 100).toFixed(1) + '%' : '–'; if (c === 'ft%') return st.fta ? (st.ft / st.fta * 100).toFixed(1) + '%' : '–'; const x = st[c === '2d' ? '2d' : c]; return x == null ? '–' : (+x).toFixed(c === 's' || c === 'b' || c === '3' || c === 'to' || c === '2d' ? 1 : 1); };
@@ -896,7 +897,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     // one player: a coloured read in words; the stats behind it on tap
     const playerRow = (r, o) => { o = o || {}; const words = fitWords(r, V, o.grp);
       return `<details class="pr" data-k="pr${esc(r.id)}"><summary><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b><span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>${r.inj ? `<span class="chip lost">${esc(injChip(r.inj))}</span>` : ''}${tagChip(r.tag)}${o.block ? '<span class="chip plain">On the block</span>' : ''}</div>
-        <div class="l2">${esc(words)}${o.owner ? ` <span class="muted">· ${owner(r.own)}</span>` : ''}</div></summary>
+        <div class="l2">${words.map(w => `<div class="ln">${w[0] ? `<span>${esc(w[0])}</span> ` : ''}${esc(w[1])}</div>`).join('')}${o.owner ? `<div class="ln muted">${owner(r.own)}</div>` : ''}</div></summary>
         <div class="ld">${o.block != null ? `<div class="row" style="margin-bottom:8px"><button class="lnk blk${o.block ? ' on' : ''}" data-block="${esc(r.id)}">${o.block ? 'Take off the trade block' : 'Put on the trade block'}</button></div>` : ''}${statsTable(r.p, V.cats)}<div class="sub">${r.g} games left${r.brank ? ' · Basketball Monster rank ' + r.brank : ''}${r.yrank ? ' · Yahoo rank ' + r.yrank : ''}</div>${r.notes.map(n => `<div class="sub">${esc(n.by)} (${esc(n.tag)}${n.tagNote ? ' ' + esc(n.tagNote) : ''}): “${esc(n.text)}”</div>`).join('')}</div></details>`; };
     if (window.STAB === 'build') {
       const B = V.band; const ord = ['locked', 'safe', 'swing', 'dead', 'punt']; const by = k => V.cats.filter(c => B[c] === k);
@@ -926,8 +927,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     } else if (window.STAB === 'roster') {
       const block = S(lg).block || []; const ORD = ['wasted', 'costs', 'fits', 'holds', 'small'];
       h += `<div class="legend">${Object.entries(FIT).map(([k, v]) => `<span>${dot(k)}${v[1]}</span>`).join('')}</div>`;
+      const gcats = k => { const G = V.grp; const L = a => esc(andL(a.map(NN))); return k === 'wasted' ? (G.lost.length ? 'Your lost categories: ' + L(G.lost) : '') : k === 'fits' || k === 'costs' ? (G.swing.length ? 'Your swing categories: ' + L(G.swing) : '') : k === 'holds' ? (G.won.length ? 'Categories you win: ' + L(G.won) : '') : ''; };
       ORD.forEach(k => { const R = V.mine.filter(r => r.kind === k).sort((a, b) => b.lv - a.lv); if (!R.length) return;
-        h += `<div class="grh2 k-${FIT[k][0]}"><div><b>${FIT[k][1]}</b><span class="cnt">${R.length}</span></div><span class="gd">${GDESC[k]}</span></div>` + R.map(r => playerRow(r, { block: block.includes(r.id) })).join(''); });
+        h += `<div class="grh2 k-${FIT[k][0]}"><div><b>${FIT[k][1]}</b><span class="cnt">${R.length}</span></div><span class="gd">${GDESC[k]}</span>${gcats(k) ? `<span class="gc">${gcats(k)}</span>` : ''}</div>` + R.map(r => playerRow(r, { block: block.includes(r.id) })).join(''); });
     } else if (window.STAB === 'block') {
       const block = (S(lg).block || []).filter(id => V.mine.some(r => r.id === id));
       if (!block.length) h += `<div class="strnone">Nobody on the block yet. Open a player in Roster and tap "Put on the trade block".</div>`;

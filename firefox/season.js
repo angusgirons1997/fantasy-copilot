@@ -28,6 +28,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const statLine = name => { const M = modelFor(league()); const q = M && M.P[M.find(name)]; const st = q && q.ros && q.ros.st; if (!st) return '';
     const f = (k, n) => st[k] != null ? `${(+st[k]).toFixed(1)} ${n}` : null; const parts = [f('p', 'points'), f('r', 'rebounds'), f('a', 'assists'), f('3', '3-pointers'), f('s', 'steals'), f('b', 'blocks'), st.fga ? `${(st.fg / st.fga * 100).toFixed(1)}% field goals` : null, st.fta ? `${(st.ft / st.fta * 100).toFixed(1)}% free throws` : null, f('to', 'turnovers')].filter(Boolean);
     return `<div class="sline">${esc(parts.join(' · '))}${q.ros.g != null ? ` · <b>${q.ros.g}</b> games left` : ''}</div>`; };
+  // the call in one sentence, with the numbers: categories won a week (or win chance, in leagues decided by the week's winner)
+  const addSentence = (x, o) => { const u = PPC ? ' categories' : ' points of win chance'; const sc = o.score != null ? o.score : x.score; const n = v => `<b class="${v >= 0 ? 'plus' : 'minus'}">${pp(v)}${u}</b>`;
+    return `Adding ${esc(sur(x.add))} for ${esc(sur(o.name))}: ${sc != null ? `${n(sc)} a week over the next few weeks` : ''}${o.week != null ? `${sc != null ? ' · ' : ''}${n(o.week)} this week` : ''}${o.next != null ? ` · ${n(o.next)} next week` : ''}${o.futWk != null ? ` · ${n(o.futWk)} a week after that` : ''}.`; };
   const listW = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '';
   // which categories a move helps or hurts, in words (changes of 2 points of win chance or more)
   const catWords = (list, key) => { const L = (list || []).map(c => ({ c: c.c, d: key === 'd' ? c.d : (c.to - c.from) })).filter(c => Math.abs(c.d) >= 0.02); const up = L.filter(c => c.d > 0).sort((a, b) => b.d - a.d).map(c => c.c), dn = L.filter(c => c.d < 0).sort((a, b) => a.d - b.d).map(c => c.c);
@@ -517,6 +520,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const o = Object.assign({}, d || { name: x.drop, week: x.week, futWk: x.futWk, next: x.next, games: x.dropGames, addGames: x.games, catWeek: x.catWeek, catLater: x.catLater, date: x.date }); { const lt = ltOf(x.add, o.name); if (lt != null) o.futWk = lt; }
       return `<div class="l1"><div><div class="pname plus">+ ${esc(x.add)}</div><div class="when">${esc(teamN(x.addTeam))} · ${gw(o.addGames != null ? o.addGames : x.games)} · add on ${esc(fmtD(o.date || x.date))}</div>${(() => { const av = availOf(yrFor(lg), x.add); return av ? (av.st === 'W' ? `<div class="when">On waivers on Yahoo${av.wv ? ' until ' + esc(av.wv) : ''}</div>` : '') : `<div class="when muted">Checking on Yahoo that he's still free…</div>`; })()}${M && M.hot(x.add) ? `<div class="when plus">${esc(M.hot(x.add))}: others may add him first</div>` : ''}</div><span class="chip ${v[0]}">${v[1]}</span></div>
         <div class="drops"><span class="sub">Drop</span>${x.dropOpts.map(dd => `<button class="dopt${dd.name === o.name ? ' on' : ''}" data-add="${esc(x.add)}" data-drop="${esc(dd.name)}" title="${dd.injured ? 'Injured now: check his timeline' : ''}">${esc(sur(dd.name))}${dd.injured ? ' (injured)' : ''}<i>${gw(dd.games)}${M && M.find(dd.name) && M.snapRisk(M.find(dd.name)) ? ' · likely snapped up' : ''}</i></button>`).join('')}</div>
+        <div class="adv">${addSentence(x, o)}</div>
         ${statsVs(x.add, o.name)}
         <div class="gains">${(o.score != null ? o.score : x.score) != null ? `<div><span>Next few weeks, overall</span>${gainChip(o.score != null ? o.score : x.score)}</div>` : ''}<div><span>This week</span>${gainChip(o.week)}</div>${o.next != null ? `<div><span>Next week</span>${gainChip(o.next)}</div>` : ''}<div><span>Each week after</span>${gainChip(o.futWk)}</div></div>
         <div class="sub">${catWords(o.catWeek)}</div>
@@ -823,6 +827,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   //    "small impact". Analyst tags are shown as grey labels and never change a read.
   window.STAB = window.STAB || 'build';
   const FIT = { fits: ['g', 'Fits your build'], holds: ['gr', 'Holds your lead'], wasted: ['a', 'Value in lost categories'], costs: ['r', 'Costs you'], small: ['n', 'Small impact'] };
+  const GDESC = { wasted: 'Most of their value is in categories you\'ve lost', costs: 'Below average in the categories that decide your weeks', fits: 'Above average in the categories that decide your weeks', holds: 'Strong in categories you already win', small: 'Close to average where it matters to you' };
   const FT_RULE = { fits: 0.5, wasted: 1.0, share: 0.5, holds: 1.5, costs: -1.0 }; // in Basketball Monster category values (0 is an average player)
   function fitOf(cv, grp, FT) { FT = FT || FT_RULE; const sum = cs => cs.reduce((a, c) => a + (cv[c] || 0), 0), pos = cs => cs.reduce((a, c) => a + Math.max(0, cv[c] || 0), 0);
     const lost = pos(grp.lost), swing = sum(grp.swing), won = sum(grp.won); const plus = lost + Math.max(0, swing) + Math.max(0, won);
@@ -897,6 +902,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const B = V.band; const ord = ['locked', 'safe', 'swing', 'dead', 'punt']; const by = k => V.cats.filter(c => B[c] === k);
       const won = by('locked').concat(by('safe')), sw = by('swing'), lost = by('dead').concat(by('punt'));
       const kept = V.cats.filter(c => B[c] !== 'punt'); const need = Math.floor(V.cats.length / 2) + 1;
+      { const pu = V.cats.filter(c => B[c] === 'punt');
+        h += `<div class="puntbar"><div class="pbh"><span>${pu.length ? `Punting <b>${andL(pu.map(N))}</b>` : 'No punt: playing every category'}</span><button class="lnk" data-openset="build">Change</button></div>
+          <div class="onoff">${V.cats.map(c => `<span class="oo ${B[c] === 'punt' ? 'off' : 'on'}" title="${B[c] === 'punt' ? 'Punted: not competing' : 'Playing for it'}"><i></i>${N(c)}</span>`).join('')}</div></div>`; }
       h += `<div class="hlbig">You're built to win <b>${andL(won.map(N))}</b>.${sw.length ? ` <b>${andL(sw.map(N)).replace(/^./, x => x.toUpperCase())}</b> decide${sw.length > 1 ? '' : 's'} your weeks.` : ''}</div>
         <div class="sub hls">Winning ${won.length} of ${kept.length} categories you play for; a week needs ${need} of ${V.cats.length}.${lost.length ? ` Not competing in ${andL(lost.map(N))}.` : ''}</div>`;
       h += `<div class="cbd2">${V.cats.slice().sort((a, b) => ord.indexOf(B[a]) - ord.indexOf(B[b])).map(c => { const b = B[c], bn = V.bandNow ? V.bandNow[c] : b; const w = V.snap.win[c]; const me = V.rows.find(r => r.tid === M.L.me); const rk = me && me.val[c] != null ? 1 + V.rows.filter(r => r.tid !== me.tid && r.val[c] != null && r.val[c] > me.val[c]).length : null;
@@ -919,7 +927,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const block = S(lg).block || []; const ORD = ['wasted', 'costs', 'fits', 'holds', 'small'];
       h += `<div class="legend">${Object.entries(FIT).map(([k, v]) => `<span>${dot(k)}${v[1]}</span>`).join('')}</div>`;
       ORD.forEach(k => { const R = V.mine.filter(r => r.kind === k).sort((a, b) => b.lv - a.lv); if (!R.length) return;
-        h += `<div class="grh">${dot(k)}${FIT[k][1]} <span class="muted">${R.length}</span></div>` + R.map(r => playerRow(r, { block: block.includes(r.id) })).join(''); });
+        h += `<div class="grh2 k-${FIT[k][0]}"><div><b>${FIT[k][1]}</b><span class="cnt">${R.length}</span></div><span class="gd">${GDESC[k]}</span></div>` + R.map(r => playerRow(r, { block: block.includes(r.id) })).join(''); });
     } else if (window.STAB === 'block') {
       const block = (S(lg).block || []).filter(id => V.mine.some(r => r.id === id));
       if (!block.length) h += `<div class="strnone">Nobody on the block yet. Open a player in Roster and tap "Put on the trade block".</div>`;

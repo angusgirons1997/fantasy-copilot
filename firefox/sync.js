@@ -305,10 +305,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         teams[0].games = { played: a.played, total: a.total, remaining: +n[0] }; teams[1].games = { played: b.played, total: b.total, remaining: +n[3] }; } }
     return teams.every(t => t.tid) ? teams : null; }
   async function yLive(y) {
-    const d = html(await req(`${YH}/nba/${y.lid}/matchup?week=${y.week}&mid1=${y.tid}`, null, 'Yahoo matchup page')); const teams = parseLive(d, y.lid);
+    // without a week number Yahoo opens the current week, so live totals keep coming even when the roster read had no week
+    const d = html(await req(`${YH}/nba/${y.lid}/matchup?${y.week ? 'week=' + y.week + '&' : ''}mid1=${y.tid}`, null, 'Yahoo matchup page')); const teams = parseLive(d, y.lid);
+    const wk = y.week || (() => { const m = ((d.querySelector('#matchup-wall-header, .matchup-nav, [class*="week"]') || d.body || {}).textContent || '').match(/Week\s+(\d+)/); return m ? +m[1] : null; })();
     if (!teams) { trace('Yahoo live totals', false, 'category table not found'); return null; }
     const me = teams.find(t => String(t.tid) === String(y.tid)), op = teams.find(t => String(t.tid) !== String(y.tid)); if (!me || !op) return null;
-    trace('Yahoo live totals', true, 'week ' + y.week + ' · ' + Object.keys(me.st).length + ' stats · ' + me.score + '–' + op.score); return { me, op };
+    trace('Yahoo live totals', true, 'week ' + wk + ' · ' + Object.keys(me.st).length + ' stats · ' + me.score + '–' + op.score); return { me, op, week: wk };
   }
   // league settings from Yahoo's Settings page (the official rules): scoring type, weekly adds, waivers, playoffs, roster spots
   function parseSettings(d) { const o = {}; d.querySelectorAll('table tr').forEach(tr => { const c = [...tr.querySelectorAll('td, th')].map(x => (x.textContent || '').replace(/\s+/g, ' ').trim()); if (c.length === 2 && c[0].length < 60) o[c[0].replace(/:$/, '')] = c[1]; });
@@ -501,7 +503,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       // transactions (adds this week, opponent moves), live totals, settings, the league table and trends come from Yahoo's pages
       {
         if (old('tx:' + y.lid, 0.15)) { log('transactions'); const tx = await yTransactions(y.lid); if (tx.rows.length || !all['tx:' + y.lid] || (all['tx:' + y.lid].src !== 'page')) await put({ ['tx:' + y.lid]: tx }); }
-        if (y.week) { try { const lv = await yLive(y); if (lv) await put({ ['ylive:' + y.lid]: { ts: Date.now(), week: y.week, start, end, status: 'live', me: lv.me, opp: lv.op, src: 'page' } }); } catch (e) { trace('Yahoo live totals', false, e.message); } }
+        { try { const lv = await yLive(y); if (lv && (lv.week || y.week)) await put({ ['ylive:' + y.lid]: { ts: Date.now(), week: lv.week || y.week, start, end, status: 'live', me: lv.me, opp: lv.op, src: 'page' } }); else if (!lv) trace('Yahoo live totals', false, 'no totals on the matchup page'); } catch (e) { trace('Yahoo live totals', false, e.message); } }
         // last week's final result, straight from Yahoo's matchup page (once per week): feeds the track record and teaches the
         // co-pilot how sure its forecasts should be
         if (y.week > 1) { const pStart = addDay(start, -7), tk = 'track:' + m.league + ':' + pStart, rk = 'h2hres:' + y.lid + ':' + pStart;

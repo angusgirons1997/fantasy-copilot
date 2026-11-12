@@ -44,7 +44,23 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     }
     return o;
   }
-  let last = ''; function push(force) { if (document.visibilityState === 'hidden' && !force) return; try { const o = read(); const sig = JSON.stringify([o.kind, o.url, o.give, o.get, o.apid, o.dpid, Object.keys(o.players).length, o.teams]); if (sig === last && !force) return; last = sig; browser.storage.local.set({ ypage: o }); } catch (e) {} }
+  // your matchup open on Yahoo: copy its category totals into the co-pilot straight away, so the live card matches the page
+  const MKEY = { 'FG%': 'fg%', 'FT%': 'ft%', '3PTM': '3', 'PTS': 'p', 'REB': 'r', 'AST': 'a', 'ST': 's', 'STL': 's', 'BLK': 'b', 'TO': 'to', 'DD': '2d', 'FGM': 'fg', 'FTM': 'ft' };
+  let liveSig = '';
+  function liveFromPage() { if (kind() !== 'matchup') return;
+    const tb = [...document.querySelectorAll('table')].find(t => /FG%|PTS|REB/.test(txt(t.querySelector('thead'))) && t.querySelectorAll('tbody tr').length === 2 && /Score/i.test(txt(t.querySelector('thead')))); if (!tb) return;
+    const hd = [...tb.querySelectorAll('thead th')].map(th => txt(th).replace(/\*/g, ''));
+    const teams = [...tb.querySelectorAll('tbody tr')].map(tr => { const tds = [...tr.querySelectorAll('td')]; const a = tr.querySelector('a[href*="/nba/' + lid + '/"]'); const m = a && (a.getAttribute('href') || '').match(/\/nba\/\d+\/(\d+)/);
+      const o = { tid: m ? m[1] : null, name: a ? txt(a) : '', st: {} };
+      hd.forEach((h, i) => { const v = txt(tds[i]); if (!v || v === '-' || v === '-/-') return; if (h === 'FGM/A' || h === 'FTM/A') { const [x, y] = v.split('/').map(Number); if (isNaN(x) || isNaN(y)) return; if (h === 'FGM/A') { o.st.fg = x; o.st.fga = y; } else { o.st.ft = x; o.st.fta = y; } } else if (MKEY[h] && !isNaN(+v)) o.st[MKEY[h]] = +v; });
+      if (o.st.fg != null && o.st.fga == null && o.st['fg%'] > 0) o.st.fga = Math.round(o.st.fg / o.st['fg%']); if (o.st.ft != null && o.st.fta == null && o.st['ft%'] > 0) o.st.fta = Math.round(o.st.ft / o.st['ft%']);
+      o.score = +txt(tds[tds.length - 1]) || 0; return o; });
+    const wk = +(qp('week') || ((txt(document.querySelector('#matchup-wall-header')) || txt(document.body)).match(/Week\s+(\d+)/) || [])[1]) || null;
+    const sig = JSON.stringify([wk, teams]); if (sig === liveSig) return; liveSig = sig;
+    const k = 'ylive:' + lid; browser.storage.local.get([k, 'ymine']).then(o => { const cur = o[k]; const myTid = (o.ymine || {})[lid] || (cur && cur.me && cur.me.tid);
+      const me = teams.find(t => t.tid && String(t.tid) === String(myTid)), op = teams.find(t => t !== me); if (!me || !op || !cur || !wk || cur.week !== wk) return; // only this week's matchup, and only yours
+      browser.storage.local.set({ [k]: Object.assign({}, cur, { ts: Date.now(), me: Object.assign({}, cur.me, { st: me.st, score: me.score }), opp: Object.assign({}, cur.opp, { st: op.st, score: op.score }), src: 'tab' }) }); }).catch(() => {}); }
+  let last = ''; function push(force) { try { liveFromPage(); } catch (e) {} if (document.visibilityState === 'hidden' && !force) return; try { const o = read(); const sig = JSON.stringify([o.kind, o.url, o.give, o.get, o.apid, o.dpid, Object.keys(o.players).length, o.teams]); if (sig === last && !force) return; last = sig; browser.storage.local.set({ ypage: o }); } catch (e) {} }
   push(true);
   // your own team in every league, from Yahoo's top bar (works on any Yahoo Fantasy page): the co-pilot never loses track of your leagues
   try { const mine = {}; document.querySelectorAll('a[data-ylk*="navtray-fantasy"][href*="/nba/"], a[data-ylk*="slk:My Team"][href*="/nba/"]').forEach(a => { const m = (a.getAttribute('href') || '').match(/basketball\.fantasysports\.yahoo\.com\/nba\/(\d+)\/(\d+)\/?$/); if (m) mine[m[1]] = m[2]; });

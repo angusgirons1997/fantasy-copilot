@@ -3,6 +3,20 @@
 // and picks up straight away when you sign back in to Yahoo or Basketball Monster.
 (function () {
   const L = browser.storage.local;
+  // ---- updates: new versions are signed and listed on GitHub. Firefox installs them by itself (it checks about once a day, or
+  // hourly with extensions.update.interval set to 3600). This also checks the list every hour, asks Firefox to look straight away
+  // where it can, and tells the panel when a newer version exists so it can be installed in one tap. No listener on
+  // onUpdateAvailable, so Firefox applies a downloaded update immediately. ----
+  const UPD = 'https://raw.githubusercontent.com/angusgirons1997/fantasy-copilot/main/updates.json';
+  const vnum = v => String(v || '0').split('.').map(Number).reduce((a, x) => a * 1000 + (x || 0), 0);
+  async function checkUpdate() { try {
+      if (browser.runtime.requestUpdateCheck) { try { await browser.runtime.requestUpdateCheck(); } catch (e) {} }
+      const r = await fetch(UPD + '?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return; const j = await r.json();
+      const id = (browser.runtime.getManifest().browser_specific_settings || {}).gecko; const list = ((j.addons || {})[id && id.id] || {}).updates || [];
+      const top = list.slice().sort((a, b) => vnum(b.version) - vnum(a.version))[0]; const cur = browser.runtime.getManifest().version;
+      await L.set({ updAvail: top && vnum(top.version) > vnum(cur) ? { version: top.version, link: top.update_link, ts: Date.now() } : null });
+    } catch (e) {} }
+  setTimeout(checkUpdate, 20e3); setInterval(checkUpdate, 60 * 60e3);
   let lastStep = 0;
   const step = m => { if (Date.now() - lastStep > 1500) { lastStep = Date.now(); L.set({ syncProgress: { msg: m, ts: Date.now() } }); } };
   const run = (force, opt) => window.SYNC.auto(!!force, step, Object.assign({ by: 'background', lightMin: 25 }, opt || {}))

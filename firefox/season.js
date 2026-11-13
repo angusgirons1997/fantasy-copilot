@@ -365,9 +365,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     else if (!bx || !bx.ts) iss.push(['warn', 'Basketball Monster projections not loaded yet']);
     if (planFrom[lg] === 'bbm-rest') iss.push(['info', "Matchup Monster unavailable: planned from Basketball Monster's projections"]);
     healthNow[lg] = { iss, good }; // shown in the one status line at the top (see syncBar); nothing here needs you to act
-    syncBar(); return authHtml(); // sign-in prompts are the only status that sits in the page: they need you
+    syncBar(); return updHtml() + authHtml(); // sign-in prompts are the only status that sits in the page: they need you
   }
   const healthNow = {};
+  // a newer signed version than the one running: Firefox installs it by itself; until it has, one tap here installs it
+  const vnum = v => String(v || '0').split('.').map(Number).reduce((a, x) => a * 1000 + (x || 0), 0);
+  const updHtml = () => { const u = ST.updAvail; const cur = browser.runtime.getManifest().version; return u && u.version && vnum(u.version) > vnum(cur) && u.link ? `<a class="updbar" href="${esc(u.link)}" target="_blank" rel="noopener"><b>Version ${esc(u.version)} is ready</b><span>Tap to install now · otherwise Firefox installs it by itself</span></a>` : ''; };
   const ICON = { sync: '<svg class="spin ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/></svg>' };
 
   // ---- Basketball Monster sign-in, saved so the co-pilot can sign back in by itself ----
@@ -417,7 +420,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if ((!M || restAge > 60 * 60e3) && !ctxRefreshing[yp.lid] && !busy && window.SYNC && window.SYNC.bx) { ctxRefreshing[yp.lid] = true;
       window.SYNC.bx({ lid: l.lid, league: l.league }, M ? { only: ['rest', 'next'], maxAge: { rest: 60, next: 60 } } : {}).catch(() => {}).then(() => { ctxRefreshing[yp.lid] = false; return browser.storage.local.get(null); }).then(a => { ST = a; render(); }); }
     const title = { trade: 'Trade', add: 'Pickup', players: 'Player list' }[yp.kind];
-    if (!M) return `<div class="card ctx"><div class="h"><span>${title}</span></div><div class="sub">${ctxRefreshing[yp.lid] || busy ? 'Fetching the latest Basketball Monster projections (the first time takes about 30 seconds)…' : (bx && bx.err ? 'Couldn\'t get Basketball Monster projections: ' + esc(bx.err) : 'Basketball Monster projections not loaded yet. Sign in at basketballmonster.com, then press Sync.')}</div></div>`;
+    if (!M) return `<div class="card ctx"><div class="h"><span>${title}</span></div><div class="sub">${ctxRefreshing[yp.lid] || busy ? 'Fetching the latest Basketball Monster projections (the first time takes about 30 seconds)…<span class="skel" style="width:80%"></span><span class="skel" style="width:55%"></span>' : (bx && bx.err ? 'Couldn\'t get Basketball Monster projections: ' + esc(bx.err) : 'Basketball Monster projections not loaded yet. Sign in at basketballmonster.com, then press Sync.')}</div></div>`;
     // the long-term part of every verdict on Yahoo's pages uses the panel's own season measure (one mechanism)
     { const pl = planNow[l.league]; M.seasonOf = pl && pl.seasonOf ? (id => { const q = M.P[id]; return q && q.ros && q.ros.st && q.ros.g != null ? pl.seasonOf(q.ros.st, q.ros.g) : null; }) : null; }
     let body; try { if (yp.kind === 'trade') body = window.CTX.tradeCard(M, yp); else if (yp.kind === 'add') body = window.CTX.addCard(M, yp); else body = window.CTX.listCard(M, yp, { next: curWsel === 'next' ? ynextOf(y) : null }).html; } catch (e) { console.error(e); body = `<div class="sub">Couldn't read this page: ${esc(e.message)}</div>`; }
@@ -438,6 +441,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (yp.kind === 'team') { const y = yrFor(l.league); if (y && String(yp.tid) === String(y.tid)) { tab = 'team'; label = 'Your team'; } }
     return tab ? { league: l.league, lid: l.lid, tab, label, kind: yp.kind } : null; }
   let navAlert = {};
+  // the bottom bar keeps its elements between renders, so the selection pill slides and icons don't flicker
+  function setNav(lg) { const b = $('bnav'); if (!b) return; const html = navHtml(lg); const sig = html.replace(/ class="on"/g, '').replace(/ class=""/g, '');
+    if (b.dataset.sig !== sig) { b.innerHTML = html + '<span class="bnav-ind" aria-hidden="true"></span>'; b.dataset.sig = sig; wireNav(); }
+    else b.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x.dataset.tab === curTab()));
+    const i = TABS.findIndex(t => t[0] === curTab()); b.style.setProperty('--i', Math.max(0, i)); b.style.setProperty('--n', TABS.length); }
   function navHtml(lg) { const t0 = curTab(); const yo = yahooOn();
     return TABS.map(([k, l, ic]) => { const yDot = yo && yo.league === lg && yo.tab === k; const al = navAlert[k];
       return `<button data-tab="${k}" class="${t0 === k ? 'on' : ''}" title="${esc(l)}${yDot ? ' · on Yahoo now: ' + esc(yo.label) : ''}${al ? ' · ' + esc(al) : ''}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ic}</svg><span>${esc(l)}</span>${al ? '<i class="ndot alert"></i>' : yDot ? '<i class="ndot y"></i>' : ''}</button>`; }).join(''); }
@@ -457,7 +465,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const m = mm(); const o = $('out');
     if (!m) { const lg0 = league(); const y0 = leaguesKnown().find(l => l.league === lg0); const st0 = y0 && ST['sync:' + y0.lid];
       const why = syncing ? 'Syncing now. The first full sync downloads a lot from Basketball Monster and can take a couple of minutes.' : st0 && st0.err ? 'The first sync hasn\'t worked yet (' + esc(st0.err) + '). It keeps retrying by itself.' : 'Press Sync to fetch this week from Basketball Monster (you\'re signed in there in this browser). The first sync can take a couple of minutes.';
-      const yo0 = yahooOn(); const ctxOnly = !!ypageNow() && !!yo0 && yo0.tab === curTab(); $('bnav').innerHTML = navHtml(lg0); wireNav();
+      const yo0 = yahooOn(); const ctxOnly = !!ypageNow() && !!yo0 && yo0.tab === curTab(); setNav(lg0);
       paint(o, healthHtml(lg0) + `${ctxOnly ? `<div id="ctxBox">${ctxBlock()}</div>` : ''}<div class="card">${why}</div>${setPane(lg0, `<div class="card sets">${bbmAuthHtml()}${diagHtml(lg0, null)}</div>`)}`); wireConn();
       const dl0 = $('diagDl'); if (dl0) dl0.onclick = () => { const keep = Object.keys(ST).filter(k => /^(bbmFail:|sync:|diag|fullsync:|ysetp:|yWeek|bxTrace:|bx:|ypage|syncLock|yr:)/.test(k)); const rep = { at: new Date().toISOString(), version: (browser.runtime && browser.runtime.getManifest ? browser.runtime.getManifest().version : ''), store: Object.fromEntries(keep.map(k => [k, /^bx:/.test(k) ? { ts: ST[k].ts, err: ST[k].err } : ST[k]])) };
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(rep, null, 1)], { type: 'application/json' })); a.download = 'copilot-diagnostics.json'; document.body.appendChild(a); a.click(); a.remove(); };
@@ -580,7 +588,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     // alerts on the bottom bar: something on another page needs you
     navAlert = {}; try { if (ilBackCard(p, lg) || ilBlocked(yL)) navAlert.team = 'Roster needs a fix'; } catch (e) {}
     h = yahooLine(yo, TAB, lg) + wbar + healthHtml(lg) + synNote + part.note + (TAB !== 'league' ? ageLine(lg) : '') + (body || `<div class="strnone">Nothing to show here yet.</div>`) + part.settings;
-    $('bnav').innerHTML = navHtml(lg); wireNav();
+    setNav(lg);
     paint(o, h); wireHealth(); if (M) { wireTrades(lg, M); wireStrategy(lg, M); }
     o.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => { wkPick = { sel: b.dataset.wk, lg, ts: Date.now() }; selDay = null; render(); });
     o.querySelectorAll('[data-om]').forEach(b => b.onclick = () => { s.oppMode = b.dataset.om; saveS(lg); render(); });
@@ -687,12 +695,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const sp = $('spare'); if (sp) sp.onchange = e => set(() => { s.spare = e.target.checked; });
     const sw = $('swap'); if (sw) sw.onchange = e => set(() => { s.swap = e.target.checked; });
     const tg = $('showTags'); if (tg) tg.onchange = e => set(() => { s.showTags = e.target.checked; });
-    document.querySelectorAll('#setPane [data-punt]').forEach(b => b.onclick = () => set(() => { const cur = (puntFor(lg) || []).slice(); const c = b.dataset.punt; s.punt = cur.includes(c) ? cur.filter(x => x !== c) : cur.concat([c]); }));
+    document.querySelectorAll('#setPane [data-punt]').forEach(b => b.onclick = () => { const cur = (puntFor(lg) || []).slice(); const c = b.dataset.punt; const on = cur.includes(c); set(() => { s.punt = on ? cur.filter(x => x !== c) : cur.concat([c]); }); toast(`${window.STRAT ? window.STRAT.Name(c) : c} ${on ? 'back in play' : 'punted'}`, 'ok'); });
     const pc = $('puntCopy'); if (pc) pc.onclick = () => set(() => { const MM = modelFor(lg); s.punt = ((MM && MM.ctx.puntBbm) || []).slice(); });
-    document.querySelectorAll('#setPane [data-pick]').forEach(b => b.onclick = () => set(() => { s.pick = b.dataset.pick === 'std' ? null : b.dataset.pick; }));
+    document.querySelectorAll('#setPane [data-pick]').forEach(b => b.onclick = () => { set(() => { s.pick = b.dataset.pick === 'std' ? null : b.dataset.pick; }); toast('Pickups: ' + PICK[b.dataset.pick].t, 'ok'); });
     [['thDead', 'dead'], ['thSafe', 'safe'], ['thLock', 'locked']].forEach(([id, k]) => { const e = $(id); if (e) e.onchange = () => set(() => { s.th = Object.assign({}, s.th || {}, { [k]: Math.max(0, Math.min(100, +e.value || 0)) / 100 }); }); });
     [['frFits', 'fits', 1], ['frWasted', 'wasted', 1], ['frShare', 'share', 100], ['frHolds', 'holds', 1], ['frCosts', 'costs', 1]].forEach(([id, k, d]) => { const e = $(id); if (e) e.onchange = () => set(() => { const v = +e.value; if (!isFinite(v)) return; s.fit = Object.assign({}, s.fit || {}, { [k]: v / d }); }); });
-    const rs = $('setReset'); if (rs) rs.onclick = () => set(() => { delete s.pick; delete s.fit; delete s.th; });
+    const rs = $('setReset'); if (rs) rs.onclick = () => { set(() => { delete s.pick; delete s.fit; delete s.th; }); toast('Advice and bands back to the defaults', 'ok'); };
     const br = $('bandsReset'); if (br) br.onclick = () => { const M = modelFor(lg); const l = leaguesKnown().find(x => x.league === lg); const win = l && window.STRAT && M ? window.STRAT.catWin(ST['bbmstand:' + l.lid], M.ctx.cats) : null; if (!win) { br.textContent = 'Waiting for Basketball Monster…'; return; } const sk = 'strat:' + l.lid; ST[sk] = window.STRAT.snapshot(M, win, M.ctx.punt || []); browser.storage.local.set({ [sk]: ST[sk] }); DV++; render(); };
     const yr = $('yReload'); if (yr) yr.onclick = async () => { const y = yrFor(lg); if (!y) return; const k = 'ysetp:' + y.lid; const cur = Object.assign({}, ST[k] || {}, { ts: 0 }); ST[k] = cur; await browser.storage.local.set({ [k]: cur }); yr.textContent = 'Reloading…'; yr.disabled = true; runSync(true); }; }
   // ---- the settings pane: everything you can change, in one place, opened from the gear at the top right ----
@@ -701,18 +709,25 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   function showSettings(on, k) { setOpen = !!on; const sp = $('setPane'); if (sp) sp.hidden = !setOpen; document.body.classList.toggle('setopen', setOpen);
     const b = $('setBtn'); if (b) { b.classList.toggle('on', setOpen); b.setAttribute('aria-expanded', String(setOpen)); }
     if (setOpen && k) { const d = document.querySelector('#setPane details[data-k=' + k + ']') || $('set-' + k); if (d) { if ('open' in d) d.open = true; setTimeout(() => d.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30); } } }
+  // the big numbers count up when a page opens (not on every refresh), so a fresh page reads as live
+  function countUp(o) { if (REDUCED) return; o.querySelectorAll('.hero-pct, .cgrid .tile span').forEach(e => { const t = e.firstChild; if (!t || t.nodeType !== 3) return; const m = t.textContent.match(/^(\d+(?:\.\d+)?)(%?)$/); if (!m) return;
+    const end = +m[1], dp = (m[1].split('.')[1] || '').length, t0 = performance.now(), D = 420; const step = now => { const k = Math.min(1, (now - t0) / D), e2 = 1 - Math.pow(1 - k, 3); t.textContent = (end * e2).toFixed(dp) + m[2]; if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }); }
+  // a small confirmation above the bottom bar after anything you change
+  function toast(msg, kind) { let t = $('toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); document.body.appendChild(t); }
+    t.className = 'toast ' + (kind || ''); t.innerHTML = `<i></i>${esc(msg)}`; void t.offsetWidth; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 1900); }
   function paint(o, h) {
     const open = {}; o.querySelectorAll('details[data-k]').forEach(d => open[d.dataset.k] = d.open);
     const ae = document.activeElement; const fid = ae && ae.id && o.contains(ae) ? ae.id : null; const sel = fid && ae.selectionStart != null ? [ae.selectionStart, ae.selectionEnd] : null; const y = window.scrollY;
     // motion: cards ease in only when you arrive on a different page or league; numbers that changed give a small pulse
-    const vk = league() + '|' + curTab() + '|' + (window.STAB || ''); const fresh = vk !== paint.vk; const daySwap = !fresh && paint.day !== selDay; paint.vk = vk; paint.day = selDay;
+    const vk = league() + '|' + curTab() + '|' + (window.STAB || ''); const fresh = vk !== paint.vk; const daySwap = !fresh && paint.day !== selDay;
+    const ti = TABS.findIndex(t => t[0] === curTab()), dir = paint.ti == null || ti === paint.ti ? 'u' : ti > paint.ti ? 'r' : 'l'; paint.vk = vk; paint.day = selDay; paint.ti = ti;
     const NUM = '.hero-pct, .score b, .stat b, .tile span, .dchip b, table.pl td.v';
     const before = fresh ? null : [...o.querySelectorAll(NUM)].map(e => e.textContent);
     const sp0 = $('setPane'); const spY = sp0 ? sp0.scrollTop : 0;
     o.innerHTML = h;
     const sp1 = $('setPane'); if (sp1) sp1.scrollTop = spY; document.body.classList.toggle('setopen', setOpen && !!sp1);
     if (!REDUCED) {
-      if (fresh) { o.classList.remove('enter'); void o.offsetWidth; o.classList.add('enter'); clearTimeout(paint.t); paint.t = setTimeout(() => o.classList.remove('enter'), 900); }
+      if (fresh) { o.classList.remove('enter', 'from-r', 'from-l', 'from-u'); void o.offsetWidth; o.classList.add('enter', 'from-' + dir); clearTimeout(paint.t); paint.t = setTimeout(() => o.classList.remove('enter', 'from-r', 'from-l', 'from-u'), 900); countUp(o); }
       else if (before) { const now = [...o.querySelectorAll(NUM)]; if (now.length === before.length) now.forEach((e, i) => { if (e.textContent !== before[i]) { e.classList.add('bump'); setTimeout(() => e.classList.remove('bump'), 600); } }); }
       if (daySwap) { const lu = o.querySelector('.lu'); if (lu) { lu.classList.add('dayswap'); setTimeout(() => lu.classList.remove('dayswap'), 400); } }
     }
@@ -890,7 +905,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   function strategyCard(lg, M, opt) { const V = strategyState(lg, M); if (!V) return '';
     const sub = [['build', 'Build'], ['moves', 'Best moves'], ['roster', 'Roster'], ['block', 'Trade block'], ['finder', 'Finder'], ['how', 'How it works']]; if (!sub.some(x => x[0] === window.STAB)) window.STAB = 'build';
     let h = `<div class="seg trtabs stabs">${sub.map(([k, t]) => `<button data-stab="${k}" class="${window.STAB === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
-    if (!V.snap) return `<div class="card strat">${h}<div class="strnone">Waiting for Basketball Monster's Analysis Monster, which comes with the next sync.</div></div>`;
+    if (!V.snap) return `<div class="card strat">${h}<div class="strnone">Waiting for Basketball Monster's Analysis Monster, which comes with the next sync.<span class="skel" style="width:70%"></span><span class="skel" style="width:45%"></span></div></div>`;
     const N = c => esc(NN(c)); const nOpp = Math.max(1, V.rows.length - 1); const beat = w => w == null ? null : Math.round(w * nOpp);
     const dt = ts => new Date(ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }); const owner = tid => tid ? esc(M.teamName(tid)) : 'Free agent';
     const tagChip = t => t && showTags(lg) ? `<span class="chip plain tagl" title="Basketball Monster analyst tag (general fantasy value, not your build): ${esc(t.text)}">${esc(t.by)}: ${esc(t.tag)}</span>` : '';
@@ -1019,13 +1034,13 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   function teamNeedsAll(lg, M, r) { return M.L.teams.filter(t => t.tid !== M.L.me).map(t => { const N = teamNeeds(lg, M, t.tid); if (!N) return null; const cats = N.need.filter(c => (r.cv[c] || 0) >= 0.5); return cats.length ? { tid: t.tid, cats } : null; }).filter(Boolean).sort((a, b) => b.cats.length - a.cats.length).slice(0, 4); }
   function wireStrategy(lg, M) { const o = $('out'); const s0 = S(lg);
     o.querySelectorAll('[data-stab]').forEach(b => b.onclick = () => { window.STAB = b.dataset.stab; render(); });
-    o.querySelectorAll('[data-findmoves]').forEach(b => b.onclick = () => { b.classList.add('busy'); setTimeout(() => { window.STAB = 'moves'; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }, 350); });
-    o.querySelectorAll('[data-strev]').forEach(b => b.onclick = () => { const V = strategyState(lg, M); if (!V || !V.winNow) { b.textContent = 'Waiting for Basketball Monster…'; return; } const sk = 'strat:' + V.l.lid; ST[sk] = window.STRAT.snapshot(M, V.winNow, M.ctx.punt || []); browser.storage.local.set({ [sk]: ST[sk] }); DV++; render(); });
+    o.querySelectorAll('[data-findmoves]').forEach(b => b.onclick = () => { b.classList.add('busy'); b.innerHTML = '<span class="spinner" aria-hidden="true"></span>Reading your roster against Analysis Monster…'; setTimeout(() => { window.STAB = 'moves'; render(); window.scrollTo({ top: 0, behavior: REDUCED ? 'auto' : 'smooth' }); }, REDUCED ? 0 : 650); });
+    o.querySelectorAll('[data-strev]').forEach(b => b.onclick = () => { const V = strategyState(lg, M); if (!V || !V.winNow) { b.textContent = 'Waiting for Basketball Monster…'; return; } const sk = 'strat:' + V.l.lid; ST[sk] = window.STRAT.snapshot(M, V.winNow, M.ctx.punt || []); browser.storage.local.set({ [sk]: ST[sk] }); DV++; render(); toast('Bands set from today\'s numbers', 'ok'); });
     o.querySelectorAll('[data-openset]').forEach(b => b.onclick = () => showSettings(true, b.dataset.openset));
     o.querySelectorAll('[data-tryp]').forEach(b => b.onclick = () => { const c = b.dataset.tryp; const L = (s0.tryPunt || []).slice(); const i = L.indexOf(c); if (i >= 0) L.splice(i, 1); else L.push(c); s0.tryPunt = L; saveS(lg); render(); });
     o.querySelectorAll('[data-fwho]').forEach(b => b.onclick = () => { s0.find = Object.assign({ kind: 'fits' }, s0.find || {}, { who: b.dataset.fwho }); saveS(lg); render(); });
     o.querySelectorAll('[data-fkind]').forEach(b => b.onclick = () => { s0.find = Object.assign({ who: 'all' }, s0.find || {}, { kind: b.dataset.fkind }); saveS(lg); render(); });
-    o.querySelectorAll('[data-block]').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); const id = b.dataset.block; const L = (s0.block || []).slice(); const i = L.indexOf(id); if (i >= 0) L.splice(i, 1); else L.push(id); s0.block = L; saveS(lg); render(); }); }
+    o.querySelectorAll('[data-block]').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); const id = b.dataset.block; const L = (s0.block || []).slice(); const i = L.indexOf(id); if (i >= 0) L.splice(i, 1); else L.push(id); s0.block = L; saveS(lg); render(); const nm0 = M.P[id] ? M.P[id].n : 'Player'; toast(i >= 0 ? `${nm0} taken off the trade block` : `${nm0} is on the trade block`, i >= 0 ? '' : 'ok'); }); }
   // links that open a trade on Yahoo: in the Yahoo tab you're looking at (a new tab only if that isn't possible)
   function wireTrades(lg, M) { const o = $('out');
     o.querySelectorAll('[data-yurl]').forEach(b => b.onclick = e => { if (!browser.tabs || !browser.tabs.query) return; e.preventDefault(); browser.tabs.query({ active: true, currentWindow: true }).then(ts => { const t = ts && ts[0]; if (t && /fantasysports\.yahoo\.com/.test(t.url || '')) return browser.tabs.update(t.id, { url: b.dataset.yurl }); return browser.tabs.create({ url: b.dataset.yurl }); }).catch(() => window.open(b.dataset.yurl, '_blank')); }); }
@@ -1230,7 +1245,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     let asked = false; try { const r = await browser.runtime.sendMessage({ target: 'bg', cmd: force ? 'syncNow' : 'syncDue', now: !!now }); asked = !!(r && r.ok); } catch (e) {}
     if (!asked && window.SYNC) { syncing = true; syncBar(); try { await window.SYNC.auto(force, m => { ST.syncProgress = { msg: m, ts: Date.now() }; syncBar(); }, { by: 'panel', lightMin: 15, now: !!now }); } catch (e) { console.error(e); } }
     else if (force) { const t0 = Date.now(); await new Promise(z => { const iv = setInterval(() => { const lk = ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3; if ((!lk && Date.now() - t0 > 4000) || Date.now() - t0 > 8 * 60e3) { clearInterval(iv); z(); } }, 1000); }); }
-    syncing = false; ST = await browser.storage.local.get(null); DV++; render();
+    syncing = false; ST = await browser.storage.local.get(null); DV++; render(); if (force) toast('Synced with Yahoo and Basketball Monster', 'ok');
   }
   function render() {
     const ls = leaguesKnown(); const lg = league();

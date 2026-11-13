@@ -301,7 +301,9 @@
       const ret = out && L && miss >= 1 ? (L.filter(d => d >= sFrom && (!SEND || d <= SEND))[Math.round(miss)] || null) : null;
       const done = seasonOut(pl) || (out && gp != null && gp < 1) || (out && PO && PO.start && ret && ret >= PO.start);
       const o = { val: seasonOut(pl) ? 0 : (gp == null ? fwkS(pl) * 10 : gp * per), gp, n, ret, done: !!done, out, per, rank: pl.sr || pl.rank || null }; SI.set(pl, o); return o; };
-    const sVal = pl => seasonInfo(pl).val;
+    // the shared measure (the panel's board: expected categories a week over the rest of the season) ranks your players when given
+    const BD = opts.board || null; const bVal = pl => { const v = BD && BD.val ? BD.val(pl.name) : null; return v == null ? null : v; };
+    const sVal = pl => { const v = bVal(pl); return v != null ? v : seasonInfo(pl).val; };
     const fut = R => R.filter(r => r.to === ctx.nd - 1).reduce((t, r) => t + fwH(r.pl), 0);
     const fut1 = R => R.filter(r => r.to === ctx.nd - 1).reduce((t, r) => t + fwH1(r.pl), 0);
     const fwCats = pl => { const st = pl._gs || (pl._gs = gameStats(pl)); const o = {}; ctx.cats.forEach(c => { let d; if (RATIO[c]) { const [mk, ak] = RATIO[c]; const pt = Aset.m[ak] ? Aset.m[mk] / Aset.m[ak] : 0.47; d = (st[mk] - pt * st[ak]) / (Aset.m[ak] || 300); } else d = c === 'to' ? -st.to : st[c]; o[c] = 3.4 * health(pl) * phi(0) * d / (sdW[c] || 1); }); return o; };
@@ -334,7 +336,7 @@
     // a drop candidate is anyone a free agent beats on the same measure (this week plus the weeks after); no rank cut-off
     const canDrop = r => r.to === ctx.nd - 1 && !protect.has(key(r.pl.name)) && !r.added && r.pl.type !== 'ir' && !ctx.ilSlot.has(key(r.pl.name));
     // a pickup may cost a little over the season if it wins now, but no more than this (about 0.3 categories across the season)
-    const seasonCost = (f, k) => sVal(k) - sVal(f); const SEASON_TOL = 3 * (opts.minGain || 0.03) * ctx.unit;
+    const seasonCost = (f, k) => { if (BD && BD.cost) { const c = BD.cost(f.name, k.name); if (c != null) return -c; } return sVal(k) - sVal(f); }; const SEASON_TOL = 3 * (opts.minGain || 0.03) * ctx.unit;
     const gamesFrom = (pl, d) => pl.games.filter((g, i) => g && i >= d && !g.zero).length;
     // the reason for a drop, in facts: where he sits on your roster over the rest of the season, his projected games, his return
     const dropWhy = (pl, f) => { const si = seasonInfo(pl), fi = seasonInfo(f); const mine = roster.filter(r => r.to === ctx.nd - 1 && r.pl.type !== 'ir' && !ctx.ilSlot.has(key(r.pl.name)) && !r.added).map(r => r.pl).sort((a, b) => sVal(a) - sVal(b));
@@ -346,7 +348,18 @@
     // a swap that only helps this week must be clearly worth the add
     const swapMin = opts.swapMin == null ? 0.05 : opts.swapMin; const okMove = c => c.il || !(fwkS(c.f) - fwkS(c.k.pl) < -0.004 && c.week < swapMin); // a worse long-term player only for a clear gain this week
     const roster0 = roster, best0 = best; // the roster and lineup as they stand, before any planned pickup (streams start from here)
-    for (let step = 0; step < adds && firstOpen >= 0; step++) {
+    const bPicks = BD && BD.picks ? BD.picks : null;
+    for (let step = 0; step < (bPicks ? Math.min(adds, bPicks.length) : adds) && firstOpen >= 0; step++) {
+      if (bPicks) { // the pickup is decided by the shared measure; the planner only picks the day (best for this week) and plans the lineup
+        const bp = bPicks[step]; const f = fas.find(x => key(x.name) === key(bp.add) && !roster.some(r => r.pl === x)); const k = roster.find(r => r.to === ctx.nd - 1 && !r.added && key(r.pl.name) === key(bp.drop));
+        if (!f || !k) continue; let days = []; f.games.forEach((g, d) => { if (g && d >= firstOpen && !g.zero && dayOK(f, d)) days.push(d); }); if (!days.length) { const d0 = model.days.findIndex((x, d) => d >= firstOpen && dayOK(f, d)); if (d0 < 0) continue; days = [d0]; }
+        let top = null; days.forEach(d => { if (k.from > d) return; const R = roster.filter(r => r !== k).concat([{ pl: k.pl, from: k.from, to: d - 1, dropped: true }, { pl: f, from: d, to: ctx.nd - 1, added: true }]);
+          const o = optimise(ctx, R, oppList, 2); if (!top || o.Wnp > top.o.Wnp) top = { o, R, d }; }); if (!top) continue;
+        const catWeek = ctx.cats.map(c => ({ c: LBL[c], from: best.cp[c].p, to: top.o.cp[c].p }));
+        const mv = { dropOpts: [], alts: [], board: true, add: f.name, addTeam: f.team, addPos: f.pos, drop: k.pl.name, day: top.d, date: model.days[top.d].date, label: model.days[top.d].label, from: best.W, to: top.o.W, week: top.o.W - best.W, futWk: bp.season || 0, later: 0, score: bp.season || 0, cats: [], catWeek,
+          catLater: catDiff(fwCats(f), fwCats(k.pl)), verdict: 'long', picked: !!bp.picked, forced: !!bp.picked, games: gamesFrom(f, top.d), dropGames: gamesFrom(k.pl, top.d), hAdd: horizon(f), hDrop: horizon(k.pl), next: null, why: dropWhy(k.pl, f) };
+        mv.dropOpts = [{ name: k.pl.name, score: mv.score, week: mv.week, futWk: mv.futWk, day: top.d, date: mv.date, label: mv.label, injured: injNow(k.pl), rank: k.pl.sr || k.pl.rank, games: mv.dropGames, addGames: mv.games, catWeek, catLater: mv.catLater, verdict: 'long', next: null, note: noteView(k.pl), why: mv.why }];
+        moves.push(mv); roster = top.R; best = top.o; continue; }
       // (tried from the lowest long-term value up; the 8 lowest are enough, a free agent doesn't beat the top of your roster)
       const droppable = roster.filter(canDrop).sort((a, b) => sVal(a.pl) - sVal(b.pl)).filter((r, i) => i < 8 || allow.has(key(r.pl.name)));
       const futNow = fut(roster), fut1Now = fut1(roster);
@@ -420,10 +433,11 @@
       const cap = Math.max(0, SO.cap || 0);
       const full = R.filter(r => r.to === ctx.nd - 1 && !r.added && !protect.has(key(r.pl.name)) && r.pl.type !== 'ir' && !ctx.ilSlot.has(key(r.pl.name)) && !seasonInfo(r.pl).out).sort((a, b) => sVal(a.pl) - sVal(b.pl));
       const trend = {}; Object.entries(SO.trendDrop || {}).forEach(([n, v]) => { trend[key(n)] = v; }); const half = Math.ceil(full.length / 2);
-      const pool0 = full.filter((r, i) => i < 3 || (trend[key(r.pl.name)] && i < half));
+      const pool0 = SO.pool ? SO.pool.map(n => full.find(r => key(r.pl.name) === key(n))).filter(Boolean).slice(0, 3) : full.filter((r, i) => i < 3 || (trend[key(r.pl.name)] && i < half));
+      const onlyF = SO.only ? new Set(SO.only.map(key)) : null;
       for (let step = 0; step < cap && inPlay.length && firstOpen >= 0; step++) {
         const A0 = agg(B.list), B0 = agg(oppList), cp0 = catProbs(ctx, A0, B0), w0 = statWeights(ctx, A0, B0, cp0);
-        const pre = fas.filter(f => !R.some(r => r.pl === f) && !usedAdd.has(key(f.name))).map(f => { let mv = 0, g = 0; f.games.forEach((x, d) => { if (x && d >= firstOpen && !x.zero && dayOK(f, d)) { mv += Math.max(0, gameMV(w0, f)); g++; } }); return { f, mv, g }; }).filter(x => x.g > 0).sort((a, b) => b.mv - a.mv).slice(0, 15);
+        const pre = fas.filter(f => !R.some(r => r.pl === f) && !usedAdd.has(key(f.name)) && (!onlyF || onlyF.has(key(f.name)))).map(f => { let mv = 0, g = 0; f.games.forEach((x, d) => { if (x && d >= firstOpen && !x.zero && dayOK(f, d)) { mv += Math.max(0, gameMV(w0, f)); g++; } }); return { f, mv, g }; }).filter(x => x.g > 0).sort((a, b) => b.mv - a.mv).slice(0, 15);
         const pool = pool0.filter(k => R.includes(k) && !usedDrop.has(key(k.pl.name)));
         let top = null;
         for (const { f } of pre) { const d = f.games.findIndex((x, i) => x && i >= firstOpen && !x.zero && dayOK(f, i)); if (d < 0) continue;
@@ -432,7 +446,7 @@
             const o = optimise(ctx, R2, oppList, 2);
             const dc = ctx.cats.map(c => ({ c, d: o.cp[c].p - B.cp[c].p }));
             const gain = dc.reduce((t, x) => t + (punted(x.c) ? 0 : inPlay.includes(x.c) ? x.d : Math.min(0, x.d)), 0);
-            const cost = Math.max(0, catsOf((fwkS(k.pl) - fwkS(f)) * Heff));
+            const bc = SO.cost ? SO.cost(f.name, k.pl.name) : null; const cost = bc != null ? Math.max(0, -bc * Heff) : Math.max(0, catsOf((fwkS(k.pl) - fwkS(f)) * Heff));
             const net = gain - cost;
             if (!top || net > top.net) top = { f, k, d, o, R2, gain, cost, net, dc }; } }
         if (!top || top.gain < MIN || top.net < MIN) break;

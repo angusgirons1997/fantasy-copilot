@@ -7,7 +7,6 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const usToday = () => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } };
   const sur = n => { const w = String(n).split(' ').filter(x => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(x)); return w[w.length - 1] || n; };
   const ago = ts => { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : Math.round(m / 60) + ' h ago'; };
-  const gw = n => n === 1 ? '1 game this week' : (n || 0) + ' games this week';
   // plain words: NBA teams, lineup spots and how much a move helps (the panel shows no abbreviations)
   const TEAMN = window.STRAT ? window.STRAT.TEAMN : {};
   const teamN = c => TEAMN[String(c || '').trim().toUpperCase()] || c || '';
@@ -15,22 +14,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const SLOTN = { PG: 'Point guard', SG: 'Shooting guard', G: 'Guard', SF: 'Small forward', PF: 'Power forward', F: 'Forward', C: 'Centre', UTIL: 'Utility', BN: 'Bench', IL: 'Injured list', 'IL+': 'Injured list', NA: 'Not active' };
   const slotN = x => SLOTN[String(x || '').toUpperCase()] || (x === '–' ? '' : x || '');
   const lnm = (name, slot, opp) => `<span class="nm"><b>${esc(name)}</b><span class="sub">${esc([slotN(slot), oppW(opp)].filter(Boolean).join(' · '))}</span></span>`;
-  // how much a move helps, in words; the number itself sits in the detail underneath
-  const gainWord = v => { const c = PPC ? v * PPC : v * 10; const a = Math.abs(c); const k = a < 0.05 ? 0 : a < 0.2 ? 1 : a < 0.5 ? 2 : 3; if (!k) return ['n', 'About the same'];
-    return c > 0 ? ['g', ['', 'Helps a little', 'Helps clearly', 'Helps a lot'][k]] : ['r', ['', 'Costs a little', 'Costs clearly', 'Costs a lot'][k]]; };
-  const gainChip = v => { const g = gainWord(v); return `<span class="fk ${g[0]}">${g[1]}</span><span class="gnum ${v >= 0 ? 'plus' : 'minus'}">${pp(v)}</span>`; };
   // per-game projection for the pickup against the drop: the primitive numbers behind the call
   const statsVs = (add, drop) => { const M = modelFor(league()); if (!M) return ''; const a = M.P[M.find(add)], d = M.P[M.find(drop)]; if (!a || !a.ros || !a.ros.st) return '';
     const cats = M.ctx.cats; const v = (p, c) => { const st = p && p.ros && p.ros.st; if (!st) return '–'; if (c === 'fg%') return st.fga ? (st.fg / st.fga * 100).toFixed(1) : '–'; if (c === 'ft%') return st.fta ? (st.ft / st.fta * 100).toFixed(1) : '–'; return st[c] == null ? '–' : (+st[c]).toFixed(1); };
     const ab = { p: 'Points', 3: '3-pointers', r: 'Rebounds', a: 'Assists', s: 'Steals', b: 'Blocks', to: 'Turnovers', 'fg%': 'Field goal %', 'ft%': 'Free throw %', '2d': 'Double-doubles', fg: 'Field goals', ft: 'Free throws' };
     return `<table class="stt2 svs"><thead><tr><th>Per game, rest of season</th><th>${esc(sur(add))}</th><th>${esc(sur(drop))}</th></tr></thead><tbody>${cats.map(c => { const x = v(a, c), y = v(d, c); const better = x !== '–' && y !== '–' && (c === 'to' ? +x < +y : +x > +y);
       return `<tr><td>${ab[c] || esc(c)}</td><td class="${better ? 'plus' : ''}">${x}</td><td>${y}</td></tr>`; }).join('')}<tr><td>Games left</td><td>${a.ros.g != null ? a.ros.g : '–'}</td><td>${d && d.ros && d.ros.g != null ? d.ros.g : '–'}</td></tr></tbody></table>`; };
-  const statLine = name => { const M = modelFor(league()); const q = M && M.P[M.find(name)]; const st = q && q.ros && q.ros.st; if (!st) return '';
-    const f = (k, n) => st[k] != null ? `${(+st[k]).toFixed(1)} ${n}` : null; const parts = [f('p', 'points'), f('r', 'rebounds'), f('a', 'assists'), f('3', '3-pointers'), f('s', 'steals'), f('b', 'blocks'), st.fga ? `${(st.fg / st.fga * 100).toFixed(1)}% field goals` : null, st.fta ? `${(st.ft / st.fta * 100).toFixed(1)}% free throws` : null, f('to', 'turnovers')].filter(Boolean);
-    return `<div class="sline">${esc(parts.join(' · '))}${q.ros.g != null ? ` · <b>${q.ros.g}</b> games left` : ''}</div>`; };
-  // the call in one sentence, with the numbers: categories won a week (or win chance, in leagues decided by the week's winner)
-  const addSentence = (x, o) => { const u = PPC ? ' categories' : ' points of win chance'; const sc = o.score != null ? o.score : x.score; const n = v => `<b class="${v >= 0 ? 'plus' : 'minus'}">${pp(v)}${u}</b>`;
-    return `Adding ${esc(sur(x.add))} for ${esc(sur(o.name))}: ${sc != null ? `${n(sc)} a week over the next few weeks` : ''}${o.week != null ? `${sc != null ? ' · ' : ''}${n(o.week)} this week` : ''}${o.next != null ? ` · ${n(o.next)} next week` : ''}${o.futWk != null ? ` · ${n(o.futWk)} a week after that` : ''}.`; };
   // his team's games left this regular season, from the bundled NBA schedule
   const SCC = { NOP: 'NOR', NO: 'NOR', PHX: 'PHO', GS: 'GSW', SA: 'SAS', NY: 'NYK', UTAH: 'UTA', WSH: 'WAS', BRK: 'BKN', CHO: 'CHA' };
   const teamLeft = t => { const by = (ST.nbasched || window.NBA_SCHED || {}).by; if (!by || !t) return null; const u = String(t).toUpperCase(); const L = by[SCC[u] || u]; if (!L) return null; const d0 = usToday(); return L.filter(d => d >= d0).length; };
@@ -39,12 +28,6 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (b && Date.now() - b > 12 * 3600e3) old.push(`Basketball Monster's projections are ${ago(b).replace(' ago', '')} old`); if (yt && Date.now() - yt > 12 * 3600e3) old.push(`Yahoo's rosters were read ${ago(yt)}`);
     return old.length ? `<div class="agel">${old.join('; ')}. The advice below uses them: sync before acting.</div>` : ''; };
   const listW = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '';
-  // which categories a move helps or hurts, in words (changes of 2 points of win chance or more)
-  const catWords = (list, key) => { const L = (list || []).map(c => ({ c: c.c, d: key === 'd' ? c.d : (c.to - c.from) })).filter(c => Math.abs(c.d) >= 0.02); const up = L.filter(c => c.d > 0).sort((a, b) => b.d - a.d).map(c => c.c), dn = L.filter(c => c.d < 0).sort((a, b) => a.d - b.d).map(c => c.c);
-    return up.length || dn.length ? [up.length ? `Helps ${esc(listW(up))}` : '', dn.length ? `hurts ${esc(listW(dn))}` : ''].filter(Boolean).join('; ').replace(/^h/, 'H') + '.' : 'Barely changes any category.'; };
-  let PPC = 0; // categories league: show gains as extra categories won a week (value × number of categories)
-  const pp2 = v => { if (PPC) { const r = Math.round(v * PPC * 100) / 100; return r === 0 ? '0' : (r > 0 ? '+' : '−') + Math.abs(r).toFixed(2); } const r = Math.round(v * 1000) / 10; return r === 0 ? '0' : (r > 0 ? '+' : '−') + Math.abs(r).toFixed(1); };
-  const pp = v => { if (PPC) { const r = Math.round(v * PPC * 10) / 10; return r === 0 ? '0' : (r > 0 ? '+' : '−') + Math.abs(r).toFixed(1); } const r = Math.round(v * 100); return r === 0 ? '0' : (r > 0 ? '+' : '−') + Math.abs(r); };
   const fmtD = date => new Date(date + 'T12:00:00Z').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   let ST = {};
   // league rules: read from each league's own Yahoo settings page (nothing about any particular league is built in).
@@ -278,9 +261,22 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       if (MI) { model = Object.assign({}, model, { players: model.players.map(pl => { const id = pl.bbm && MI.P[pl.bbm] ? pl.bbm : MI.find(pl.name, pl.team); const q = id && MI.P[id];
         return q && q.ros ? Object.assign({}, pl, { ros: { g: q.ros.g, st: q.ros.st }, sr: BR[id] || null }) : pl; }) }); }
       opts.playoffs = RL.playoffs || null; const sp = y && ST['ysetp:' + y.lid]; const nT = ((y && ST['ystand:' + y.lid]) || {}).teams; opts.rostered = sp && sp.slots ? (sp.slots.length + (sp.bench || 0)) * ((nT && nT.length) || (MI && MI.L.teams.length) || 0) : 0; }
-    const p = E.plan(model, opts);
+    // the one measure decides who to add and who goes: the planner only picks the day and plans the lineup around it
+    const bd = boardPick(m.league, isNext ? null : A); const BD = boardFor(m.league);
+    { const MI = modelFor(m.league); if (BD && MI) { const vId = {}; BD.mine.forEach(x => vId[x.id] = x.val);
+      const val = n => { const id = MI.find(n); return id && vId[id] != null ? vId[id] : null; };
+      const cost = (f, k) => { const a = MI.find(f), d = MI.find(k); return a && d && vId[d] != null && vId[a] == null ? BD.swap(a, d).g : null; };
+      const picks = bd && bd.worth && (isNext || !bd.wait) ? [{ add: bd.add, drop: bd.dropName, season: bd.season, picked: bd.chosen }] : [];
+      opts.board = { val, cost, picks }; opts.pickAdds = {}; opts.forceDrop = {}; opts.exclude = [];
+      if (opts.streams) { const pa = new Set(picks.map(x => K(x.add))), pd = new Set(picks.map(x => K(x.drop)));
+        Object.assign(opts.streams, { only: BD.list.map(x => MI.P[x.id].n).filter(n => !pa.has(K(n))), pool: BD.order.map(x => MI.P[x.id].n).filter(n => !pd.has(K(n))), cost }); } } }
+    const p = E.plan(model, opts); p.bd = bd;
+    // self-check: the plan must carry out exactly the pickup the one measure chose (kept in Diagnostics if it ever doesn't)
+    if (!isNext && bd && bd.worth && !bd.wait) { const m0 = p.moves[0]; const ok = !m0 || (K(m0.add) === K(bd.add) && K(m0.drop || '') === K(bd.dropName)); const k = 'selfcheck:uni:' + m.league;
+      if (!ok && (!ST[k] || ST[k].add !== bd.add)) { ST[k] = { ts: Date.now(), add: bd.add, drop: bd.dropName, planned: m0 ? m0.add + ' for ' + m0.drop : null }; browser.storage.local.set({ [k]: ST[k] }); } }
+    if (opts.board && p.rosVal) { p.rosVal.forEach(x => { const v = opts.board.val(x.name); if (v != null) x.season = +v.toFixed(4); }); p.rosVal.sort((a, b) => a.season - b.season); }
     // the lineup always follows the roster you actually have: planned pickups are step 1, and the lineup is re-planned once Yahoo shows them
-    if (!isNext && p.moves.length) { try { const p0 = E.plan(model, Object.assign({}, opts, { addsLeft: 0, next: null, lookAhead: 0, pickAdds: {}, forceDrop: {}, test: null, streams: null })); p.nowDays = p0.days; p.nowSlots = p0.slots; } catch (e) { console.error(e); } }
+    if (!isNext && p.moves.length) { try { const p0 = E.plan(model, Object.assign({}, opts, { addsLeft: 0, next: null, lookAhead: 0, pickAdds: {}, forceDrop: {}, test: null, streams: null, board: null })); p.nowDays = p0.days; p.nowSlots = p0.slots; } catch (e) { console.error(e); } }
     p.live = !!liveOk; p.filled = filled.map(x => x.name); p.punt = punt; p.ms = Math.round(performance.now() - t0); p.waiverSrc = p0src.w; p.newsN = NW.length; p.mmTs = m.ts; p.rules = RL; p.ilUsed = ilUsed; p.leagueFitInfo = leagueFit; p.txRows = tx && tx.rows ? tx.rows.length : null; p.adds = A;
     if (p.recon && p.recon.pairs && p.recon.pairs.length) { const im = Object.assign({}, idmap); let ch = false; p.recon.pairs.forEach(x => { if (im[x.pid] !== x.bbm) { im[x.pid] = x.bbm; ch = true; } }); if (ch) { ST.idmap = im; browser.storage.local.set({ idmap: im }); } }
     { const tk = 'track:' + m.league + ':' + m.start; const tr = ST[tk] || { league: m.league, start: m.start, opp: p.opp, oppTid };
@@ -344,6 +340,47 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     M.weeksLeft = cw && po ? Math.max(1, po - cw) : null; M.tradeBar = M.ctx.cats.length >= 11 ? 5 : 4; M.tm = l ? ST['bbmtm:' + l.lid] || null : null; M.finish = null; M.needs = tid => teamNeeds(lg, M, tid); return M; }); }
   function modelForRaw(lg) { const l = leaguesKnown().find(x => x.league === lg); if (!l || !window.CTX) return null; const y = yrFor(lg); const m = mm(); const same = m && m.league === lg;
     try { return window.CTX.model(ST, l.lid, { punt: puntFor(lg), yr: y, obj: scoringOf(lg).mode, today: usToday(), rules: rulesFor(lg, y), cats: same ? m.cats.filter(c => E.LBL[c]) : null, weekEnd: same ? m.end : null }); } catch (e) { console.error(e); return null; } }
+  // ---- the one measure (every page reads it): expected categories won a week over the rest of the season, against every other
+  // team in your league, from Basketball Monster's rest-of-season projections. A player's value to you is what that number loses
+  // without him; a pickup is what it gains when he replaces one of your players; a trade is what it gains after the swap. ----
+  function boardKeep(lg, M) { const y = yrFor(lg); const s = S(lg); const rm = recentMoves(y, ST['hist:' + lg] || { log: [] }); const ids = ns => (ns || []).map(n => M.find(n)).filter(Boolean);
+    // a player in the top half of everyone rostered in the league is never a drop: another team would claim him, so he's traded instead
+    const N = M.L.teams.reduce((a, t) => a + t.ids.length, 0); const all = Object.values(M.P).filter(q => q.ros && q.ros.lv != null && (q.ros.g || 0) > 0).sort((a, b) => b.ros.lv - a.ros.lv); const top = new Set(all.slice(0, Math.round(N / 2)).map(q => q.id));
+    const mine = (M.L.teams.find(t => t.tid === M.L.me) || { ids: [] }).ids; const claim = mine.filter(id => top.has(id));
+    return { keep: new Set([...(M.ilIds || [])].concat(ids(s.protect), ids(rm.adds), claim)), claim: new Set(claim), block: new Set(ids(rm.drops)), taken: takenSet(y) }; }
+  function boardFor(lg, punt) { const M = modelFor(lg); if (!M || !window.H2H || !window.H2H.board) return null; const k = boardKeep(lg, M);
+    const fas = M.L.fas.filter(id => !k.block.has(id) && !k.taken.has(K(M.P[id].n)));
+    const pu = punt === undefined ? M.ctx.punt : (punt && punt.length ? punt : null);
+    const sig = [...k.keep].sort().join(',') + '|' + fas.join(',').length + '|' + fas.length + '|' + (pu || []).join(',');
+    return memo('board|' + lg + '|' + sig, () => { const was = M.ctx.punt; M.ctx.punt = pu; try { const b = window.H2H.board(M.ctx, M.L, { keepIds: k.keep, fas, n: 20 }); if (b) { b.keep = k.keep; b.claim = k.claim; b.punt = pu; } return b; } catch (e) { console.error(e); return null; } finally { M.ctx.punt = was; } }); }
+  const seasonBar = lg => (PICK[S(lg).pick] || PICK.std).season; // a pickup's minimum, in categories over the rest of the season
+  const tradeBarOf = (lg, M) => S(lg).tradeBar != null ? +S(lg).tradeBar : M.ctx.cats.length >= 11 ? 2 : 1.5; // a trade's, likewise: twice a standard pickup's
+  // the decision on the list's number 1 (and the tags every page shows): add now, wait until Monday, or nothing worth an add
+  function boardPick(lg, A) { const B = boardFor(lg); const M = modelFor(lg); if (!B || !M || !B.list.length) return null; const y = yrFor(lg); const s = S(lg);
+    { const nx = ynextOf(y); M.L.oppNext = nx && nx.oppTid ? String(nx.oppTid) : null; }
+    const bar = seasonBar(lg); const pk = Array.isArray(s.pickAdds) ? null : (s.pickAdds || {})[0]; let chosen = pk ? B.list.find(x => K(M.P[x.id].n) === K(pk)) : null;
+    const fd = chosen && (s.forceDrop || {})[K(M.P[chosen.id].n)]; let drop = chosen ? chosen.drop : null; if (fd) { const d = B.order.find(o => K(M.P[o.id].n) === fd); if (d) drop = d.id; }
+    const top = chosen || B.list[0]; drop = drop || top.drop; const g = chosen ? B.swap(top.id, drop).g : top.gain; const season = g * B.weeks;
+    const tm = window.H2H.timing(M.ctx, M.L, top.id, drop) || {}; const adds = A ? A.left : 1;
+    const worth = !!chosen || season >= bar; const wait = worth && (!adds || (tm.week != null && tm.week < -0.15));
+    return { id: top.id, drop, add: M.P[top.id].n, dropName: M.P[drop].n, season, week: tm.week, next: tm.next, worth, wait, why: !adds ? 'adds' : wait ? 'week' : null, chosen: !!chosen, bar }; }
+  // ---- player reads on the same measure. Yours: what he's worth to you, whether a free agent does more (he's a drop), and whether
+  // a one-for-one trade at his Basketball Monster value adds a clear margin (he's a sell). Other teams' players: what each would
+  // add to you in place of your least valuable player. A player who holds up a category (taking him out loses it) is never a sell. ----
+  function readsFor(lg, punt) { const M = modelFor(lg); const B = boardFor(lg, punt); if (!M || !B) return null;
+    return memo('reads|' + lg + '|' + (B.punt || []).join(','), () => {
+      const bar = tradeBarOf(lg, M) / B.weeks, pbar = seasonBar(lg) / B.weeks; const own = {}; M.L.teams.forEach(t => t.ids.forEach(id => own[id] = t.tid));
+      const lvOf = id => ((M.P[id] || {}).ros || {}).lv || 0; const others = Object.keys(own).filter(id => own[id] !== M.L.me && M.P[id] && M.P[id].ros && (M.P[id].ros.g || 0) > 0);
+      const fasTop = B.list.slice(0, 10).map(x => x.id);
+      // the bottom third of your roster by value to you is "small impact" (unless a free agent or a trade beats him)
+      const asc = B.mine.map(x => x.val).sort((a, b) => a - b); const low = asc[Math.max(0, Math.floor(asc.length / 3) - 1)];
+      const by = {}; B.mine.forEach(x => { const il = M.ilIds.has(x.id); const lv = lvOf(x.id); let fa = null;
+        if (!x.keep) fasTop.forEach(f => { const r = B.swap(f, x.id); if (!fa || r.g > fa.g) fa = { id: f, g: r.g }; });
+        const trades = il ? [] : others.filter(j => lvOf(j) <= lv + 0.03 && lvOf(j) >= lv - 0.1).map(j => { const r = B.swap(j, x.id); return { id: j, g: r.g, cats: r.cats, own: own[j] }; }).sort((a, b) => b.g - a.g);
+        const sell = trades.filter(t => t.g >= bar);
+        by[x.id] = { val: x.val, cats: x.cats, fa, trades, sell, il, kind: fa && fa.g >= pbar ? 'costs' : sell.length ? 'sell' : x.val > low ? 'fits' : 'small' }; });
+      const d0 = B.order[0]; const league = {}; others.forEach(j => { const r = d0 ? B.swap(j, d0.id) : null; if (r) league[j] = { g: r.g, cats: r.cats, kind: r.g >= pbar ? 'fits' : r.g < 0 ? 'nohelp' : 'small' }; });
+      return { by, league, bar, pbar, weeks: B.weeks, B, d0: d0 ? d0.id : null }; }); }
   // ---- health: is every source fresh enough to trust the advice? ----
   // ---- health: quiet when things are fine; one clear button when only you can fix it (a sign-in) ----
   const SIGNIN = { bbm: 'https://basketballmonster.com/Login.aspx', yahoo: 'https://login.yahoo.com/?done=' + encodeURIComponent('https://basketball.fantasysports.yahoo.com/nba') };
@@ -400,7 +437,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     // in order: 1 the roster move (if one is due), 2 the lineup for the roster you then have
     const d = (p.nowDays || p.days).find(x => x.date === t); const due = p.moves.filter(x => x.date <= t), nxt = p.moves.filter(x => x.date > t);
     if (due.length) due.forEach(x => { const u = yLink(lg, x.add); rows.push(['warn', `<b>1 · Roster:</b> add <b>${esc(x.add)}</b>${x.drop ? ', drop <b>' + esc(x.drop.replace(/\.$/, '')) + '</b>' : x.il ? ' (' + esc(x.il) + ' to IL first)' : ''}${u ? ` · <a href="${esc(u)}" target="_blank" rel="noopener">open on Yahoo</a>` : ''}`]); });
-    else rows.push(['good', `<b>1 · Roster:</b> no pickup today${nxt.length ? `. Next: <b>${esc(nxt[0].add)}</b> on ${esc(fmtD(nxt[0].date))}` : ''}`]);
+    else rows.push(['good', `<b>1 · Roster:</b> no pickup today${nxt.length ? `. Next: <b>${esc(nxt[0].add)}</b> on ${esc(fmtD(nxt[0].date))}` : p.bd && p.bd.worth && p.bd.wait ? `. Best pickup <b>${esc(p.bd.add)}</b> (for ${esc(p.bd.dropName)}): wait until Monday` : ''}`]);
     if (due.length) rows.push(['', '<b>2 · Lineup:</b> set it after the pickup (it\'s re-planned once Yahoo shows the change)']);
     else if (d && d.open && (d.start.length + d.bench.length)) { const c = dayCheck(d, y ? actualFor(y.lid, t) : null); rows.push(c.known ? (c.changes ? ['warn', `<b>2 · Lineup:</b> <b>${c.changes} change${c.changes > 1 ? 's' : ''}</b> to make today`] : ['good', '<b>2 · Lineup:</b> set correctly for today']) : ['', '<b>2 · Lineup:</b> checking today\'s lineup on Yahoo…']); }
     else rows.push(['good', '<b>2 · Lineup:</b> nobody plays today']);
@@ -413,7 +450,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const injWord = s => ({ Q: 'questionable', D: 'doubtful', O: 'out', GTD: 'a game-time decision', DTD: 'day-to-day', P: 'probable' }[String(s).toUpperCase().split(/\s/)[0]] || String(s).toLowerCase());
   function ctxBlock() {
     const yp = ypageNow(); if (!yp || !window.CTX) return '';
-    const l = leaguesKnown().find(x => x.lid === yp.lid); const y = yrFor(l.league);
+    const l = leaguesKnown().find(x => x.lid === yp.lid);
     const M = modelFor(l.league);
     // get fresh BBM numbers before advising: none yet, or this week's projections over an hour old
     const bx = ST['bx:' + yp.lid]; const restAge = bx && bx.ts && bx.ts.rest ? Date.now() - bx.ts.rest : Infinity; const busy = ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3;
@@ -422,8 +459,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const title = { trade: 'Trade', add: 'Pickup', players: 'Player list' }[yp.kind];
     if (!M) return `<div class="card ctx"><div class="h"><span>${title}</span></div><div class="sub">${ctxRefreshing[yp.lid] || busy ? 'Fetching the latest Basketball Monster projections (the first time takes about 30 seconds)…<span class="skel" style="width:80%"></span><span class="skel" style="width:55%"></span>' : (bx && bx.err ? 'Couldn\'t get Basketball Monster projections: ' + esc(bx.err) : 'Basketball Monster projections not loaded yet. Sign in at basketballmonster.com, then press Sync.')}</div></div>`;
     // the long-term part of every verdict on Yahoo's pages uses the panel's own season measure (one mechanism)
-    { const pl = planNow[l.league]; M.seasonOf = pl && pl.seasonOf ? (id => { const q = M.P[id]; return q && q.ros && q.ros.st && q.ros.g != null ? pl.seasonOf(q.ros.st, q.ros.g) : null; }) : null; }
-    let body; try { if (yp.kind === 'trade') body = window.CTX.tradeCard(M, yp); else if (yp.kind === 'add') body = window.CTX.addCard(M, yp); else body = window.CTX.listCard(M, yp, { next: curWsel === 'next' ? ynextOf(y) : null }).html; } catch (e) { console.error(e); body = `<div class="sub">Couldn't read this page: ${esc(e.message)}</div>`; }
+    M.board = boardFor(l.league); M.pickBar = seasonBar(l.league);
+    let body; try { if (yp.kind === 'trade') body = window.CTX.tradeCard(M, yp); else if (yp.kind === 'add') body = window.CTX.addCard(M, yp); else body = window.CTX.listCard(M, yp).html; } catch (e) { console.error(e); body = `<div class="sub">Couldn't read this page: ${esc(e.message)}</div>`; }
 
     if (Object.keys(M.yidmap).length !== Object.keys(ST.yidmap || {}).length) { ST.yidmap = M.yidmap; browser.storage.local.set({ yidmap: M.yidmap }); }
     const fr = window.CTX.freshness(M.bx, yp.kind === 'players' ? ['rest', 'ros'] : ['rest', 'ros', 'po']);
@@ -433,7 +470,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // ---- one-page app: five pages on a bottom bar. The panel never jumps by itself: the page matching the Yahoo screen
   // you're on just gets a dot, and that page shows what the co-pilot reads from it at the top ----
   const TABS = [['week', 'Week', '<path d="M3 5h18v16H3z"/><path d="M3 10h18M8 3v4M16 3v4"/>'], ['team', 'Team', '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><path d="M16 4.6a3 3 0 0 1 0 6.4M18 14.8c1.8.7 2.9 2.4 3.2 5.2"/>'], ['players', 'Players', '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>'], ['strategy', 'Strategy', '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'], ['league', 'League', '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 6h3a3 3 0 0 1-3 4M7 6H4a3 3 0 0 0 3 4"/>']];
-  const TABPARTS = { week: ['brief', 'live', 'hero', 'next'], team: ['ilback', 'week'], players: ['ctx', 'pick', 'stream', 'watch'], strategy: ['ctx', 'strategy'], league: ['standings', 'league'] };
+  const TABPARTS = { week: ['brief', 'live', 'hero', 'next'], team: ['ilback', 'week'], players: ['ctx', 'board'], strategy: ['ctx', 'strategy'], league: ['standings', 'league'] };
   const curTab = () => TABS.some(t => t[0] === ST.uiTab) ? ST.uiTab : 'week';
   // the Yahoo screen you're on (only while it's recent): which league, which page of the co-pilot it belongs to, what to call it
   function yahooOn() { const yp = ST.ypage; if (!yp || Date.now() - yp.ts > 30 * 60e3) return null; const l = leaguesKnown().find(x => x.lid === yp.lid); if (!l) return null;
@@ -453,7 +490,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const yahooLine = (yo, tab, lg) => yo && yo.league === lg && yo.tab === tab ? `<div class="ynow"><i></i>On Yahoo now: <b>${esc(yo.label)}</b></div>` : '';
   // which week the panel shows: the one you're looking at on Yahoo (a team-page date or matchup week after this one means next
   // week), your own pick (until you move to another Yahoo page), and next week automatically once this one is over
-  let wkPick = null, curWsel = 'this';
+  let wkPick = null;
   function weekSel(m0, nextOK) {
     if (!nextOK) return 'this';
     if (wkPick && wkPick.lg === m0.league && Date.now() - wkPick.ts < 6 * 3600e3) return wkPick.sel;
@@ -470,13 +507,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const dl0 = $('diagDl'); if (dl0) dl0.onclick = () => { const keep = Object.keys(ST).filter(k => /^(bbmFail:|sync:|diag|fullsync:|ysetp:|yWeek|bxTrace:|bx:|ypage|syncLock|yr:)/.test(k)); const rep = { at: new Date().toISOString(), version: (browser.runtime && browser.runtime.getManifest ? browser.runtime.getManifest().version : ''), store: Object.fromEntries(keep.map(k => [k, /^bx:/.test(k) ? { ts: ST[k].ts, err: ST[k].err } : ST[k]])) };
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(rep, null, 1)], { type: 'application/json' })); a.download = 'copilot-diagnostics.json'; document.body.appendChild(a); a.click(); a.remove(); };
       return; }
-    const pThis = compute(); const nxOK = !!nextModel(m); const wsel = weekSel(m, nxOK); curWsel = wsel; const pNext = wsel === 'next' ? compute('next') : null;
+    const pThis = compute(); const nxOK = !!nextModel(m); const wsel = weekSel(m, nxOK); const pNext = wsel === 'next' ? compute('next') : null;
     // check on Yahoo that the players the plan wants to add are really free (re-plans by itself when the answers arrive)
-    { const yv = yrFor(m.league); const cand = []; [pThis, pNext].forEach(pp0 => pp0 && pp0.moves.forEach(x => { cand.push(x.add); (x.alts || []).forEach(a => cand.push(a.add)); })); verifyAvail(yv, cand); }
-    const p = pNext || pThis; const s = S(m.league); const lg = m.league; const M = modelFor(lg); PPC = p.obj === 'cats' ? p.ncat : 0;
+    { const yv = yrFor(m.league); const cand = []; [pThis, pNext].forEach(pp0 => pp0 && pp0.moves.forEach(x => { cand.push(x.add); (x.alts || []).forEach(a => cand.push(a.add)); })); { const B0 = boardFor(m.league), M0 = modelFor(m.league); if (B0 && M0) B0.list.slice(0, 5).forEach(x => cand.push(M0.P[x.id].n)); } verifyAvail(yv, cand); }
+    const p = pNext || pThis; const s = S(m.league); const lg = m.league; const M = modelFor(lg);
     // one scale everywhere: long-term value from the BBM projections model (same numbers as trades and the player list)
     { const yF0 = yrFor(lg); const yF = yF0 ? Object.assign({}, yF0, { next: ynextOf(yF0) }) : null; if (M && yF && yF.next && yF.next.oppTid && M.ctx.has.next) { const fk = 'h2hfc:' + yF.lid + ':' + yF.next.start; if (!ST[fk]) { const me = M.L.teams.find(t => t.tid === M.L.me), op = M.L.teams.find(t => t.tid === String(yF.next.oppTid)); if (me && op) { try { const r = window.H2H.nextWeek(M.ctx, me.ids, op.ids); ST[fk] = { ts: Date.now(), W: r.W, cats: Object.fromEntries(r.cats.map(c => [c.c, +c.p.toFixed(3)])) }; browser.storage.local.set({ [fk]: ST[fk] }); } catch (e) {} } } } }
-    const LT = {}; const ltOf = (add, drop) => { const k = add + '|' + drop; if (k in LT) return LT[k]; let v = null; if (M) { const a = M.find(add), d = M.find(drop); if (a && d) { try { const r = window.H2H.pickup(M.ctx, M.L, a, [d]); v = r.drops && r.drops[0] ? r.drops[0].ros : null; } catch (e) {} } } LT[k] = v; return v; };
     const stale = Date.now() - m.ts > 3 * 3600e3;
     const W = p.W.plan;
     let h = '';
@@ -494,80 +530,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <div class="cgrid">${cs.map((c, i) => `<div class="tile ${tcls(c.p)}${i === p.need - 1 ? ' line' : ''}" title="${esc(c.label)}: you ${fmtT(c, c.me)}, them ${fmtT(c, c.opp)}"><b>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</b><span>${Math.round(c.p * 100)}%</span><i>${fmtT(c, c.me)} v ${fmtT(c, c.opp)}</i></div>`).join('')}</div>
       <div class="sub" style="margin-top:6px">Under each: your projected total against theirs for the week${p.live ? ', including games already played' : ''}${cs.some(c => c.label === 'turnovers') ? ' (fewer turnovers wins)' : ''}.</div>
       <div class="omrow"><span class="sub">Their lineup:</span><span class="seg small"><button data-om="max" class="${p.oppMode === 'max' ? 'on' : ''}" title="Assume the opponent fills every start">fills every start</button><button data-om="set" class="${p.oppMode === 'set' ? 'on' : ''}" title="Opponent lineup exactly as set">as set now</button></span></div></div>`; }
-    const order = cs.map(c => c.label);
-    const miniWeek = list => { const ch = list.filter(c => Math.abs(c.to - c.from) >= 0.01).sort((a, b) => order.indexOf(a.c) - order.indexOf(b.c)); if (!ch.length) return '<span class="sub">no category changes by 1 point of win chance or more</span>';
-      return ch.map(c => `<span class="mt plain" title="Chance to win ${esc(c.c)}: ${pct(c.from)} → ${pct(c.to)}"><b>${esc(c.c)}</b> ${pct(c.from)} → ${pct(c.to)}</span>`).join(''); };
-    const miniLater = list => { const ch = list.filter(c => Math.abs(c.d) >= 0.015).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 5); if (!ch.length) return '<span class="sub">even across categories</span>';
-      return ch.map(c => { const d = Math.round(c.d * 100); return `<span class="mt plain" title="Change in chance to win ${esc(c.c)} each week"><b>${esc(c.c)}</b> <i class="${d >= 0 ? 'plus' : 'minus'}">${d >= 0 ? '+' : '−'}${Math.abs(d)} points</i></span>`; }).join(''); };
-    const noteLine = (nv, who) => nv ? `<div class="nt" title="${esc(nv.text)}"><b>${esc(nv.by || 'BBM')} on ${esc(sur(who))}:</b> “${esc(nv.text.length > 120 ? nv.text.slice(0, 117) + '…' : nv.text)}”</div>` : '';
-    // PICKUPS
-    const c1 = h.length;
-    const LBLD = { long: ['plain', 'Keep long term'], few: ['plain', 'For 2–3 weeks'], week: ['plain', 'For this week'] };
-    const A = p.adds; const nm = e => e.name || (m.players.find(x => K(x.name) === e.k) || {}).name || String(e.k || '').replace(/\b\w/g, c => c.toUpperCase());
-    h += `<div class="card prim"><div class="h"><span>Pickups</span><span class="sub">${A.used} of ${A.limit} adds used this week${A.src === 'seen' ? ' (estimate)' : ''}${p.rules && p.rules.waiverDays && yrFor(lg) && yrFor(lg).waiverPriority ? ' · waiver priority ' + yrFor(lg).waiverPriority : ''}${A.spare ? ' · keeping 1 spare' : A.weekend ? ' · spare freed for the weekend' : ''}</span></div>`;
-    let pnotes = '';
-    if (A.done.length) pnotes += `<div class="sub" style="margin-bottom:4px">Done this week: ${A.done.map(e => (e.t === 'add' ? 'added ' : 'dropped ') + esc(nm(e))).join(' · ')}</div>`;
-    if (p.recon && (p.recon.gone.length || p.recon.joined.length)) pnotes += `<div class="sub" style="margin-bottom:4px">Basketball Monster hasn't caught up with your Yahoo roster yet, so the plan uses Yahoo's (${esc(p.recon.joined.join(', '))} in${p.recon.gone.length ? ', ' + esc(p.recon.gone.join(', ')) + ' out' : ''}).</div>`;
-    if (PPC && p.moves.length) pnotes += `<div class="sub" style="margin-bottom:4px">Numbers are extra categories won a week.</div>`;
-    if (p.live && p.moves.length) { const sw = p.cats.filter(c => c.tag === 'toss-up' || c.tag === 'chase').map(c => c.label); pnotes += `<div class="sub" style="margin-bottom:4px">Ranked with this week's live score${sw.length ? ': players who help <b>' + sw.map(esc).join(', ') + '</b> rank higher' : ''}.</div>`; }
-    if (!p.moves.length) h += `<div class="sub">${A.left ? 'No swap is clearly worth an add this week.' : 'No adds left to plan with' + (A.spare ? ' (1 kept spare for injuries).' : '.')}</div>`;
-    p.moves.forEach((x, i) => {
-      const opts = [{ add: x.add, addTeam: x.addTeam, games: x.games, verdict: x.verdict, il: x.il, cur: true }].concat(x.alts || []);
-      h += '<div class="mvw">';
-      // one clear recommendation; the other options sit underneath, ranked by overall value, for when you'd rather plan around one of them
-      if (opts.length > 1) { const sc = a => a.cur ? x.score : a.score; const ord = opts.slice().sort((a, b) => (sc(b) == null ? -1e9 : sc(b)) - (sc(a) == null ? -1e9 : sc(a)));
-        const row = (a, j) => `<button class="popt${a.cur ? ' on' : ''}" data-mi="${i}" data-pick="${esc(a.add)}"><span class="rk">${j + 1}</span><span class="pn">${esc(a.add)}${j === 0 ? ' <i class="best">Best</i>' : ''}</span>${sc(a) != null ? `<span class="pv ${sc(a) >= 0 ? 'plus' : 'minus'}">${pp2(sc(a))}</span>` : ''}</button>`;
-        h += `<div class="label lbl2">${x.picked ? 'Your choice' : 'Recommended'} <span>${x.picked ? 'you picked this over the top option' : 'the best of ' + opts.length + ' options'}</span></div>`;
-        x._more = `<details class="popmore"><summary>All ${opts.length} options, ranked</summary><div class="sub">Ranked by ${PPC ? 'extra categories won' : 'win chance gained'} across this week and the next few, so the order can differ from the one-week numbers above.</div><div class="popts">${ord.map(row).join('')}</div></details>`; }
-      h += `<div class="mv" id="mv${i}">${moveBody(x, x.dropOpts.find(d => d.name === x.drop) || null)}</div>${x._more || ''}</div>`;
-    });
-    function moveBody(x, d) {
-      const v = LBLD[(d && d.verdict) || x.verdict] || LBLD.week;
-      if (x.type === 'il') return `<div class="l1"><span><b class="plus big1">+ ${esc(x.add)}</b> <span class="muted">${esc(teamN(x.addTeam))} · ${gw(x.games)}</span></span><span class="chip safe">No drop needed</span></div>
-        <div class="sub">Move <b>${esc(x.il)}</b> to an open IL slot first (he's out), then add on ${esc(fmtD(x.date))}.</div>
-        <div class="gains"><div><span>This week</span>${gainChip(x.week)}</div><div><span>Each week after</span>${gainChip(x.futWk)}</div></div><div class="sub">${catWords(x.catWeek)}</div>
-        <details class="more"><summary>Why</summary><div class="imp"><b>${pp(x.week)}</b> this week · <b>${pp(x.futWk)}</b> each week after ${PPC ? '(categories won)' : '(win chance)'}</div><div class="mts"><span class="sub">This week</span>${miniWeek(x.catWeek)}</div></details>${noteLine(x.hAdd && x.hAdd.note, x.add)}<div class="acts"><button data-skip="${esc(x.add)}">Not ${esc(sur(x.add))}</button></div>`;
-      const o = Object.assign({}, d || { name: x.drop, week: x.week, futWk: x.futWk, next: x.next, games: x.dropGames, addGames: x.games, catWeek: x.catWeek, catLater: x.catLater, date: x.date }); { const lt = ltOf(x.add, o.name); if (lt != null) o.futWk = lt; }
-      return `<div class="l1"><div><div class="pname plus">+ ${esc(x.add)}</div><div class="when">${esc(teamN(x.addTeam))} · ${gw(o.addGames != null ? o.addGames : x.games)} · add on ${esc(fmtD(o.date || x.date))}</div>${(() => { const av = availOf(yrFor(lg), x.add); return av ? (av.st === 'W' ? `<div class="when">On waivers on Yahoo${av.wv ? ' until ' + esc(av.wv) : ''}</div>` : '') : `<div class="when muted">Checking on Yahoo that he's still free…</div>`; })()}${M && M.hot(x.add) ? `<div class="when plus">${esc(M.hot(x.add))}: others may add him first</div>` : ''}</div><span class="chip ${v[0]}">${v[1]}</span></div>
-        <div class="drops"><span class="sub">Drop</span>${x.dropOpts.map(dd => `<button class="dopt${dd.name === o.name ? ' on' : ''}" data-add="${esc(x.add)}" data-drop="${esc(dd.name)}" title="${dd.injured ? 'Injured now: check his timeline' : ''}">${esc(sur(dd.name))}${dd.injured ? ' (injured)' : ''}<i>${gw(dd.games)}${M && M.find(dd.name) && M.snapRisk(M.find(dd.name)) ? ' · likely snapped up' : ''}</i></button>`).join('')}</div>
-        <div class="adv">${addSentence(x, o)}</div>
-        ${statsVs(x.add, o.name)}
-        <div class="gains">${(o.score != null ? o.score : x.score) != null ? `<div><span>Next few weeks, overall</span>${gainChip(o.score != null ? o.score : x.score)}</div>` : ''}<div><span>This week</span>${gainChip(o.week)}</div>${o.next != null ? `<div><span>Next week</span>${gainChip(o.next)}</div>` : ''}<div><span>Each week after</span>${gainChip(o.futWk)}</div></div>
-        <div class="sub">${catWords(o.catWeek)}</div>
-        <div class="mts">${miniWeek(o.catWeek)}</div>
-        ${o.why ? `<div class="dwhy"><b>Why ${esc(sur(o.name))}:</b> ${o.why.order ? `the ${o.why.order === 1 ? 'lowest' : nth(o.why.order) + ' lowest'} rest-of-season value of the ${o.why.of} players outside your injured list, for your build` : 'his rest-of-season value for your build is below the pickup\'s'}. ${o.why.gp != null ? `${o.why.gp} games projected from next week to the end of your playoffs${o.why.n != null ? ` (his team plays ${o.why.n})` : ''}` : ''}${o.why.ret ? `; expected back around ${esc(fmtD(o.why.ret))}` : ''}.${o.why.addGp != null ? ` ${esc(sur(x.add))}: ${o.why.addGp} games projected.` : ''}${o.why.rank ? ` Basketball Monster rank ${o.why.rank}.` : ''}${o.why.claim ? ` <span class="minus">Another team is likely to claim him: this drop can't be undone.</span>` : ''}</div>` : ''}
-        <details class="more" data-k="mvd${esc(x.add)}"><summary>Why, and other choices</summary>
-        <div class="imp"><b>${pp(o.week)}</b> this week${o.next != null ? ` · <b>${pp(o.next)}</b> next week` : ''} · <b>${pp(o.futWk)}</b> each week after ${PPC ? '(categories won)' : '(win chance)'}</div>
-        <div class="mts"><span class="sub">This week</span>${miniWeek(o.catWeek)}</div>
-        <div class="mts"><span class="sub">Each week after</span>${miniLater(o.catLater)}</div>
-        ${noteLine(x.hAdd && x.hAdd.note, x.add)}${noteLine(d ? d.note : x.hDrop && x.hDrop.note, o.name)}
-        <div class="acts"><button data-skip="${esc(x.add)}">Not ${esc(sur(x.add))}</button><button data-keep="${esc(o.name)}">Keep ${esc(sur(o.name))}</button></div></details>`;
-    }
-    if ((s.exclude || []).length || (s.protect || []).length || Object.keys(s.forceDrop || {}).length || Object.keys(s.pickAdds || {}).length) h += `<div class="sub" style="margin-top:4px">Your choices: ${(s.exclude || []).length} skipped · ${(s.protect || []).length} kept · ${Object.keys(s.forceDrop || {}).length + Object.keys(s.pickAdds || {}).length} picked <button class="lnk" id="resetX">reset</button></div>`;
-    if (pnotes) h += `<details class="more"><summary>Notes</summary>${pnotes}</details>`;
-    const tsel = s.test || {};
-    h += `<details class="test" data-k="test" ${s.test ? 'open' : ''}><summary>Test a swap</summary><div class="row" style="margin-top:6px"><select id="tAdd"><option value="">Add…</option>${p.faNames.map(n => `<option ${tsel.add === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select><select id="tDrop"><option value="">Drop…</option>${p.rosterNames.map(n => `<option ${tsel.drop === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select><button class="lnk" id="tGo">Test</button></div>`;
-    if (p.test) { const t = p.test; h += t.err ? `<div class="warn" style="margin-top:6px">${esc(t.err)}</div>` : `<div class="imp" style="margin-top:6px"><b class="plus">+ ${esc(t.add)}</b> for <b class="minus">${esc(t.drop)}</b> from ${esc(t.day.split(' ')[0])}: <b class="${t.week >= 0 ? 'plus' : 'minus'}">${pp(t.week)}</b> this week${t.next != null ? ` · <b>${pp(t.next)}</b> next week` : ''} · <b class="${t.futWk >= 0 ? 'plus' : 'minus'}">${pp(t.futWk)}</b> each week after</div><div class="mts"><span class="sub">This week</span>${miniWeek(t.catWeek)}</div><div class="mts"><span class="sub">Each week after</span>${miniLater(t.catLater)}</div><div class="sub">Compared with the plan above. <button class="lnk" id="tClear">clear</button></div>`; }
-    h += '</details></div>';
+    const c1 = h.length; const A = p.adds;
     const c2 = h.length;
     // LINEUP: the plan for each day, checked against what's actually set on Yahoo for that day
     h += lineupCard(p, lg);
     const c3 = h.length;
-    // WATCHLIST
-    if (p.holds.length) {
-      h += `<div class="sec"><div class="h"><span>Watchlist</span><span class="sub">free agents to keep an eye on</span></div><div class="hl">${esc(p.holds[0].name)}${p.holds.length > 1 ? ` <span class="muted">and ${p.holds.length - 1} more</span>` : ''}</div><details class="more" data-k="watch"><summary>${p.holds.length} free agent${p.holds.length > 1 ? 's' : ''} worth watching</summary>`;
-      p.holds.forEach(x => { const f = x.h.form; const tags = []; { const lt = ltOf(x.name, x.drop); if (lt != null) x.perWk = lt; }
-        if (x.perWk >= 0.01) tags.push(['safe', 'Worth adding long term']); else if (x.perWk >= 0.003) tags.push(['toss-up', 'Possible long-term add']);
-        if (x.h.wk >= 3 && x.perWk > -0.01) tags.push(['toss-up', 'Stream short term']);
-        if (!tags.length) tags.push(['plain', 'Watch']);
-        if (x.stash) tags.unshift(['up', 'IL stash: no drop']);
-        if (f && f.d >= 0.15) tags.push(['plain', 'Playing better lately']); if (f && f.d <= -0.15) tags.push(['plain', 'Playing worse lately']);
-        // Basketball Monster's analyst tag, word for word, as a label only (it never changes a player's value)
-        { const tg = showTags(lg) && window.STRAT && window.STRAT.tagOf({ notes: x.h.tags || [] }); if (tg) tags.push(['plain', tg.by + ': ' + tg.tag]); }
-        if (x.h.po != null) tags.push(['plain', x.h.po + ' playoff games']);
-        h += `<div class="wl"><div class="l1"><span><b>${esc(x.name)}</b> <span class="muted">${esc(teamN(x.team))} · ${gw(x.h.wk)}</span></span><span>${x.perWk >= 0.005 ? gainChip(x.perWk) : ''}</span></div>${statLine(x.name)}<div>${tags.map(t => `<span class="tag ${t[0]}">${esc(t[1])}</span>`).join('')}</div><div class="sub">Each week compared with ${esc(sur(x.drop))}: ${catWords(x.catLater, 'd').replace(/^H/, 'h')}</div><div class="mts"><button class="lnk" data-test="${esc(x.name)}" style="margin-left:auto">Test this swap</button></div>${noteLine(x.h.note, x.name)}</div>`; });
-      h += `<div class="sub" style="margin-top:4px">Basketball Monster projections${p.sched ? ' on the real NBA schedule' : ''}, weighted to the categories you can still swing ${p.fitSrc === 'league' ? 'against your league' : '(league scan pending)'}; analyst notes nudge values a little.${p.oppBoost ? ' Opponent expected to stream about ' + p.oppBoost + ' more adds this week.' : ''}</div></details></div>`;
-    }
     const c4 = h.length;
     h += setPane(lg, settingsBody(lg, m, A, p));
     // show only what the Yahoo page you're on needs (or everything, if you ask)
@@ -577,7 +544,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       ['hero', 'pick', 'week'].forEach(k => part[k] = nw(part[k])); }
     const TAB = curTab(); const yo = yahooOn(); const show = TABPARTS[TAB];
     const yL = yrFor(lg); const yLn = yL ? Object.assign({}, yL, { next: ynextOf(yL) }) : null; const onLg = yo && yo.league === lg;
-    const lazy = { ilback: () => ilBackCard(p, lg), brief: () => briefHtml(pThis, lg, M), live: () => M && yL && !pNext ? window.CTX.liveCard(M, ST, yL.lid, yL) : '', next: () => { if (!M || !yLn || pNext) return ''; let ov = null; try { const pn = nxOK ? compute('next') : null; if (pn) ov = { W: pn.obj === 'cats' ? pn.Wmaj : pn.W }; } catch (e) {} return window.CTX.nextCard(M, yLn, ov); }, league: () => leagueCard(lg, M, true), standings: () => standingsCard(lg, true), stream: () => streamCard(p, lg),
+    const lazy = { ilback: () => ilBackCard(p, lg), brief: () => briefHtml(pThis, lg, M), live: () => M && yL && !pNext ? window.CTX.liveCard(M, ST, yL.lid, yL) : '', next: () => { if (!M || !yLn || pNext) return ''; let ov = null; try { const pn = nxOK ? compute('next') : null; if (pn) ov = { W: pn.obj === 'cats' ? pn.Wmaj : pn.W }; } catch (e) {} return window.CTX.nextCard(M, yLn, ov); }, league: () => leagueCard(lg, M, true), standings: () => standingsCard(lg, true), board: () => boardCard(p, lg, M),
       strategy: () => M ? strategyCard(lg, M, { tid: onLg && yo.kind === 'trade' && ST.ypage && ST.ypage.mid2 ? ST.ypage.mid2 : null }) : `<div class="card">Strategy needs the first full sync from Basketball Monster.</div>`,
       // what the co-pilot reads from the Yahoo screen you're on, shown on the page it belongs to
       ctx: () => onLg && yo.tab === TAB && ['players', 'add', 'trade'].includes(yo.kind) ? `<div id="ctxBox">${ctxBlock()}</div>` : '' };
@@ -595,27 +562,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     o.querySelectorAll('[data-skip]').forEach(b => b.onclick = () => { s.exclude = (s.exclude || []).concat([b.dataset.skip]); saveS(lg); soon(); });
     o.querySelectorAll('[data-keep]').forEach(b => b.onclick = () => { s.protect = (s.protect || []).concat([b.dataset.keep]); saveS(lg); soon(); });
     const rx = $('resetX'); if (rx) rx.onclick = () => { s.exclude = []; s.protect = []; s.forceDrop = {}; s.pickAdds = {}; saveS(lg); soon(); };
-    // drop pills: switch instantly (each option carries its own numbers), then re-plan the week in the background
-    o.querySelectorAll('.dopt').forEach(b => b.onclick = () => {
-      const mi = +b.closest('.mv').id.slice(2); const x = p.moves[mi]; const ak = K(b.dataset.add), dk = K(b.dataset.drop);
-      const rec = x.dropOpts[0]; const isOn = b.classList.contains('on');
-      const fd = Object.assign({}, s.forceDrop || {});
-      if (isOn && fd[ak]) delete fd[ak]; else if (isOn) return; else if (rec && K(rec.name) === dk && x.forced) delete fd[ak]; else fd[ak] = dk;
-      const target = fd[ak] ? x.dropOpts.find(d => K(d.name) === fd[ak]) : rec;
-      $('mv' + mi).innerHTML = moveBody(x, target); $('mv' + mi).classList.add('upd'); wireMove(); s.forceDrop = fd; saveS(lg); soon(250);
-    });
-    // pickup options: tap another to plan around it; tap the chosen one again to go back to the recommendation
-    o.querySelectorAll('.popt').forEach(b => b.onclick = () => {
-      const mi = +b.dataset.mi; const k = K(b.dataset.pick); const on = b.classList.contains('on');
-      const pk = Object.assign({}, Array.isArray(s.pickAdds) ? {} : s.pickAdds || {}); Object.keys(pk).forEach(i => { if (+i > mi) delete pk[i]; }); // later pickups re-plan around this choice
-      if (on) delete pk[mi]; else pk[mi] = k; s.pickAdds = pk;
-      b.parentNode.querySelectorAll('.popt').forEach(z => z.classList.toggle('on', !on && z === b));
-      $('mv' + b.dataset.mi).classList.add('upd'); saveS(lg); soon(30);
-    });
-    function wireMove() { o.querySelectorAll('.mv [data-skip]').forEach(b => b.onclick = () => { s.exclude = (s.exclude || []).concat([b.dataset.skip]); saveS(lg); soon(); }); o.querySelectorAll('.mv [data-keep]').forEach(b => b.onclick = () => { s.protect = (s.protect || []).concat([b.dataset.keep]); saveS(lg); soon(); }); }
-    const tg = $('tGo'); if (tg) tg.onclick = () => { const a = $('tAdd').value, d = $('tDrop').value; if (!a || !d) return; s.test = { add: a, drop: d }; saveS(lg); render(); };
-    const tc = $('tClear'); if (tc) tc.onclick = () => { s.test = null; saveS(lg); render(); };
-    o.querySelectorAll('[data-test]').forEach(b => b.onclick = () => { s.test = { add: b.dataset.test, drop: p.holds[0].drop }; saveS(lg); render(); setTimeout(() => { const el = document.querySelector('details.test'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 50); });
+    // the free-agent list: plan another player than the top one (with his drop), or go back to the top one
+    o.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { s.pickAdds = { 0: b.dataset.plan }; s.forceDrop = { [K(b.dataset.plan)]: K(b.dataset.pdrop) }; saveS(lg); toast('Planning ' + b.dataset.plan, 'ok'); soon(30); });
+    o.querySelectorAll('[data-unplan]').forEach(b => b.onclick = () => { s.pickAdds = {}; s.forceDrop = {}; saveS(lg); toast('Back to the top pickup', 'ok'); soon(30); });
     wireSettings(lg);
     const hc = $('hideConn'); if (hc) hc.onclick = () => { s.hideConn = true; saveS(lg); render(); };
     wireConn();
@@ -631,9 +580,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // ---- Settings: the league's rules as read from Yahoo, your build, how eager the advice is, display, sign-ins ----
   // Every rule the co-pilot follows reads its numbers from here, so "How it works" and the advice always match.
   const PICK = {
-    fewer: { min: 0.06, swap: 0.08, t: 'Fewer moves', w: 'A pickup has to win you about 0.2 more categories this week. If the player you add is worse than the one you drop for the rest of the season, it has to win you about 0.8 of a category more this week.' },
-    std: { min: 0.03, swap: 0.05, t: 'Standard', w: 'A pickup has to win you about 0.1 more categories this week (roughly one extra category every 9–10 weeks). If the player you add is worse than the one you drop for the rest of the season, it has to win you about half a category more this week.' },
-    more: { min: 0.015, swap: 0.03, t: 'More moves', w: 'A pickup has to win you about 0.05 more categories this week. If the player you add is worse than the one you drop for the rest of the season, it has to win you about 0.3 of a category more this week.' } };
+    fewer: { min: 0.06, swap: 0.08, season: 1.5, t: 'Fewer moves', w: 'A pickup has to add at least 1.5 categories over the rest of the season.' },
+    std: { min: 0.03, swap: 0.05, season: 0.75, t: 'Standard', w: 'A pickup has to add at least 0.75 of a category over the rest of the season (about one category every month and a half).' },
+    more: { min: 0.015, swap: 0.03, season: 0.4, t: 'More moves', w: 'A pickup has to add at least 0.4 of a category over the rest of the season.' } };
   const pickOf = lg => PICK[S(lg).pick] || PICK.std;
   const fitRule = lg => Object.assign({}, FT_RULE, S(lg).fit || {});
   const showTags = lg => S(lg).showTags !== false;
@@ -669,18 +618,13 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <div class="row bandrow"><i class="fd g"></i>Locked above that</div>
       <div class="sub" style="margin-top:6px">${snap ? `Bands set ${new Date(snap.ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}. They stay put until you set them again.` : 'Bands are set at the first sync with Basketball Monster\'s Analysis Monster.'} <button class="lnk" id="bandsReset">Set again from today's numbers</button></div></div>`;
     // 3. how eager the advice is
-    const pk = s.pick && PICK[s.pick] ? s.pick : 'std'; const fr = fitRule(lg);
+    const pk = s.pick && PICK[s.pick] ? s.pick : 'std';
     h += `<div class="card sets" id="set-advice"><div class="h"><span>Advice</span></div>
       <div class="row">Pickups<span class="seg small sortbar" style="margin:0 0 0 auto">${Object.entries(PICK).map(([k, v]) => `<button data-pick="${k}" class="${pk === k ? 'on' : ''}">${v.t}</button>`).join('')}</span></div>
-      <div class="sub">${PICK[pk].w} A drop is only suggested when the pickup is also at least as good over the rest of the season, through your playoffs.</div>
+      <div class="sub">${PICK[pk].w} The drop is whoever leaves your team best off. This week and next are timing only: when adding now costs this week, the advice is to wait until Monday.</div>
       <div class="row" style="margin-top:8px"><label><input type="checkbox" id="spare" ${A.spare ? 'checked' : ''}> Keep one add spare for injuries until Saturday</label></div>
-      <details class="more" data-k="fitrule"><summary>Player reads</summary>
-        <div class="sub">Basketball Monster rates every player in every category: 0 is an average player, +1 a step above, −1 a step below. A read adds up his ratings across one group of your categories.</div>
-        <div class="row bandrow"><i class="fd g"></i>Fits your build: swing categories add up to at least <input class="thin" id="frFits" type="number" step="0.1" value="${fr.fits}"></div>
-        <div class="row bandrow"><i class="fd a"></i>Value in lost categories: lost categories add up to at least <input class="thin" id="frWasted" type="number" step="0.1" value="${fr.wasted}"> and make up at least <input class="thin" id="frShare" type="number" min="10" max="100" value="${Math.round(fr.share * 100)}">% of his plus value</div>
-        <div class="row bandrow"><i class="fd a"></i>Surplus in won categories: winning categories add up to at least <input class="thin" id="frHolds" type="number" step="0.1" value="${fr.holds}"></div>
-        <div class="row bandrow"><i class="fd r"></i>Costs you: swing categories add up to <input class="thin" id="frCosts" type="number" step="0.1" value="${fr.costs}"> or less</div>
-      </details>
+      <div class="row" style="margin-top:8px">Trades<span style="margin-left:auto">sell at <input class="thin" id="tradeBar" type="number" step="0.5" min="0.5" value="${(() => { const MM = modelFor(lg); return MM ? tradeBarOf(lg, MM) : 1.5; })()}"> categories</span></div>
+      <div class="sub">A player is a sell when a one-for-one trade at his Basketball Monster value adds at least this many categories over the rest of the season. Every number is expected categories won against your league: the same measure on every page.</div>
       <div class="sub" style="margin-top:8px"><button class="lnk" id="setReset">Reset advice and bands to the defaults</button></div></div>`;
     // 4. display
     h += `<div class="card sets" id="set-display"><div class="h"><span>Display</span></div>
@@ -699,8 +643,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const pc = $('puntCopy'); if (pc) pc.onclick = () => set(() => { const MM = modelFor(lg); s.punt = ((MM && MM.ctx.puntBbm) || []).slice(); });
     document.querySelectorAll('#setPane [data-pick]').forEach(b => b.onclick = () => { set(() => { s.pick = b.dataset.pick === 'std' ? null : b.dataset.pick; }); toast('Pickups: ' + PICK[b.dataset.pick].t, 'ok'); });
     [['thDead', 'dead'], ['thSafe', 'safe'], ['thLock', 'locked']].forEach(([id, k]) => { const e = $(id); if (e) e.onchange = () => set(() => { s.th = Object.assign({}, s.th || {}, { [k]: Math.max(0, Math.min(100, +e.value || 0)) / 100 }); }); });
-    [['frFits', 'fits', 1], ['frWasted', 'wasted', 1], ['frShare', 'share', 100], ['frHolds', 'holds', 1], ['frCosts', 'costs', 1]].forEach(([id, k, d]) => { const e = $(id); if (e) e.onchange = () => set(() => { const v = +e.value; if (!isFinite(v)) return; s.fit = Object.assign({}, s.fit || {}, { [k]: v / d }); }); });
-    const rs = $('setReset'); if (rs) rs.onclick = () => { set(() => { delete s.pick; delete s.fit; delete s.th; }); toast('Advice and bands back to the defaults', 'ok'); };
+    const tb = $('tradeBar'); if (tb) tb.onchange = e => set(() => { const v = +e.target.value; s.tradeBar = v > 0 ? v : null; });
+    const rs = $('setReset'); if (rs) rs.onclick = () => { set(() => { delete s.pick; delete s.fit; delete s.th; delete s.tradeBar; }); toast('Advice and bands back to the defaults', 'ok'); };
     const br = $('bandsReset'); if (br) br.onclick = () => { const M = modelFor(lg); const l = leaguesKnown().find(x => x.league === lg); const win = l && window.STRAT && M ? window.STRAT.catWin(ST['bbmstand:' + l.lid], M.ctx.cats) : null; if (!win) { br.textContent = 'Waiting for Basketball Monster…'; return; } const sk = 'strat:' + l.lid; ST[sk] = window.STRAT.snapshot(M, win, M.ctx.punt || []); browser.storage.local.set({ [sk]: ST[sk] }); DV++; render(); };
     const yr = $('yReload'); if (yr) yr.onclick = async () => { const y = yrFor(lg); if (!y) return; const k = 'ysetp:' + y.lid; const cur = Object.assign({}, ST[k] || {}, { ts: 0 }); ST[k] = cur; await browser.storage.local.set({ [k]: cur }); yr.textContent = 'Reloading…'; yr.disabled = true; runSync(true); }; }
   // ---- the settings pane: everything you can change, in one place, opened from the gear at the top right ----
@@ -804,20 +748,39 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       if (!best && left.length === 1 && rest.filter(r => !out[String(r.tid)]).length === 1) best = left[0]; if (best) { out[String(t.tid)] = best; left = left.filter(x => x !== best); } });
     return out; }
   // ---- streaming: this week only, the categories still in play, and only when a stream is clearly worth an add ----
-  function streamCard(p, lg) { const S0 = p && p.streams; if (!S0) return ''; const nx = p.week === 'next'; const wk = nx ? 'next week' : 'this week';
-    const chips = (lab, list, cls) => list.length ? `<div class="hl3"><i class="fd ${cls}"></i><span><b>${lab}</b> ${list.map(c => `${esc(c)} <span class="muted">${Math.round((S0.probs[c] || 0) * 100)}%</span>`).join(', ')}</span></div>` : '';
-    const cn = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2);
-    let h = `<div class="card strm"><div class="h"><span>Stream ${wk}</span><span class="sub">vs ${esc(p.opp || '')}</span></div>`;
-    const x = S0.list[0];
-    if (x) { const u = yLink(lg, x.add);
-      h += `<div class="hl">Add <b class="plus">${esc(x.add)}</b>, drop ${esc(x.drop)}</div><div class="sub hls">${gainChip(x.net / (PPC || 1))} ${x.games} game${x.games === 1 ? '' : 's'} from ${esc(fmtD(x.date))} · helps ${esc(listW(x.cats.filter(c => c.inPlay && c.d > 0).slice(0, 3).map(c => c.c)))}</div>`;
-      if (u) h += `<div class="acts"><a class="btn small" href="${esc(u)}" target="_blank" rel="noopener">Add ${esc(sur(x.add))} on Yahoo</a></div>`; }
-    else h += `<div class="hl muted">No stream worth an add ${wk}</div><div class="sub hls">${S0.reason === 'adds' ? 'No adds to spare (one is kept for injuries until the weekend).' : S0.reason === 'none-in-play' ? 'Every category is either safely yours or out of reach.' : `None helps enough ${wk} once the cost of the drop in later weeks is counted.`}</div>`;
-    let more = chips('In play:', S0.inPlay, 'a') + chips('Already won:', S0.banked, 'g') + chips('Out of reach:', S0.gone, 'n');
-    if (x) more += `<div class="imp"><b>${cn(x.net)}</b> categories ${wk}</div><div class="mts">${x.cats.map(c => `<span class="mt plain"><b>${esc(c.c)}</b> <i class="${c.d >= 0 ? 'plus' : 'minus'}">${c.d >= 0 ? '+' : '−'}${Math.abs(Math.round(c.d * 100))} points</i></span>`).join('')}</div><div class="sub">${x.trendDrop ? `${esc(x.drop)} is being dropped across Yahoo (${x.trendDrop.toLocaleString()} in two days). ` : ''}${x.cost >= 0.01 ? `The drop costs about ${x.cost.toFixed(2)} categories over the next few weeks, already taken off.` : ''}</div>`
-      + S0.list.slice(1).map(y => `<div class="sub">Also worth it: add <b>${esc(y.add)}</b>, drop ${esc(y.drop)} (${esc(gainWord(y.net / (PPC || 1))[1].toLowerCase())}).</div>`).join('');
-    more += `<div class="sub">In play means a swing category this week: a ${Math.round((S0.bands || {}).dead * 100 || 15)}–${Math.round((S0.bands || {}).safe * 100 || 75)}% chance on Basketball Monster's projections${p.live ? ' plus finished games' : ''} (the same cut-offs as your strategy). A stream only gets credit for categories in play; anything it costs elsewhere counts against it. Drops come from your three least valuable players, plus anyone Yahoo managers are dropping in numbers.</div>`;
-    return h + `<details class="more"><summary>Why</summary>${more}</details></div>`; }
+  // ---- Players: one list. The top 20 of every Basketball Monster free agent, ranked by the one measure (what he adds to your
+  // expected categories over the rest of the season, replacing his best drop). The tags are the only advice: Best pickup,
+  // Wait until Monday, Stream this week only. Tap a player to test him: his drop, this week, next week, the season, per game. ----
+  const cn = (v, d) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d == null ? 1 : d);
+  const seasonChip = v => { const a = Math.abs(v); const k = a < 0.5 ? 0 : a < 2 ? 1 : a < 5 ? 2 : 3; return k ? (v > 0 ? ['g', ['', 'Helps a little', 'Helps clearly', 'Helps a lot'][k]] : ['r', ['', 'Costs a little', 'Costs clearly', 'Costs a lot'][k]]) : ['n', 'About even']; };
+  const catMoves = (cats, min) => { const L = (cats || []).filter(c => Math.abs(c.d) >= (min || 0.01)); const up = L.filter(c => c.d > 0).sort((a, b) => b.d - a.d).map(c => window.STRAT.name(c.c)), dn = L.filter(c => c.d < 0).sort((a, b) => a.d - b.d).map(c => window.STRAT.name(c.c)); return { up, dn }; };
+  function boardCard(p, lg, M) {
+    const B = boardFor(lg); if (!B || !M) return `<div class="card"><div class="h"><span>Free agents</span></div><div class="strnone">Your free-agent list appears once Basketball Monster's rest-of-season projections are in.</div></div>`;
+    const bd = p.bd; const A = p.adds || {}; const y = yrFor(lg); const nx = p.week === 'next'; const nm = id => M.P[id].n;
+    const SL = new Map(((p.streams && p.streams.list) || []).map(x => [K(x.add), x])); const mv = (p.moves || []).find(x => bd && K(x.add) === K(bd.add));
+    let h = `<div class="card prim fal"><div class="h"><span>Free agents</span><span class="sub">${nx ? 'next week' : `${Math.max(0, A.left || 0)} of ${A.limit || 0} adds left this week${A.spare ? ' (1 kept spare)' : ''}`}</span></div>`;
+    if (bd && bd.worth && !bd.wait) h += `<div class="hl">Add <b class="plus">${esc(bd.add)}</b>, drop <b>${esc(bd.dropName)}</b>${mv ? ` on ${esc(fmtD(mv.date))}` : ''}</div><div class="sub hls"><b class="plus">${cn(bd.season)}</b> categories over the rest of the season${bd.chosen ? ' · your pick' : ''}</div>`;
+    else if (bd && bd.worth) h += `<div class="hl"><b>${esc(bd.add)}</b> is the best pickup: wait until Monday</div><div class="sub hls">${bd.why === 'adds' ? 'No adds left this week.' : `Dropping ${esc(sur(bd.dropName))} now costs this week (${cn(bd.week)} categories); from Monday it's ${cn(bd.season)} over the rest of the season.`}</div>`;
+    else h += `<div class="hl">No free agent clears your bar</div><div class="sub hls">The best, ${esc(nm(B.list[0].id))}, adds ${cn(B.list[0].gain * B.weeks)} categories over the rest of the season; your bar is ${cn(seasonBar(lg), 2)} (Settings → Advice).</div>`;
+    const rows = B.list.map((x, i) => { const name = nm(x.id); const sel = bd && K(bd.add) === K(name); const drop = sel ? bd.drop : x.drop; const r = sel && bd.drop !== x.drop ? B.swap(x.id, drop) : x;
+      const season = (r.g != null ? r.g : r.gain) * B.weeks; const tm = window.H2H.timing(M.ctx, M.L, x.id, drop) || {}; const st = SL.get(K(name)); const av = availOf(y, name);
+      const tags = []; if (sel && bd.worth && !bd.wait) tags.push(['g', bd.chosen ? 'Your pick' : 'Best pickup']); if (sel && bd.worth && bd.wait) tags.push(['a', 'Wait until Monday']); if (st) tags.push(['a', 'Stream this week only']);
+      if (av && av.st === 'W') tags.push(['n', 'On waivers' + (av.wv ? ' until ' + fmtD(av.wv) : '')]);
+      const cm = catMoves(r.cats || x.cats, 0.01); const gk = seasonChip(season);
+      const P = M.P[x.id], D = M.P[drop]; const alt = !sel && x.alt ? x.alt : null;
+      return `<details class="pr fa" data-k="fa${esc(x.id)}"><summary><div class="l1"><span class="frk">${i + 1}</span><b>${esc(name)}</b><span class="fv ${season >= 0 ? 'plus' : 'minus'}">${cn(season)}</span></div>
+        <div class="l2">${tags.length ? `<div class="ftags">${tags.map(t => `<span class="fk ${t[0]}">${esc(t[1])}</span>`).join('')}</div>` : ''}<div class="ln">${esc(teamN(P.t))}${P.inj ? ` · <span class="minus">${esc(injChip(P.inj))}</span>` : ''} · drop ${esc(sur(nm(drop)))}</div>${cm.up.length ? `<div class="ln"><span>Helps</span> ${esc(listW(cm.up.slice(0, 4)))}</div>` : ''}${cm.dn.length ? `<div class="ln"><span>Costs</span> ${esc(listW(cm.dn.slice(0, 3)))}</div>` : ''}</div></summary>
+        <div class="ld"><div class="sub">Test: add ${esc(sur(name))}, drop <b>${esc(nm(drop))}</b>${sel && bd.drop !== x.drop ? ' (your choice)' : ', the drop that leaves your team best off'}.</div>
+          <div class="gains"><div><span>This week</span>${tm.week != null ? `<span class="gnum ${tm.week >= 0 ? 'plus' : 'minus'}">${cn(tm.week, 2)}</span>` : '<span class="sub">–</span>'}</div><div><span>Next week</span>${tm.next != null ? `<span class="gnum ${tm.next >= 0 ? 'plus' : 'minus'}">${cn(tm.next, 2)}</span>` : '<span class="sub">–</span>'}</div><div><span>Rest of season</span><span class="fk ${gk[0]}">${gk[1]}</span><span class="gnum ${season >= 0 ? 'plus' : 'minus'}">${cn(season)}</span></div></div>
+          <div class="sub">Expected categories won: this week against ${esc(p.opp || 'your opponent')}${M.L.oppNext ? `, next week against ${esc(M.teamName(M.L.oppNext))}` : ''}, and in total over the rest of the season against your league. This week and next are timing only: the order above is the rest of the season.</div>
+          ${st ? `<div class="sub" style="margin-top:4px"><b>As a stream:</b> drop ${esc(st.drop)} for ${st.games} game${st.games === 1 ? '' : 's'} from ${esc(fmtD(st.date))}: ${cn(st.net, 2)} categories this week after what the drop costs later.</div>` : ''}
+          ${alt ? `<div class="sub" style="margin-top:4px">Or drop ${esc(nm(alt.drop))}: ${cn(alt.g * B.weeks)} over the rest of the season.</div>` : ''}
+          ${statsVs(name, nm(drop))}
+          <div class="sub">${P.ros && P.ros.g != null ? `${P.ros.g} games left projected for ${esc(sur(name))}` : ''}${D && D.ros && D.ros.g != null ? `, ${D.ros.g} for ${esc(sur(nm(drop)))}` : ''}.${P.rank ? ` Basketball Monster rank ${P.rank}.` : ''}${M.hot(name) ? ` <span class="plus">${esc(M.hot(name))}</span>.` : ''}</div>
+          <div class="acts">${sel && bd.chosen ? '<button class="lnk" data-unplan>Back to the top pickup</button>' : !sel ? `<button class="lnk" data-plan="${esc(name)}" data-pdrop="${esc(nm(drop))}">Plan this pickup instead</button>` : ''}${(() => { const u = yLink(lg, name); return u ? `<a class="lnk" href="${esc(u)}" target="_blank" rel="noopener">Open on Yahoo</a>` : ''; })()}</div></div></details>`; }).join('');
+    h += `<div class="sub" style="margin:8px 0 4px">Every Basketball Monster free agent, ranked by what he adds to your team over the rest of the season: expected categories won against every team in your league, in place of the player he'd replace${B.punt ? ` (punting ${esc(listW(B.punt.map(c => window.STRAT.name(c))))})` : ''}.</div>${rows}`;
+    return h + '</div>'; }
+
   // ---- projected standings: Basketball Monster's Analysis Monster (rest of season, counting only games each team can start)
   // added to the record each team already has on Yahoo ----
   // projected final table: Yahoo record now + each team's share of categories for the weeks left (Basketball Monster's Analysis
@@ -843,8 +806,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   //    the categories you win and not in swing ones → "surplus in won categories" (spare value: a sell, like lost-category value); clearly negative in swing categories → "costs you"; else
   //    "small impact". Analyst tags are shown as grey labels and never change a read.
   window.STAB = window.STAB || 'build';
-  const FIT = { fits: ['g', 'Fits your build'], holds: ['a', 'Surplus in won categories'], wasted: ['a', 'Value in lost categories'], costs: ['r', 'Costs you'], small: ['n', 'Small impact'] };
-  const GDESC = { holds: 'Strong in categories you already win: spare value to trade for help where your weeks are decided', wasted: 'Most of their value is in categories you\'ve lost', costs: 'Below average in the categories that decide your weeks', fits: 'Above average in the categories that decide your weeks', holds: 'Strong in categories you already win', small: 'Close to average where it matters to you' };
+  const FIT = { fits: ['g', 'Fits your build'], holds: ['a', 'Surplus in won categories'], wasted: ['a', 'Value in lost categories'], costs: ['r', 'A free agent does more'], small: ['n', 'Small impact'], nohelp: ['r', 'Doesn\'t help you'] };
+  const GDESC = { fits: 'Worth more to you than any free agent, and no trade at his value adds a clear margin', holds: 'A one-for-one trade at his value adds a clear margin: his output sits in categories you already win', wasted: 'A one-for-one trade at his value adds a clear margin: his output sits in categories you\'ve lost', costs: 'A free agent adds more to your team than he does: he\'s the drop on the Players page', small: 'The third of your roster worth least to you. No free agent or trade beats him yet: first in line when one does', nohelp: 'Adds nothing in place of your least valuable player' };
   const FT_RULE = { fits: 0.5, wasted: 1.0, share: 0.5, holds: 1.5, costs: -1.0 }; // in Basketball Monster category values (0 is an average player)
   function fitOf(cv, grp, FT) { FT = FT || FT_RULE; const sum = cs => cs.reduce((a, c) => a + (cv[c] || 0), 0), pos = cs => cs.reduce((a, c) => a + Math.max(0, cv[c] || 0), 0);
     const lost = pos(grp.lost), swing = sum(grp.swing), won = sum(grp.won); const plus = lost + Math.max(0, swing) + Math.max(0, won);
@@ -861,13 +824,16 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const all = Object.values(M.P).filter(p => p.ros && p.ros.lv != null && (p.ros.g || 0) > 0).sort((a, b) => b.ros.lv - a.ros.lv); const brank = {}; all.forEach((p, i) => brank[p.id] = i + 1);
       const own = {}; M.L.teams.forEach(t => t.ids.forEach(id => own[id] = t.tid));
       const ystat = {}; ((yrFor(lg) || {}).rows || []).forEach(r => { const id = M.find(r.name, r.team); if (id) ystat[id] = r.inj || ''; });
-      const line = (id, grp) => { const p = M.P[id]; if (!p || !p.ros) return null; const cv = p.ros.cv || {}; const f = fitOf(cv, grp || G.grp, FR);
+      // the read (kind) comes from the one measure; the category sums only say where his output sits (won or lost categories)
+      const RD = readsFor(lg); const pos = (cv, cs) => cs.reduce((a, c) => a + Math.max(0, cv[c] || 0), 0);
+      const line = (id, grp, rd) => { const p = M.P[id]; if (!p || !p.ros) return null; const cv = p.ros.cv || {}; const gg = grp || G.grp; const f = fitOf(cv, gg, FR); rd = rd || RD;
+        const r = rd && (rd.by[id] || rd.league[id]); if (r) { f.kind = r.kind === 'sell' ? (pos(cv, gg.won) >= pos(cv, gg.lost) ? 'holds' : 'wasted') : r.kind; f.read = r; f.mine = !!rd.by[id]; f.rd = rd; }
         return Object.assign({ id, n: p.n, t: p.t, cv, lv: p.ros.lv || 0, tg: teamLeft(p.t), brank: brank[id] || null, g: p.ros.g || 0, inj: ystat[id] || p.inj || '', tag: STR.tagOf(p), notes: (p.notes || []).filter(n => n.tag), yrank: M.yrank ? M.yrank(id) : null, own: own[id] || null, p }, f); };
       const mineIds = (M.L.teams.find(t => t.tid === M.L.me) || {}).ids || [];
       const mine = mineIds.map(id => line(id)).filter(Boolean);
-      const league = all.filter(p => own[p.id] !== M.L.me && p.ros.cv).map(p => line(p.id)).filter(Boolean);
+      const league = all.filter(p => own[p.id] && own[p.id] !== M.L.me && p.ros.cv).map(p => line(p.id)).filter(Boolean); // rostered players only: free agents live on the Players page
       const miss = STR.missing(((ST['lgscan:' + l.lid] || {}).teams || []).filter(t => String(t.tid) !== M.L.me).flatMap(t => t.players || []), n => M.find(n));
-      return { l, snap, winNow, th, band: G.band, grp: G.grp, bandNow, groups, rows, mine, mineIds, league, line, miss, cats, punt, brank }; }); }
+      return { l, snap, winNow, th, band: G.band, grp: G.grp, bandNow, groups, rows, mine, mineIds, league, line, miss, cats, punt, brank, rd: RD }; }); }
   // a team's categories from Basketball Monster's team values, cut by the same bands: the share of teams it beats in each
   function teamNeeds(lg, M, tid) { const l = leaguesKnown().find(x => x.league === lg); const STR = window.STRAT; if (!l || !STR) return null;
     const rows = Object.entries(amMatch(l.lid, M.L.me)).map(([t, r]) => ({ tid: t, val: r.val || {} })); const me = rows.find(r => r.tid === String(tid)); if (!me || rows.length < 4) return null;
@@ -884,18 +850,15 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const INJW = { Q: 'Questionable', D: 'Doubtful', P: 'Probable', O: 'Out', OUT: 'Out', INJ: 'Injured', GTD: 'Game-time decision', DTD: 'Day-to-day', NA: 'Not active', SUSP: 'Suspended', IL: 'Injured list', 'IL+': 'Injured list' };
   const injChip = x => { const s = String(x || '').trim(); const k = s.split(/\s+/)[0].toUpperCase(); return INJW[k] ? INJW[k] + s.slice(k.length) : s; };
   // what a player is good and bad at, in words (category values of +0.5 / −0.5 and beyond)
-  const goodAt = (cv, cs) => cs.filter(c => (cv[c] || 0) >= 0.5).sort((a, b) => cv[b] - cv[a]), badAt = (cv, cs) => cs.filter(c => (cv[c] || 0) <= -0.5).sort((a, b) => cv[a] - cv[b]);
+  const goodAt = (cv, cs) => cs.filter(c => (cv[c] || 0) >= 0.5).sort((a, b) => cv[b] - cv[a]);
   // a player's read as short lines, one statement each: [label, categories]
-  function fitWords(r, V, grp) { grp = grp || V.grp; const cv = r.cv; const gl = goodAt(cv, grp.lost), gs = goodAt(cv, grp.swing), gw = goodAt(cv, grp.won), bs = badAt(cv, grp.swing), bw = badAt(cv, grp.won);
-    const L = (a) => andL(a.map(NN)); const parts = [];
-    if (r.kind === 'wasted') parts.push(['Value in', L(gl) + ' (lost)']);
-    if (r.kind === 'fits') parts.push(['Helps', L(gs) || 'your swing categories']);
-    if (r.kind === 'holds') parts.push(['Surplus in', L(gw) + ' (already won)']);
-    if (r.kind === 'costs') parts.push(['Hurts', L(bs)]);
-    if (r.kind === 'small') parts.push(['', 'Close to average where it matters']);
-    if (r.kind !== 'fits' && gs.length) parts.push(['Also helps', L(gs)]);
-    if (r.kind !== 'costs' && bs.length) parts.push(['Costs some', L(bs)]);
-    if (bw.length && r.kind !== 'holds') parts.push(['Weak in', L(bw)]);
+  function fitWords(r, V, grp) { grp = grp || V.grp; const cv = r.cv; const rd = r.rd; const L = (a) => andL(a.map(NN)); const parts = []; const M = modelFor(league());
+    if (!r.read || !rd || !M) return [['', 'Not rated yet']]; const w = rd.weeks; const x = r.read; const top = (cats, sgn) => cats.filter(c => sgn * c.d >= 0.02).sort((a, b) => sgn * (b.d - a.d)).slice(0, 3).map(c => c.c);
+    if (r.mine) { parts.push(['Worth', `${cn(x.val * w)} categories to you over the rest of the season`]); const carry = top(x.cats, 1); if (carry.length) parts.push(['Holds up', L(carry)]);
+      if (r.kind === 'costs' && x.fa) parts.push(['Free agent', `${M.P[x.fa.id].n} adds ${cn(x.fa.g * w)} in his place`]);
+      if ((r.kind === 'holds' || r.kind === 'wasted') && x.sell[0]) { parts.push(['Trade', `${x.sell.length} player${x.sell.length > 1 ? 's' : ''} at his value add up to ${cn(x.sell[0].g * w)}`]); const g = goodAt(cv, r.kind === 'holds' ? grp.won : grp.lost); if (g.length) parts.push([r.kind === 'holds' ? 'Surplus in' : 'Value in', L(g) + (r.kind === 'holds' ? ' (already won)' : ' (lost)')]); }
+      if (r.kind === 'fits' && x.trades[0]) parts.push(['Best trade at his value', `${cn(x.trades[0].g * w)}, under your ${cn(rd.bar * w)} bar`]); }
+    else { parts.push(['For you', `${cn(x.g * w)} categories over the rest of the season in place of ${rd.d0 ? M.P[rd.d0].n : 'your least valuable player'}`]); const up = top(x.cats, 1), dn = top(x.cats, -1); if (up.length) parts.push(['Helps', L(up)]); if (dn.length) parts.push(['Costs', L(dn)]); }
     return parts; }
   // the stats behind a read: Basketball Monster's projection, this season so far and the last two weeks, per game
   function statsTable(p, cats) { const cols = [['Projection', p.ros], ['Season', p.season], ['Last 2 weeks', p.form]].filter(x => x[1] && x[1].st);
@@ -912,7 +875,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const dot = k => `<i class="fd ${FIT[k][0]}"></i>`;
     const BW = { punt: ['Punted', 'n'], dead: ['Lost', 'n'], swing: ['Swing', 'a'], safe: ['Winning', 'gr'], locked: ['Locked', 'g'] };
     // one player: a coloured read in words; the stats behind it on tap
-    const playerRow = (r, o) => { o = o || {}; const words = fitWords(r, V, o.grp);
+    const playerRow = (r, o) => { o = o || {}; const words = (o.extra || []).concat(fitWords(r, V, o.grp));
       return `<details class="pr" data-k="pr${esc(r.id)}"><summary><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b><span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>${r.inj ? `<span class="chip lost">${esc(injChip(r.inj))}</span>` : ''}${tagChip(r.tag)}${o.block ? '<span class="chip plain">On the block</span>' : ''}</div>
         <div class="l2">${words.map(w => `<div class="ln">${w[0] ? `<span>${esc(w[0])}</span> ` : ''}${esc(w[1])}</div>`).join('')}${r.tg ? `<div class="ln${r.g < 0.6 * r.tg ? ' warnl' : ''}"><span>Plays</span> ${Math.min(r.g, r.tg)} of ${r.tg} games left${r.g < 0.6 * r.tg ? ` (projected to miss ${r.tg - r.g})` : ''}</div>` : ''}${o.owner ? `<div class="ln muted">${owner(r.own)}</div>` : ''}</div></summary>
         <div class="ld">${o.block != null ? `<div class="row" style="margin-bottom:8px"><button class="lnk blk${o.block ? ' on' : ''}" data-block="${esc(r.id)}">${o.block ? 'Take off the trade block' : 'Put on the trade block'}</button></div>` : ''}${statsTable(r.p, V.cats)}<div class="sub">${r.g} games left${r.brank ? ' · Basketball Monster rank ' + r.brank : ''}${r.yrank ? ' · Yahoo rank ' + r.yrank : ''}</div>${r.notes.map(n => `<div class="sub">${esc(n.by)} (${esc(n.tag)}${n.tagNote ? ' ' + esc(n.tagNote) : ''}): “${esc(n.text)}”</div>`).join('')}</div></details>`; };
@@ -941,11 +904,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const tryP = (S(lg).tryPunt || []).filter(c => V.cats.includes(c));
       h += `<div class="h" style="margin-top:14px"><span>Try a different build</span></div><div class="sub">Pick categories to punt. Nothing changes in your settings.</div><div class="trypick">${V.cats.map(c => `<button class="pchip${tryP.includes(c) ? ' on' : ''}" data-tryp="${esc(c)}">${N(c)}</button>`).join('')}</div>`;
       if (tryP.length) { const G2 = V.groups(tryP, V.snap.win); const won2 = V.cats.filter(c => G2.band[c] === 'safe' || G2.band[c] === 'locked'), sw2 = G2.grp.swing, lost2 = V.cats.filter(c => G2.band[c] === 'dead');
-        const R1 = V.mine.slice().sort((a, b) => b.lv - a.lv).slice(0, 6); const R2 = R1.map(r => V.line(r.id, G2.grp));
+        const rd2 = readsFor(lg, tryP); const R1 = V.mine.slice().sort((a, b) => b.lv - a.lv).slice(0, 6); const R2 = R1.map(r => V.line(r.id, G2.grp, rd2)).filter(Boolean);
         const fit2 = R2.filter(r => r.kind === 'fits'), waste2 = R2.filter(r => r.kind === 'wasted' || r.kind === 'holds');
         h += `<div class="tryres"><div><b>Punting ${andL(tryP.map(N))}</b>: you'd already be winning ${won2.length} of ${V.cats.length - tryP.length} kept categories${won2.length ? ` (${andL(won2.map(N))})` : ''}.</div>
           ${sw2.length ? `<div>Still to fight for: ${andL(sw2.map(N))}.</div>` : ''}${lost2.length ? `<div class="minus">Kept but currently lost: ${andL(lost2.map(N))}.</div>` : ''}
-          <div>Your top six by Basketball Monster: ${fit2.length ? `${andL(fit2.map(r => esc(r.n)))} ${fit2.length > 1 ? 'fit' : 'fits'} this build` : 'none fit this build'}${waste2.length ? `; ${andL(waste2.map(r => esc(r.n)))} would have most of their value in categories you'd lose` : ''}.</div>
+          <div>Your top six by Basketball Monster: ${fit2.length ? `${andL(fit2.map(r => esc(r.n)))} ${fit2.length > 1 ? 'fit' : 'fits'} this build` : 'none fit this build'}${waste2.length ? `; ${andL(waste2.map(r => esc(r.n)))} would be worth more to you traded at ${waste2.length > 1 ? 'their' : 'his'} value` : ''}.</div>
           <div class="sub">This uses your team as it stands. Categories you've been punting will show as lost until the roster changes, so this view leans towards the build you already have.</div>
           <div class="sub">Compare: now you win ${won.length} of ${kept.length}, and ${V.mine.slice().sort((a, b) => b.lv - a.lv).slice(0, 6).filter(r => r.kind === 'fits').length} of your top six fit.</div></div>`; }
       if (V.miss.length) h += `<div class="sub" style="margin-top:8px">Not in Basketball Monster's projections: ${esc(V.miss.slice(0, 10).join(', '))}${V.miss.length > 10 ? ' and others' : ''}.</div>`;
@@ -959,75 +922,68 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     } else if (window.STAB === 'block') {
       const block = (S(lg).block || []).filter(id => V.mine.some(r => r.id === id));
       if (!block.length) h += `<div class="strnone">Nobody on the block yet. Open a player in Roster and tap "Put on the trade block".</div>`;
-      const TIER = [[1, 30, 'Stars'], [31, 75, 'Starters'], [76, 130, 'Rotation players'], [131, 9999, 'Depth']];
-      block.forEach(id => { const r = V.mine.find(x => x.id === id); const st = r.p.ros && r.p.ros.st || {};
-        const fits = V.league.filter(x => x.kind === 'fits' && x.swing > 0 && x.swing >= Math.max(0, r.swing)).sort((a, b) => b.swing - a.swing);
-        const T = teamNeedsAll(lg, M, r);
-        const gives = V.grp.swing.map(c => c === 'fg%' ? `${st.fga ? (st.fg / st.fga * 100).toFixed(1) : '–'}% field goals on ${(+st.fga || 0).toFixed(1)} attempts` : c === 'ft%' ? `${st.fta ? (st.ft / st.fta * 100).toFixed(1) : '–'}% free throws on ${(+st.fta || 0).toFixed(1)} attempts` : `${(+st[c] || 0).toFixed(1)} ${NN(c)}`).join(', ');
+      block.forEach(id => { const r = V.mine.find(x => x.id === id); if (!r) return; const T = teamNeedsAll(lg, M, r); const rd = V.rd; const tr = r.read ? r.read.trades.filter(t => t.g > 0) : []; const lv = V.league.reduce((m, x) => (m[x.id] = x, m), {});
         h += `<div class="blkc"><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b><span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span><button class="lnk blk on" data-block="${esc(r.id)}">Take off the block</button></div>
-          <div class="sub">In your swing categories he gives you ${esc(gives)} a game (Basketball Monster's projection). <b>Look for at least that much</b>, so the trade doesn't weaken the categories that decide your weeks.</div>
+          <div class="sub">Worth ${rd ? cn(r.read.val * rd.weeks) : '–'} categories to you over the rest of the season. Below: players at his Basketball Monster value (or a little less) who'd add to your team in a one-for-one, best first.${rd ? ` A clear move is ${cn(rd.bar * rd.weeks)} or more.` : ''}</div>
           ${T.length ? `<div class="sub">Teams fighting for what he's good at: ${T.map(t => `${owner(t.tid)} <span class="muted">(${andL(t.cats.map(N))})</span>`).join(', ')}.</div>` : ''}
-          ${TIER.map(([a, b, name]) => { const L0 = fits.filter(x => x.brank >= a && x.brank <= b); return `<details class="more"${L0.length && a <= 75 ? ' open' : ''}><summary>${name}: ${L0.length} fit${L0.length === 1 ? 's' : ''}</summary>${L0.length ? L0.map(x => playerRow(x, { owner: true })).join('') : '<div class="strnone">None.</div>'}</details>`; }).join('')}</div>`; });
+          ${tr.length ? tr.slice(0, 8).map(t => lv[t.id] ? playerRow(lv[t.id], { owner: true, extra: [['This trade', `${cn(t.g * rd.weeks)} categories over the rest of the season`]] }) : '').join('') : '<div class="strnone">No player at his value adds to your team in a one-for-one.</div>'}</div>`; });
     } else if (window.STAB === 'finder') {
-      const f0 = S(lg).find || { who: 'all', kind: 'fits' }; const f = f0.kind === 'holds' ? Object.assign({}, f0, { kind: 'fits' }) : f0; const L0 = V.league.filter(x => (f.who === 'fa' ? !x.own : f.who === 'teams' ? !!x.own : true) && (f.kind === 'all' || x.kind === f.kind)).sort((a, b) => b.swing - a.swing || b.lv - a.lv);
-      h += `<div class="seg small sortbar">${[['all', 'Everyone'], ['teams', 'On teams'], ['fa', 'Free agents']].map(([k, t]) => `<button data-fwho="${k}" class="${f.who === k ? 'on' : ''}">${t}</button>`).join('')}</div>
-        <div class="seg small sortbar">${[['fits', FIT.fits[1]], ['all', 'Any']].map(([k, t]) => `<button data-fkind="${k}" class="${f.kind === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
-      h += `<div class="sub" style="margin-bottom:6px">${L0.length} players, best for your swing categories first.</div>` + L0.slice(0, 25).map(x => playerRow(x, { owner: true })).join('') + (L0.length > 25 ? `<details class="more"><summary>${L0.length - 25} more</summary>${L0.slice(25, 120).map(x => playerRow(x, { owner: true })).join('')}</details>` : '');
+      const f0 = S(lg).find || {}; const kind = f0.kind === 'all' ? 'all' : 'fits'; const TIER = [[1, 30, 'Stars'], [31, 75, 'Starters'], [76, 130, 'Rotation players'], [131, 9999, 'Depth']];
+      const L0 = V.league.filter(x => x.read && (kind === 'all' || x.kind === 'fits')).sort((a, b) => b.read.g - a.read.g);
+      h += `<div class="seg small sortbar">${[['fits', FIT.fits[1]], ['all', 'Any']].map(([k, t]) => `<button data-fkind="${k}" class="${kind === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+      h += `<div class="sub" style="margin-bottom:6px">Players on other teams, by what each would add to your team over the rest of the season in place of ${V.rd && V.rd.d0 ? esc(M.P[V.rd.d0].n) + ', your least valuable player' : 'your least valuable player'}. Free agents are on the Players page.</div>`;
+      h += TIER.map(([a, b, name], ti) => { const T0 = L0.filter(x => x.brank >= a && x.brank <= b); return T0.length ? `<details class="more"${ti < 2 ? ' open' : ''}><summary>${name}: ${T0.length}</summary>${T0.slice(0, 12).map(x => playerRow(x, { owner: true })).join('')}</details>` : ''; }).join('') || '<div class="strnone">Nobody yet.</div>';
     } else if (window.STAB === 'how') h += howItWorks(lg, V);
     return `<div class="card strat">${h}</div>`; }
-  // ---- Best moves: the same method as a strategy chat, on your current roster only (no trade is assumed) ----
-  // 1. Bands from Analysis Monster (dated). 2. Sells: value in lost categories, or surplus in categories you already win. 3. For each,
-  // the profile to ask for: your weakest swing categories, without costing your locks, at about his value. 4. Every player in the
-  // league who fits, by value tier. 5. Free agents who fit and beat your weakest healthy player over the rest of the season.
-  function movesHtml(lg, M, V, U) { const { dot, playerRow, owner, N } = U; const STR = window.STRAT; const G = V.grp; if (!G.swing.length) return `<div class="strnone">No swing categories in your current bands, so there's nothing to aim trades at. Set the bands again on Build.</div>`;
-    const W = STR.weights(V.snap.win, V.cats, V.punt) || {}; const bv = r => r.cv ? V.cats.reduce((a, c) => a + (W[c] || 0) * (r.cv[c] || 0), 0) * Math.max(0, r.g || 0) : 0; // value for your build over the games he'll play
-    const y = yrFor(lg); const ilIds = new Set(((y && y.rows) || []).filter(r => /^IL/.test(r.slot || '')).map(r => M.find(r.name, r.team)).filter(Boolean));
-    const need = G.swing.slice().sort((a, b) => (V.snap.win[a] || 0) - (V.snap.win[b] || 0)); const locks = G.won;
-    const dt = new Date(V.snap.ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
-    let h = `<div class="mvhead"><b>Current roster only</b> · no trade assumed · bands from Analysis Monster, ${esc(dt)}</div>`;
-    h += `<div class="mvsum"><div><span>Fight for</span><b>${esc(andL(need.map(NN)))}</b></div>${locks.length ? `<div><span>Protect</span><b>${esc(andL(locks.map(NN)))}</b></div>` : ''}${G.lost.length ? `<div><span>Ignore</span><b>${esc(andL(G.lost.map(NN)))}</b></div>` : ''}</div>`;
-    // sells, biggest spare value first
-    const sells = V.mine.filter(r => (r.kind === 'wasted' || r.kind === 'holds') && !ilIds.has(r.id)).map(r => Object.assign({}, r, { spare: r.kind === 'wasted' ? r.lost : r.won })).sort((a, b) => b.spare * (1 + b.lv) - a.spare * (1 + a.lv)).slice(0, 4);
-    const TIER = [[1, 30, 'Stars'], [31, 75, 'Starters'], [76, 130, 'Rotation players'], [131, 9999, 'Depth']];
-    const fitsFor = r => V.league.filter(x => x.kind === 'fits' && x.won > -0.5 && need.some(c => (x.cv[c] || 0) >= 0.5));
-    h += `<div class="h mvh"><span>1 · Sell</span><span class="sub">${sells.length} candidate${sells.length === 1 ? '' : 's'}</span></div>`;
-    if (!sells.length) h += `<div class="strnone">Nobody on your roster has much value in categories you've lost or already win. Your roster fits your build.</div>`;
-    sells.forEach(r => { const st = r.p.ros && r.p.ros.st || {}; const gl = goodAt(r.cv, r.kind === 'wasted' ? G.lost : G.won);
-      const val = k => k === 'fg%' ? (st.fga ? (st.fg / st.fga * 100).toFixed(1) + '%' : '–') : k === 'ft%' ? (st.fta ? (st.ft / st.fta * 100).toFixed(1) + '%' : '–') : (+st[k] || 0).toFixed(1);
-      const lo = r.brank ? Math.max(1, Math.round(r.brank * 0.6)) : null, hi = r.brank ? Math.round(r.brank * 1.6) : null;
-      const F = fitsFor(r); const inRange = lo ? F.filter(x => x.brank && x.brank >= lo && x.brank <= hi).sort((a, b) => b.swing - a.swing) : [];
+  // ---- Best moves, on the one measure (current roster only): 1. sells: a one-for-one trade at the player's Basketball Monster
+  // value that adds at least your trade bar; the targets are those trades and the profile is what they have in common. A player
+  // who holds up a category can't be a sell (taking him out costs that category, so no same-value trade clears the bar).
+  // 2. the waiver wire: the Players page's list, top three. 3. who to build around: your most valuable players to you. ----
+  function movesHtml(lg, M, V, U) { const { dot, playerRow } = U; const rd = V.rd; if (!rd) return `<div class="strnone">Best moves needs Basketball Monster's rest-of-season projections. They come with the next sync.</div>`;
+    const w = rd.weeks; const dt = new Date(V.snap.ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }); const LV = V.league.reduce((m, x) => (m[x.id] = x, m), {});
+    let h = `<div class="mvhead"><b>Current roster only</b> · every number is expected categories won against your league over the rest of the season · bands from Analysis Monster, ${esc(dt)}</div>`;
+    // 1 · sells
+    const sells = V.mine.filter(r => (r.kind === 'holds' || r.kind === 'wasted') && r.read && r.read.sell.length).sort((a, b) => b.read.sell[0].g - a.read.sell[0].g);
+    const top4 = V.mine.filter(r => !(r.read && r.read.il)).sort((a, b) => b.lv - a.lv).slice(0, 4).map(r => r.id); const sTop = sells.filter(r => top4.includes(r.id));
+    h += `<div class="h mvh"><span>1 · Sell</span><span class="sub">${sells.length} candidate${sells.length === 1 ? '' : 's'} · bar ${cn(rd.bar * w)}</span></div>`;
+    if (sTop.length >= 2) h += `<div class="warnt"><b>Your punt doesn't suit your best players</b> (${esc(andL(sTop.map(r => r.n)))}): compare builds before selling. <button class="lnk" data-stab="build">Try a build</button></div>`;
+    if (!sells.length) { const near = V.mine.filter(r => r.read && r.read.trades.length).sort((a, b) => b.read.trades[0].g - a.read.trades[0].g)[0];
+      h += `<div class="strnone">No one-for-one trade at a player's value adds ${cn(rd.bar * w)} categories over the rest of the season. Your roster is worth more to you than the market would give for it.${near ? ` Closest: ${esc(near.n)} for ${esc(M.P[near.read.trades[0].id].n)}, ${cn(near.read.trades[0].g * w)}.` : ''}</div>`; }
+    sells.forEach(r => { const T = r.read.sell; const avg = {}; T.slice(0, 5).forEach(t => t.cats.forEach(c => avg[c.c] = (avg[c.c] || 0) + c.d / Math.min(5, T.length)));
+      const up = Object.keys(avg).filter(c => avg[c] >= 0.01).sort((a, b) => avg[b] - avg[a]).slice(0, 3), dn = Object.keys(avg).filter(c => avg[c] <= -0.01).sort((a, b) => avg[a] - avg[b]).slice(0, 3);
+      const rk = T.map(t => V.brank[t.id]).filter(Boolean); const lo = rk.length ? Math.min(...rk) : null, hi = rk.length ? Math.max(...rk) : null;
       h += `<div class="mvc"><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b><span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>${r.brank ? `<span class="muted">rank ${r.brank}</span>` : ''}</div>
-        <div class="mvl"><span>Gives you</span>${gl.map(c => `${esc(NN(c))} ${val(c)}`).join(' · ') || '–'} <i>per game, ${r.kind === 'wasted' ? 'in categories you\'ve lost' : 'in categories you already win'}</i></div>
-        <div class="mvl"><span>Ask for</span><b>${esc(andL(need.map(NN)))}</b>${locks.length ? ` <i>without costing ${esc(andL(locks.map(NN)))}</i>` : ''}</div>
-        ${lo ? `<div class="mvl"><span>At about his value</span>Basketball Monster rank ${lo}–${hi}: <b>${inRange.length}</b> player${inRange.length === 1 ? '' : 's'} fit</div>` : ''}
-        ${inRange.slice(0, 4).map(x => playerRow(x, { owner: true })).join('')}
-        ${TIER.map(([a, b, name]) => { const L0 = F.filter(x => x.brank >= a && x.brank <= b && !inRange.includes(x)).sort((p, q) => q.swing - p.swing); return L0.length ? `<details class="more"><summary>${name}: ${L0.length} more fit${L0.length === 1 ? 's' : ''}</summary>${L0.slice(0, 15).map(x => playerRow(x, { owner: true })).join('')}</details>` : ''; }).join('')}
+        <div class="mvl"><span>Worth to you</span>${cn(r.read.val * w)} <i>over the rest of the season</i></div>
+        <div class="mvl"><span>Ask for</span>${up.length ? `<b>more ${esc(andL(up.map(NN)))}</b>` : 'the players below'}${dn.length ? ` <i>giving up some ${esc(andL(dn.map(NN)))}</i>` : ''}</div>
+        <div class="mvl"><span>Market</span>${lo ? `Basketball Monster rank ${lo}–${hi}, his value or a little less: ` : ''}<b>${T.length}</b> player${T.length === 1 ? '' : 's'} clear the bar</div>
+        ${T.slice(0, 4).map(t => LV[t.id] ? playerRow(LV[t.id], { owner: true, extra: [['This trade', `${cn(t.g * w)} categories over the rest of the season`]] }) : '').join('')}
+        ${T.length > 4 ? `<details class="more"><summary>${T.length - 4} more</summary>${T.slice(4, 15).map(t => LV[t.id] ? playerRow(LV[t.id], { owner: true, extra: [['This trade', `${cn(t.g * w)} categories over the rest of the season`]] }) : '').join('')}</details>` : ''}
         <div class="mvf"><button class="lnk${(S(lg).block || []).includes(r.id) ? ' on' : ''}" data-block="${esc(r.id)}">${(S(lg).block || []).includes(r.id) ? 'On the trade block' : 'Put on the trade block'}</button></div></div>`; });
-    // waiver wire: free agents who fit and beat your weakest healthy player for your build
-    const mineH = V.mine.filter(r => !ilIds.has(r.id) && !/^(O|OUT|INJ)$/i.test(String(r.inj || '').trim())).sort((a, b) => bv(a) - bv(b)); const weak = mineH[0];
-    const fas = weak ? V.league.filter(x => !x.own && x.kind === 'fits' && bv(x) > bv(weak)).sort((a, b) => bv(b) - bv(a)).slice(0, 6) : [];
-    h += `<div class="h mvh"><span>2 · Waiver wire</span><span class="sub">${weak ? `against ${esc(weak.n)}, your weakest healthy player` : ''}</span></div>`;
-    h += fas.length ? `<div class="sub mvsubl">Free agents who fit your build and are worth more than ${esc(weak.n)} for it over the rest of the season.</div>` + fas.map(x => playerRow(x, { owner: true })).join('') : `<div class="strnone">No free agent who fits your build beats ${weak ? esc(weak.n) : 'your weakest player'} over the rest of the season.</div>`;
-    // build around
-    const keep = V.mine.filter(r => r.kind === 'fits').sort((a, b) => b.swing - a.swing);
-    h += `<div class="h mvh"><span>3 · Build around</span><span class="sub">${keep.length} fit${keep.length === 1 ? 's' : ''}</span></div>` + (keep.length ? `<div class="sub mvsubl">${esc(andL(keep.map(r => r.n)))}: above average in the categories that decide your weeks.</div>` : `<div class="strnone">Nobody on your roster clearly fits your swing categories yet.</div>`);
+    // 2 · the waiver wire: the Players page's list
+    const B = rd.B; const bd = (planNow[lg] || {}).bd;
+    h += `<div class="h mvh"><span>2 · Waiver wire</span><span class="sub">the same list as Players</span></div>`;
+    h += B.list.length ? B.list.slice(0, 3).map((x, i) => { const sel = bd && K(bd.add) === K(M.P[x.id].n); const tag = sel && bd.worth ? (bd.wait ? ['a', 'Wait until Monday'] : ['g', bd.chosen ? 'Your pick' : 'Best pickup']) : null; const sv = (sel ? B.swap(x.id, bd.drop).g : x.gain) * w;
+      return `<div class="mvl"><span>${i + 1}</span><b>${esc(M.P[x.id].n)}</b>${tag ? ` <span class="fk ${tag[0]}">${tag[1]}</span>` : ''} <i>for ${esc(M.P[sel ? bd.drop : x.drop].n)}</i> <b class="${sv >= 0 ? 'plus' : 'minus'}">${cn(sv)}</b></div>`; }).join('') + `<div class="mvf"><button class="lnk" data-gotab="players">Open the full list</button></div>` : `<div class="strnone">No free agents to rate yet.</div>`;
+    // 3 · build around
+    const keep = V.mine.filter(r => r.kind === 'fits' && r.read).sort((a, b) => b.read.val - a.read.val).slice(0, 5);
+    h += `<div class="h mvh"><span>3 · Build around</span><span class="sub">${keep.length} player${keep.length === 1 ? '' : 's'}</span></div>` + (keep.length ? `<div class="sub mvsubl">${keep.map(r => `${esc(r.n)} <b class="plus">${cn(r.read.val * w)}</b>`).join(' · ')}: what your team would lose without each, over the rest of the season. No free agent or trade at their value does better.</div>` : `<div class="strnone">Nobody on your roster clearly earns his spot yet.</div>`);
     return h; }
   // the rules behind every read, in plain words (the same thresholds the code uses)
-  function howItWorks(lg, V) { const th = V.th; const pc = x => Math.round(x * 100); const fr = fitRule(lg); const PK = pickOf(lg); const sg = x => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x);
+  function howItWorks(lg, V) { const th = V.th; const pc = x => Math.round(x * 100); const PK = pickOf(lg); const M = modelFor(lg); const tb = M ? tradeBarOf(lg, M) : 1.5;
     return `<div class="how"><p><b>Where the numbers come from.</b> Basketball Monster's rest-of-season projections (they already take in this season's games), its Analysis Monster team projections, and Yahoo's rosters, injury statuses and league settings. Nothing else, and no forecasts of the co-pilot's own.</p>
-      <p><b>Your punt</b> is set in Settings. Basketball Monster's own punt settings aren't used.</p>
-      <p><b>Your build.</b> For each category, the co-pilot counts how many teams Basketball Monster projects you to beat from here. <i class="fd n"></i>Lost: under ${pc(th.dead)}% of teams. <i class="fd a"></i>Swing: up to ${pc(th.safe)}%. <i class="fd gr"></i>Winning: up to ${pc(th.locked)}%. <i class="fd g"></i>Locked: above that. Categories you punt always count as lost. The bands are set once and only change when you set them again; the page notes when today's numbers would put a category in a different band.</p>
-      <p><b>How much each category counts.</b> Everywhere the co-pilot judges long-term value (pickups, drops, streams, the cards on Yahoo's pages), a category counts by how much your chance of winning it can still move: fully when Analysis Monster has you beating about half the league in it, much less when you beat almost everyone or almost no one, and almost nothing when you punt it. These are the same numbers the bands come from.</p>
-      <p><b>Reading a player.</b> Basketball Monster rates every player in every category: 0 is an average player, +1 a step above. The co-pilot adds those ratings up for the categories you've lost, the ones in play, and the ones you're winning:</p>
-      <ul><li><i class="fd a"></i><b>Value in lost categories</b>: lost categories add up to ${sg(fr.wasted)} or more and are at least ${pc(fr.share)}% of his plus value.</li>
-      <li><i class="fd g"></i><b>Fits your build</b>: swing categories add up to ${sg(fr.fits)} or more.</li>
-      <li><i class="fd a"></i><b>Surplus in won categories</b>: winning categories add up to ${sg(fr.holds)} or more, and he doesn't fit your swing categories. Like lost-category value, that's spare value to trade for swing help.</li>
-      <li><i class="fd r"></i><b>Costs you</b>: swing categories add up to ${sg(fr.costs)} or less.</li>
-      <li><i class="fd n"></i><b>Small impact</b>: none of the above.</li></ul>
-      <p>"Good at" and "weak in" mean ${sg(0.5)} or ${sg(-0.5)} and beyond in that category.</p>
-      <p><b>Pickups</b> (${esc(PK.t)}). ${esc(PK.w)}</p>
-      <p><b>Drops.</b> Every drop is judged over the rest of the season, through the end of your playoffs: the games each player's team plays, counting only the games Basketball Monster expects him to play, times his value per game for your build. An injured player counts as missing his next games and then playing the rest, so a star coming back keeps his value. A pickup can win on timing only if it costs no more than about 0.3 categories over the season. Players in an injured-list spot are never dropped for a pickup (it frees no roster spot), one-week streams only replace your weakest healthy players, and a drop of someone in the top half of all rostered players is flagged because another team will likely claim him.</p>
-      <p><b>Trade block.</b> The players listed fit your build or hold your lead, and give you at least as much in your swing categories as the one you're moving, grouped by Basketball Monster's overall rank (stars 1–30, starters 31–75, rotation 76–130, depth after that). Teams "fighting for" a category beat between ${pc(th.dead)}% and ${pc(th.safe)}% of the league in it on Basketball Monster's team values.</p>
+      <p><b>One measure, every page.</b> Your expected categories won a week over the rest of the season, through the end of your playoffs, against every other team in your league, on Basketball Monster's projections (games each player is expected to play, times his per-game stats). Punted categories count as a usual loss, whatever the move. Every decision is a change in that one number: Players, Week, Team, Strategy and the cards on Yahoo's pages all read the same result, so they can't disagree. Changes are shown as categories over the rest of the season.</p>
+      <ul><li><b>A player's value to you</b>: what the number loses without him. A player who holds up a category you win is worth a lot to you even if his overall rank is modest, because taking him out costs that category.</li>
+      <li><b>A pickup</b>: what the number gains when he replaces one of your players. His drop is whoever leaves your team best off (never a player in an injured-list spot, one you chose to keep, or one you added in the last two weeks). The Players page lists the top 20 of every Basketball Monster free agent this way.</li>
+      <li><b>A trade</b>: what the number gains after the swap. A sell is a player for whom a one-for-one trade at his Basketball Monster value (or a little less) adds at least ${cn(tb)} categories over the rest of the season.</li></ul>
+      <p><b>Pickups</b> (${esc(PK.t)}). ${esc(PK.w)} <b>Best pickup</b> is the list's number 1 when it clears that bar. <b>Wait until Monday</b>: it clears the bar but adding now costs this week (more than 0.15 of a category against this week's opponent), or you have no adds left. <b>Stream this week only</b>: not a keeper, but worth more this week in the categories still in play than its drop costs over the next few weeks. This week and next are timing only; they never change the order.</p>
+      <p><b>Your build.</b> For each category, the co-pilot counts how many teams Basketball Monster projects you to beat from here. <i class="fd n"></i>Lost: under ${pc(th.dead)}% of teams. <i class="fd a"></i>Swing: up to ${pc(th.safe)}%. <i class="fd gr"></i>Winning: up to ${pc(th.locked)}%. <i class="fd g"></i>Locked: above that. Categories you punt always count as lost. The bands describe your team; the reads below come from the one measure.</p>
+      <p><b>Reading your players.</b></p>
+      <ul><li><i class="fd r"></i><b>${FIT.costs[1]}</b>: a free agent in the top 10 adds at least your pickup bar in his place. He's the drop on the Players page.</li>
+      <li><i class="fd a"></i><b>${FIT.holds[1]}</b> / <b>${FIT.wasted[1]}</b>: a sell (above). Which of the two depends on whether his output sits mostly in categories you win or in ones you've lost.</li>
+      <li><i class="fd g"></i><b>${FIT.fits[1]}</b>: none of the above, in the top two thirds of your roster by value to you.</li>
+      <li><i class="fd n"></i><b>${FIT.small[1]}</b>: none of the above, in the bottom third.</li></ul>
+      <p><b>Other teams' players</b> (Finder, trade targets): what each would add in place of your least valuable player, or in a one-for-one for the player you're moving.</p>
+      <p><b>Your punt doesn't suit your best players</b> appears when two or more of your top four by Basketball Monster value are sells: the build may be wrong, not the players. Compare builds before selling.</p>
       <p><b>Analyst tags</b> (Sell High, Buy Low, Droppable…) are Basketball Monster's view of general fantasy value, not your build. They're shown in grey and never change a read.</p>
       <p><button class="lnk" data-openset="build">Change these in Settings</button></p></div>`; }
   // teams fighting for (swing band) a category the player is good at
@@ -1038,8 +994,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     o.querySelectorAll('[data-strev]').forEach(b => b.onclick = () => { const V = strategyState(lg, M); if (!V || !V.winNow) { b.textContent = 'Waiting for Basketball Monster…'; return; } const sk = 'strat:' + V.l.lid; ST[sk] = window.STRAT.snapshot(M, V.winNow, M.ctx.punt || []); browser.storage.local.set({ [sk]: ST[sk] }); DV++; render(); toast('Bands set from today\'s numbers', 'ok'); });
     o.querySelectorAll('[data-openset]').forEach(b => b.onclick = () => showSettings(true, b.dataset.openset));
     o.querySelectorAll('[data-tryp]').forEach(b => b.onclick = () => { const c = b.dataset.tryp; const L = (s0.tryPunt || []).slice(); const i = L.indexOf(c); if (i >= 0) L.splice(i, 1); else L.push(c); s0.tryPunt = L; saveS(lg); render(); });
-    o.querySelectorAll('[data-fwho]').forEach(b => b.onclick = () => { s0.find = Object.assign({ kind: 'fits' }, s0.find || {}, { who: b.dataset.fwho }); saveS(lg); render(); });
-    o.querySelectorAll('[data-fkind]').forEach(b => b.onclick = () => { s0.find = Object.assign({ who: 'all' }, s0.find || {}, { kind: b.dataset.fkind }); saveS(lg); render(); });
+    o.querySelectorAll('[data-gotab]').forEach(b => b.onclick = () => { ST.uiTab = b.dataset.gotab; browser.storage.local.set({ uiTab: ST.uiTab }); render(); window.scrollTo(0, 0); });
+    o.querySelectorAll('[data-fkind]').forEach(b => b.onclick = () => { s0.find = { kind: b.dataset.fkind }; saveS(lg); render(); });
     o.querySelectorAll('[data-block]').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); const id = b.dataset.block; const L = (s0.block || []).slice(); const i = L.indexOf(id); if (i >= 0) L.splice(i, 1); else L.push(id); s0.block = L; saveS(lg); render(); const nm0 = M.P[id] ? M.P[id].n : 'Player'; toast(i >= 0 ? `${nm0} taken off the trade block` : `${nm0} is on the trade block`, i >= 0 ? '' : 'ok'); }); }
   // links that open a trade on Yahoo: in the Yahoo tab you're looking at (a new tab only if that isn't possible)
   function wireTrades(lg, M) { const o = $('out');

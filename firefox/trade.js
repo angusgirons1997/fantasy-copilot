@@ -30,7 +30,7 @@
     // a team's result after its roster changes (other teams unchanged)
     S.after = (changes) => { const out = {}; S.V.forEach(v => { const list = S.base[v].map(t => changes[t.tid] ? { tid: t.tid, ids: changes[t.tid], vec: H.teamWeek(ctx, changes[t.tid], v) } : t);
       out[v] = {}; Object.keys(changes).forEach(tid => { const r = S.winOf(v, tid, list); out[v][tid] = { d: (r.W - S.w0[v][tid].W) * ncat(ctx), cp: r.cp }; }); }); return out; };
-    S.size = me.ids.length;
+    S.size = me.ids.length; S.board = (M && M.board) || null; // the panel's one measure, when it's there
     // weeks of regular season left (season.js passes Yahoo's; else from the days BBM projects, less 3 playoff weeks) and the bar
     S.weeks = (M && M.weeksLeft) || Math.max(1, Math.round((ctx.days.ros || 140) / 7) - 3); S.bar = (M && M.tradeBar) || (ctx.cats.length >= 11 ? 5 : 4);
     ctx.gMax = Math.max(1, ...Object.values(ctx.P).map(p => (p.ros && p.ros.g) || 0));
@@ -40,7 +40,8 @@
   }
   // your roster after a trade: cut whoever helps your categories least (never someone you just got), or fill from free agents
   function settleMe(S, ids, keep) { const ctx = S.ctx; let out = ids.slice(); const cut = [], fill = [];
-    while (out.length > S.size) { const c = out.filter(id => !keep.includes(id)).sort((a, b) => fitVal(ctx, a) - fitVal(ctx, b))[0]; if (!c) break; out = out.filter(x => x !== c); cut.push(c); }
+    const bv = id => { const b = S.board && S.board.mine.find(x => x.id === id); return b ? b.val : fitVal(ctx, id); };
+    while (out.length > S.size) { const c = out.filter(id => !keep.includes(id)).sort((a, b) => bv(a) - bv(b))[0]; if (!c) break; out = out.filter(x => x !== c); cut.push(c); }
     const pool = (S.L.fas || []).filter(id => !out.includes(id)).sort((a, b) => fitVal(ctx, b) - fitVal(ctx, a));
     while (out.length < S.size && pool.length) { const f = pool.shift(); out.push(f); fill.push(f); } return { ids: out, cut, fill }; }
   // their roster after a trade: they cut their lowest-valued player (never one they just got), or pick up the best free agent
@@ -70,9 +71,11 @@
     const mine = settleMe(S, S.me.ids.filter(id => !give.includes(id)).concat(get), get);
     const theirs = settleThem(S, team, team.ids.filter(id => !get.includes(id)).concat(give), give);
     const r = S.after({ [S.me.tid]: mine.ids, [tid]: theirs.ids });
-    const my = { ros: r.ros[S.me.tid].d, po: r.po ? r.po[S.me.tid].d : null }; my.all = S.comb(my.ros, my.po); my.season = my.all * S.weeks;
+    let my = { ros: r.ros[S.me.tid].d, po: r.po ? r.po[S.me.tid].d : null }; my.all = S.comb(my.ros, my.po); my.season = my.all * S.weeks;
+    // your side on the one measure every page uses: expected categories a week against the league, over the rest of the season
+    const B = S.board && S.board.of(mine.ids); if (B) my = { ros: B.g, po: null, all: B.g, season: B.g * S.board.weeks, board: true };
     const th = { ros: r.ros[tid].d, po: r.po ? r.po[tid].d : null }; th.all = S.comb(th.ros, th.po); th.season = th.all * S.weeks;
-    const cats = S.ctx.cats.map(c => ({ c, label: H.LBL[c], from: S.w0.ros[S.me.tid].cp[c], to: r.ros[S.me.tid].cp[c], d: r.ros[S.me.tid].cp[c] - S.w0.ros[S.me.tid].cp[c] }));
+    const cats = B ? S.ctx.cats.map(c => ({ c, label: H.LBL[c], from: S.board.cp[c], to: B.cp[c], d: B.cp[c] - S.board.cp[c] })) : S.ctx.cats.map(c => ({ c, label: H.LBL[c], from: S.w0.ros[S.me.tid].cp[c], to: r.ros[S.me.tid].cp[c], d: r.ros[S.me.tid].cp[c] - S.w0.ros[S.me.tid].cp[c] }));
     const theirCats = S.ctx.cats.map(c => ({ c, label: H.LBL[c], d: r.ros[tid].cp[c] - S.w0.ros[tid].cp[c] }));
     const view = theirView(S, team, get, give, theirs.ids);
     // helps both: they gain categories too (at least half a category over the season) and it's fair on value;

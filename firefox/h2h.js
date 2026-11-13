@@ -85,6 +85,48 @@
   }
   // ---- next week's matchup on next week's projections ----
   function nextWeek(ctx, myIds, oppIds) { const A = teamWeek(ctx, myIds, 'next'), B = teamWeek(ctx, oppIds, 'next'); const r = matchup(ctx, A, B); return { W: r.W, cats: ctx.cats.map(c => ({ c, label: LBL[c], p: r.cp[c] })), games: { me: Math.round(A.games), opp: Math.round(B.games) } }; }
-  root.H2H = { live, nextWeek, teamWeek, matchup, pickup, worth, LBL, weekWin, Phi };
+  // ---- the one measure every page reads: expected categories won per week over the rest of the season, against every other
+  // team in the league (Basketball Monster's rest-of-season projections, punted categories held at a usual loss).
+  // Every decision is a change in that number: a player's value to you is what it drops by without him; a pickup is what it
+  // gains when he replaces your least valuable droppable player (the best of those drops is his drop).
+  // o: { fas: [ids], keepIds: Set (never dropped: injured-list spots, players you chose to keep, recent adds), n: list size }
+  function board(ctx, L, o) {
+    o = o || {}; const me = L.teams.find(t => t.tid === L.me); if (!me || !ctx.has.ros) return null;
+    const was = ctx.valuing; ctx.valuing = true;
+    try {
+      const F = vecs(ctx, L.teams.filter(t => t.tid !== L.me), 'ros'); if (!F.length) return null;
+      const E = ids => { const r = vsField(ctx, ids, F, 'ros'); let e = 0; ctx.cats.forEach(c => e += r.cp[c]); return { e, cp: r.cp }; };
+      const base = E(me.ids); const keepIds = o.keepIds || new Set();
+      const delta = (a, b) => ctx.cats.map(c => ({ c, d: a.cp[c] - b.cp[c] }));
+      // each of your players: what the number loses without him
+      const mine = me.ids.map(id => { const r = E(me.ids.filter(x => x !== id)); return { id, val: base.e - r.e, cats: delta(base, r), keep: keepIds.has(id) }; });
+      const order = mine.filter(x => !x.keep).sort((a, b) => a.val - b.val); // the drop order: least valuable first
+      // any roster of yours against the same field: the change in the number, and each category's share of weeks won before and after
+      const pu = ctx.punt; // later calls are judged on the same punt as the board, whatever the context holds by then
+      const of = ids => { const w = ctx.valuing, p0 = ctx.punt; ctx.valuing = true; ctx.punt = pu; try { const r = E(ids); return { g: r.e - base.e, cats: delta(r, base), cp: r.cp }; } finally { ctx.valuing = w; ctx.punt = p0; } };
+      const swap = (add, drop) => of(me.ids.filter(x => x !== drop).concat([add]));
+      // every free agent against your least valuable player first, then the best 40 against every droppable player
+      const fas = (o.fas || L.fas || []).filter(id => ctx.P[id] && ctx.P[id].ros && (ctx.P[id].ros.g || 0) > 0);
+      const d0 = order[0]; if (!d0) return { base: base.e, cp: base.cp, mine, order, list: [], swap, of, weeks: (ctx.days.ros || 140) / 7 };
+      const pre = fas.map(id => ({ id, g: swap(id, d0.id).g })).sort((a, b) => b.g - a.g).slice(0, Math.max(o.depth || 40, o.n || 20));
+      const tryDrops = order.slice(0, o.drops || 10);
+      const list = pre.map(x => { let best = null; const all = [];
+        tryDrops.forEach(d => { const r = swap(x.id, d.id); all.push({ drop: d.id, g: r.g, cats: r.cats }); if (!best || r.g > best.g) best = { drop: d.id, g: r.g, cats: r.cats }; });
+        all.sort((a, b) => b.g - a.g); return { id: x.id, gain: best.g, drop: best.drop, cats: best.cats, alt: all[1] || null }; })
+        .sort((a, b) => b.gain - a.gain).slice(0, o.n || 20);
+      return { base: base.e, cp: base.cp, mine, order, list, swap, of, weeks: (ctx.days.ros || 140) / 7 };
+    } finally { ctx.valuing = was; }
+  }
+  // the timing of one swap (add for drop): this week against your opponent and next week against next week's, in expected
+  // categories. Timing only: it never changes the order above.
+  function timing(ctx, L, add, drop) {
+    const me = L.teams.find(t => t.tid === L.me); if (!me) return {}; const was = ctx.valuing; ctx.valuing = true;
+    try { const after = me.ids.filter(x => x !== drop).concat([add]); const out = {};
+      [['rest', L.oppNow], ['next', L.oppNext]].forEach(([v, tid]) => { const op = tid && L.teams.find(t => t.tid === String(tid)); if (!op || !ctx.has[v]) return;
+        const B = teamWeek(ctx, op.ids, v); const a = matchup(ctx, teamWeek(ctx, me.ids, v), B), b = matchup(ctx, teamWeek(ctx, after, v), B);
+        let d = 0; ctx.cats.forEach(c => d += b.cp[c] - a.cp[c]); out[v === 'rest' ? 'week' : 'next'] = d; });
+      return out; } finally { ctx.valuing = was; }
+  }
+  root.H2H = { live, nextWeek, teamWeek, matchup, pickup, worth, LBL, weekWin, Phi, board, timing };
   if (typeof module !== 'undefined') module.exports = root.H2H;
 })(typeof window !== 'undefined' ? window : globalThis);

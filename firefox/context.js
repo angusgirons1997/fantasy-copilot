@@ -192,6 +192,12 @@
     return h;
   }
   // ---- add/drop card ----
+  // the long-term part comes from the panel's own measure when it's available (M.seasonOf: categories over the rest of the season
+  // for your build, same weights as the Strategy bands); the this-week part stays this week's matchup
+  const seasonDiff = (M, add, drop) => { if (!M.seasonOf) return null; const a = M.seasonOf(add), b = M.seasonOf(drop); return a == null || b == null ? null : a - b; };
+  const seasonFirst = (M, add, drops) => { if (!M.seasonOf) return drops; drops.forEach(d => { const sd = seasonDiff(M, add, d.drop); if (sd != null) { d.seas = sd; d.score = sd + d.week; } });
+    return drops.slice().sort((a, b) => (b.seas != null ? b.seas : b.score) - (a.seas != null ? a.seas : a.score) || b.week - a.week); };
+  const SGW = d => d.seas != null ? GW(d.seas, true) : GW(d.ros);
   function addCard(M, yp) {
     const add = M.ofYid(yp.apid, yp.players[yp.apid]); const an = (yp.players[yp.apid] || {}).n || 'this player';
     let h = `<div class="h"><span>Pickup</span><span class="sub" id="ctxAge"></span></div>`;
@@ -201,14 +207,14 @@
     const r = H.pickup(M.ctx, M.L, add, choices.length ? choices : mineNoIL); if (r.err) return h + `<div class="sub">${esc(r.err)}</div>`;
     const p = M.P[add]; const nm = id => esc(sur(M.P[id].n));
     h += `<div class="pname plus">+ ${esc(p.n)}</div><div class="when">${esc(tn(p.t))} · ${gw(g(M, add))}${M.hot(p.n) ? ` · <span class="plus">${esc(M.hot(p.n))}</span>` : ''}</div><div style="height:10px"></div>`;
-    const top = r.drops.slice(0, 2); const b0 = top[0];
-    if (b0) { const gR = GW(b0.ros)[0], gW = GW(b0.week)[0]; const v = b0.score < 0 ? ['bad', 'Not worth an add right now'] : gR === 'g' && gW !== 'r' ? ['good', 'Worth adding'] : gR === 'g' ? ['good', 'Worth it long term, costs a little this week'] : gW === 'g' ? ['warn', 'Helps this week only'] : ['', 'Barely changes your team: probably not worth an add'];
+    r.drops = seasonFirst(M, add, r.drops); const top = r.drops.slice(0, 2); const b0 = top[0];
+    if (b0) { const gR = SGW(b0)[0], gW = GW(b0.week)[0]; const v = b0.score < 0 ? ['bad', 'Not worth an add right now'] : gR === 'g' && gW !== 'r' ? ['good', 'Worth adding'] : gR === 'g' ? ['good', 'Worth it long term, costs a little this week'] : gW === 'g' ? ['warn', 'Helps this week only'] : ['', 'Barely changes your team: probably not worth an add'];
       h += `<div class="vd ${v[0]}">${v[1]}</div>`; }
-    const sm = (lab, v) => `<div class="gn"><span>${lab}</span><span>${GC(v)}<span class="gnum ${v >= 0 ? 'plus' : 'minus'}">${pts(v)} ${WWC()}</span></span></div>`;
-    h += `<div class="label" style="margin-top:4px">Best drops</div>` + top.map((d, i) => `<div class="drow${i ? '' : ' best'}"><div class="who"><b>${esc(M.P[d.drop].n)}</b><div class="when">${gw(g(M, d.drop))}${M.snapRisk(d.drop) ? ' · <span class="minus">likely snapped up</span>' : ''}</div></div><div class="nums">${sm('This week', d.week)}${sm('Rest of season', d.ros)}</div></div>`).join('');
+    const sm = (lab, v, season) => `<div class="gn"><span>${lab}</span><span>${GC(v, season)}<span class="gnum ${v >= 0 ? 'plus' : 'minus'}">${season ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + ' categories this season' : pts(v) + ' ' + WWC()}</span></span></div>`;
+    h += `<div class="label" style="margin-top:4px">Best drops</div>` + top.map((d, i) => `<div class="drow${i ? '' : ' best'}"><div class="who"><b>${esc(M.P[d.drop].n)}</b><div class="when">${gw(g(M, d.drop))}${M.snapRisk(d.drop) ? ' · <span class="minus">likely snapped up</span>' : ''}</div></div><div class="nums">${sm('This week', d.week)}${d.seas != null ? sm('Rest of season', d.seas, true) : sm('Rest of season', d.ros)}</div></div>`).join('');
     const chosen = yp.dpid && M.ofYid(yp.dpid, yp.players[yp.dpid]);
     if (chosen) { const c = r.drops.find(d => d.drop === chosen); const b = r.drops[0];
-      if (c && b && c.drop !== b.drop) h += `<div class="warn" style="margin-top:6px">You've picked <b>${nm(chosen)}</b>: dropping <b>${nm(b.drop)}</b> instead is better for your team (${pts(b.score - c.score)} ${WWC()}).</div>`;
+      if (c && b && c.drop !== b.drop) h += `<div class="warn" style="margin-top:6px">You've picked <b>${nm(chosen)}</b>: dropping <b>${nm(b.drop)}</b> instead is better for your team${b.seas != null && c.seas != null ? ` (${(b.seas - c.seas).toFixed(1)} categories more over the season)` : ` (${pts(b.score - c.score)} ${WWC()})`}.</div>`;
       else if (c) h += `<div class="vd good">${nm(chosen)} is the right drop.</div>`; }
     h += joshLine(M, add);
     return h;
@@ -220,24 +226,26 @@
     try { return listCard0(M, yp, o); } finally { M.ctx.weekView = null; } }
   function listCard0(M, yp, o) { const NX = M.ctx.weekView === 'next'; const g = NX ? ((M2, id) => (M2.P[id] && M2.P[id].next ? M2.P[id].next.g : null)) : gThis; const gw = n => n == null ? '' : n === 1 ? '1 game ' + (NX ? 'next' : 'this') + ' week' : n + ' games ' + (NX ? 'next' : 'this') + ' week';
     const me = M.L.teams.find(t => t.tid === M.L.me); if (!me) return { html: '<div class="sub">Your roster isn\'t loaded yet.</div>', labels: {} };
-    const weakest = me.ids.filter(id => !(M.ilIds && M.ilIds.has(id))).sort((a, b) => H.worth(M.ctx, a, 'ros') - H.worth(M.ctx, b, 'ros')).slice(0, 3);
+    const vOf = id => { const x = M.seasonOf ? M.seasonOf(id) : null; return x != null ? x : H.worth(M.ctx, id, 'ros'); };
+    const weakest = me.ids.filter(id => !(M.ilIds && M.ilIds.has(id))).sort((a, b) => vOf(a) - vOf(b)).slice(0, 3);
     const rows = (yp.rows || []).filter(r => r.avail); const labels = {}; const scored = [];
     rows.forEach(r => { const id = M.ofYid(r.yid, yp.players[r.yid]); if (!id || me.ids.includes(id)) return; const k = H.pickup(M.ctx, M.L, id, weakest); const b = k.drops && k.drops[0]; if (!b) return;
+      const sd = seasonDiff(M, id, b.drop); if (sd != null) { b.seas = sd; b.score = sd + b.week; }
       scored.push({ yid: r.yid, id, b, avail: r.avail }); });
-    scored.sort((a, b) => b.b.ros - a.b.ros);
-    scored.forEach((s, i) => { const v = s.b.ros; labels[s.yid] = { t: GW(v)[1].replace(' you', ''), c: { g: 'g', r: 'b', n: 'n' }[GW(v)[0]], top: i < 3 && s.b.score > 0, tip: `For you: ${pts(s.b.ros)} ${WWC()} rest of season, ${pts(s.b.week)} this week (dropping ${M.P[s.b.drop].n}). ${gw(g(M, s.id))}.` }; });
+    scored.sort((a, b) => (b.b.seas != null ? b.b.seas : b.b.ros) - (a.b.seas != null ? a.b.seas : a.b.ros));
+    scored.forEach((s, i) => { const v = s.b.ros; const gv = SGW(s.b); labels[s.yid] = { t: gv[1].replace(' you', ''), c: { g: 'g', r: 'b', n: 'n' }[gv[0]], top: i < 3 && s.b.score > 0, tip: `For you: ${pts(s.b.ros)} ${WWC()} rest of season, ${pts(s.b.week)} this week (dropping ${M.P[s.b.drop].n}). ${gw(g(M, s.id))}.` }; });
     const nm = id => esc(M.P[id].n);
     let html = `<div class="h"><span>Players on this page</span><span class="sub" id="ctxAge"></span></div>`;
     if (!scored.length) return { html: html + '<div class="sub">No available players on this page to rate. Filter Yahoo\'s list to available players.</div>', labels };
-    const good = scored.filter(s => s.b.score > 0 && GW(s.b.ros)[0] === 'g').length;
+    const good = scored.filter(s => s.b.score > 0 && SGW(s.b)[0] === 'g').length;
     html += `<div class="hl">${good ? good + ' of ' + scored.length + ' would clearly improve your team' : 'None of these ' + scored.length + ' clearly beats your weakest players'}</div><div class="sub hls">Compared with your weakest players, for the rest of the season. Tap a player for detail.</div><table class="pl">`;
     // tap a player for the same category pills as the pickups card: this week (live chances) and each week after
     const open = globalThis.__plOpen || (globalThis.__plOpen = new Set());
     const wk = ev => { const L = ((ev.rest || {}).cats || []).filter(c => Math.abs(c.to - c.from) >= 0.01); return L.length ? L.map(c => `<span class="mt plain" title="Chance to win ${esc(c.c)}"><b>${esc(c.c)}</b> ${pctTo(c)}</span>`).join('') : '<span class="sub">no category changes by 1 point or more</span>'; };
     const later = ev => { const L = ((ev.ros || {}).cats || []).filter(c => Math.abs(c.d) >= 0.002).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 6); return L.length ? L.map(c => { const d = c.d * 100; const t = Math.abs(d) >= 1 ? Math.round(Math.abs(d)) : Math.abs(d).toFixed(1); return `<span class="mt plain" title="Change in chance to win ${esc(c.c)} each week"><b>${esc(c.c)}</b> <i class="${d >= 0 ? 'plus' : 'minus'}">${d >= 0 ? '+' : '−'}${t} points</i></span>`; }).join('') : '<span class="sub">even across categories</span>'; };
     const RH = []; scored.slice(0, 30).forEach((s, i) => { let html = ''; const v = s.b.ros; const good = s.b.score > 0; const on = open.has(s.id);
-      html += `<tr class="plr${i === 0 && good ? ' best' : ''}${on ? ' open' : ''}" data-plr="${esc(s.id)}"><td><b>${nm(s.id)}</b>${CHEV}<div class="sub">${esc(tn(M.P[s.id].t))} · ${gw(g(M, s.id))}${/^W/.test(s.avail) ? ' · on waivers' : ''}${M.hot(M.P[s.id].n) ? ' · <span class="plus">most added on Yahoo</span>' : ''}${good ? ' · drop ' + esc(sur(M.P[s.b.drop].n)) : ''}</div></td><td class="v">${GC(v)}<div class="gnum ${v >= 0 ? 'plus' : 'minus'}">${pts(v)} a week</div></td></tr>`;
-      html += `<tr class="pld"${on ? '' : ' hidden'} data-pld="${esc(s.id)}"><td colspan="2"><div class="mts"><span class="sub">${NX ? 'Next week' : 'This week'}${s.b.week ? ' (' + pts(s.b.week) + ' ' + WWC() + ')' : ''}</span>${wk(s.b.ev)}</div><div class="mts"><span class="sub">Each week after</span>${later(s.b.ev)}</div><div class="sub" style="margin-top:4px">Compared with dropping ${esc(M.P[s.b.drop].n)}. Rest of season: ${pts(v)} ${WWC()}.</div></td></tr>`; RH.push(html); });
+      html += `<tr class="plr${i === 0 && good ? ' best' : ''}${on ? ' open' : ''}" data-plr="${esc(s.id)}"><td><b>${nm(s.id)}</b>${CHEV}<div class="sub">${esc(tn(M.P[s.id].t))} · ${gw(g(M, s.id))}${/^W/.test(s.avail) ? ' · on waivers' : ''}${M.hot(M.P[s.id].n) ? ' · <span class="plus">most added on Yahoo</span>' : ''}${good ? ' · drop ' + esc(sur(M.P[s.b.drop].n)) : ''}</div></td><td class="v">${s.b.seas != null ? `${GC(s.b.seas, true)}<div class="gnum ${s.b.seas >= 0 ? 'plus' : 'minus'}">${(s.b.seas >= 0 ? '+' : '−') + Math.abs(s.b.seas).toFixed(1)} this season</div>` : `${GC(v)}<div class="gnum ${v >= 0 ? 'plus' : 'minus'}">${pts(v)} a week</div>`}</td></tr>`;
+      html += `<tr class="pld"${on ? '' : ' hidden'} data-pld="${esc(s.id)}"><td colspan="2"><div class="mts"><span class="sub">${NX ? 'Next week' : 'This week'}${s.b.week ? ' (' + pts(s.b.week) + ' ' + WWC() + ')' : ''}</span>${wk(s.b.ev)}</div><div class="mts"><span class="sub">Each week after</span>${later(s.b.ev)}</div><div class="sub" style="margin-top:4px">Compared with dropping ${esc(M.P[s.b.drop].n)}. Rest of season: ${s.b.seas != null ? (s.b.seas >= 0 ? '+' : '−') + Math.abs(s.b.seas).toFixed(1) + ' categories' : pts(v) + ' ' + WWC()}.</div></td></tr>`; RH.push(html); });
     html += RH.slice(0, 5).join('') + '</table>' + (RH.length > 5 ? `<details class="more" data-k="plmore"><summary>All ${RH.length} players on this page</summary><table class="pl">${RH.slice(5).join('')}</table></details>` : '');
     return { html, labels };
   }
@@ -259,6 +267,8 @@
     const me = M.L.teams.find(t => t.tid === M.L.me), op = M.L.teams.find(t => t.tid === String(y.oppTid)); if (!me || !op) return '';
     const r = H.live(M.ctx, me.ids, op.ids, { me: lv.me.st, opp: lv.opp.st });
     const now = r.cats.reduce((a, c) => { const d = c.nowMe == null || c.nowOpp == null ? 0 : c.c === 'to' ? c.nowOpp - c.nowMe : c.nowMe - c.nowOpp; if (d > 0) a[0]++; else if (d < 0) a[1]++; else a[2]++; return a; }, [0, 0, 0]);
+    // Yahoo's own score when the matchup page gave one (the rest are ties), so the panel always matches Yahoo
+    if (lv.me && lv.opp && typeof lv.me.score === 'number' && typeof lv.opp.score === 'number' && lv.me.score + lv.opp.score > 0) { now[0] = lv.me.score; now[1] = lv.opp.score; now[2] = Math.max(0, r.cats.length - now[0] - now[1]); }
     const fmt = (c, v) => v == null ? '–' : c.unit === 'pct' ? v.toFixed(3).replace(/^0/, '') : Math.round(v);
     const grp = s => r.cats.filter(c => c.state === s);
     const need = c => c.unit === 'pct' ? (c.gap >= 0 ? 'ahead by ' : 'behind by ') + Math.abs(c.gap).toFixed(3).replace(/^0/, '') : (c.gap >= 0 ? 'up ' : 'down ') + Math.abs(Math.round(c.gap));
@@ -321,9 +331,9 @@
     return { league: cur.league, me: cur.me, opp: oppName, t1: { id: String(M.L.me), name: cur.me }, t2: { id: String(wk.oppTid), name: oppName }, start: wk.start, end, cats: cur.cats, totals: {}, bbmWin: {}, teams: [cur.me, oppName], days, players, ts: (M.bx.ts || {})[wk.view === 'rest' ? 'rest' : 'next'] || Date.now(), synthetic: true, from: wk.view === 'rest' ? 'bbm-rest' : 'bbm-next' };
   }
   // ---- next week ----
-  function nextCard(M, y) {
+  function nextCard(M, y, ov) {
     if (!y || !y.next || !y.next.oppTid || !M.ctx.has.next) return ''; const me = M.L.teams.find(t => t.tid === M.L.me), op = M.L.teams.find(t => t.tid === String(y.next.oppTid)); if (!me || !op) return '';
-    const r = H.nextWeek(M.ctx, me.ids, op.ids); const nm = id => esc(M.P[id].n);
+    const r = H.nextWeek(M.ctx, me.ids, op.ids); if (ov && ov.W != null) r.W = ov.W; const nm = id => esc(M.P[id].n); // the panel's own forecast for next week, so the page shows one number
     const strong = r.cats.filter(c => c.p < 0.4).map(c => c.label), weak = r.cats.filter(c => c.p > 0.6).map(c => c.label);
     const streams = M.L.fas.filter(id => M.P[id].next && M.P[id].next.g >= 4).sort((a, b) => (M.P[b].next.lv || 0) * M.P[b].next.g - (M.P[a].next.lv || 0) * M.P[a].next.g).slice(0, 3);
     let h = `<div class="card"><div class="h"><span>Next week vs ${esc(M.teamName(y.next.oppTid))}</span><span class="sub">${esc(y.next.start || '')} to ${esc(y.next.end || '')}</span></div>`;

@@ -16,6 +16,12 @@
   function bands(win, cats, punt, th) { th = Object.assign({}, TH0, th || {}); const out = {};
     cats.forEach(c => { const w = win ? win[c] : null; out[c] = (punt || []).includes(c) ? 'punt' : w == null ? 'swing' : w < th.dead ? 'dead' : w < th.safe ? 'swing' : w < th.locked ? 'safe' : 'locked'; }); return out; }
 
+  // how much each category is worth to you from here: the slope of your chance to win it at the share of teams you beat in it on
+  // Analysis Monster (the same numbers the bands are cut from). A category you're winning or losing against everyone barely moves;
+  // one at 50% moves most. Punted categories count for almost nothing. Every long-term value in the co-pilot uses these weights.
+  const zOf = p => { p = Math.min(0.97, Math.max(0.03, p)); let lo = -4, hi = 4; for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; const c = 0.5 * (1 + erf(m / Math.SQRT2)); if (c < p) lo = m; else hi = m; } return (lo + hi) / 2; };
+  function erf(x) { const t = 1 / (1 + 0.3275911 * Math.abs(x)); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; }
+  function weights(win, cats, punt) { if (!win) return null; const w = {}; cats.forEach(c => { if ((punt || []).includes(c)) { w[c] = 0.05; return; } const sh = win[c]; const z = sh == null ? 0 : zOf(sh); w[c] = Math.max(0.05, Math.exp(-0.5 * z * z)); }); return w; }
   // the latest analyst tag on a player, word for word (e.g. "Droppable 12 teams"), ignoring ones over a month old. Display only.
   function tagOf(p, maxH) { maxH = maxH || 30 * 24; const n = ((p && p.notes) || []).filter(x => x && x.tag && (x.age == null || x.age <= maxH)).sort((a, b) => (a.age || 0) - (b.age || 0))[0];
     return n ? { tag: n.tag + (n.tagNote ? ' ' + n.tagNote : ''), by: n.by, text: n.text || '', age: n.age } : null; }
@@ -27,6 +33,6 @@
   // ---- the bands, set once: the win shares they were cut from and the roster at the time ----
   function snapshot(M, win, punt) { const own = {}; M.L.teams.forEach(t => t.ids.forEach(id => own[id] = t.tid)); const mine = (M.L.teams.find(t => t.tid === M.L.me) || { ids: [] }).ids;
     return { ts: Date.now(), win, punt: (punt || []).slice().sort(), own, mine: mine.slice(), inj: mine.filter(id => longInj(M.P[id])) }; }
-  root.STRAT = { NAME, name, Name, TEAMN, TH0, catWin, bands, tagOf, missing, snapshot, longInj };
+  root.STRAT = { NAME, name, Name, TEAMN, TH0, catWin, bands, weights, tagOf, missing, snapshot, longInj };
   if (typeof module !== 'undefined') module.exports = root.STRAT;
 })(typeof window !== 'undefined' ? window : globalThis);

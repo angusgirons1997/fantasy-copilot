@@ -31,7 +31,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const H = ths.map(th => txt(th));
       const dayIdx = []; H.forEach((t, i) => { const m = t.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s*(\d{1,2})/); if (m) dayIdx.push({ i, label: m[1] + ' ' + m[2], dom: +m[2] }); });
       if (!days) days = dayIdx.map(d => ({ label: d.label, dom: d.dom }));
-      const nameI = H.indexOf('Name'), teamI = H.indexOf('Team'), posI = H.indexOf('Pos'), rankI = H.indexOf('Rank'), leagI = H.indexOf('LeagV'), puntI = H.indexOf('PuntV'), anI = H.indexOf('Analysts'), injI = H.indexOf('Inj'), gI = H.indexOf('g'), roleI = H.indexOf('Role'), statusI = H.indexOf('Status');
+      const teamI = H.indexOf('Team'), posI = H.indexOf('Pos'), rankI = H.indexOf('Rank'), leagI = H.indexOf('LeagV'), puntI = H.indexOf('PuntV'), anI = H.indexOf('Analysts'), injI = H.indexOf('Inj'), gI = H.indexOf('g'), roleI = H.indexOf('Role'), statusI = H.indexOf('Status');
       const statCols = []; H.forEach((t, i) => { if (i > (gI < 0 ? 0 : gI) && STAT[t] && !statCols.find(s => s.k === STAT[t])) statCols.push({ i, k: STAT[t], per: /\/g$|%$/.test(t) || t === 'fg%' }); });
       const VK = { pV: 'p', '3V': '3', rV: 'r', aV: 'a', sV: 's', bV: 'b', 'fg%V': 'fg%', 'ft%V': 'ft%', toV: 'to', '2dV': '2d', fgV: 'fg', ftV: 'ft' };
       const vCols = []; H.forEach((t, i) => { if (VK[t] && !vCols.find(v => v.k === VK[t])) vCols.push({ i, k: VK[t] }); });

@@ -39,7 +39,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const pp2 = v => { if (PPC) { const r = Math.round(v * PPC * 100) / 100; return r === 0 ? '0' : (r > 0 ? '+' : '−') + Math.abs(r).toFixed(2); } const r = Math.round(v * 1000) / 10; return r === 0 ? '0' : (r > 0 ? '+' : '−') + Math.abs(r).toFixed(1); };
   const pp = v => { if (PPC) { const r = Math.round(v * PPC * 10) / 10; return r === 0 ? '0' : (r > 0 ? '+' : '−') + Math.abs(r).toFixed(1); } const r = Math.round(v * 100); return r === 0 ? '0' : (r > 0 ? '+' : '−') + Math.abs(r); };
   const fmtD = date => new Date(date + 'T12:00:00Z').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-  let ST = {}, lastPlan = null, confirmWeek = null;
+  let ST = {};
   // league rules: read from each league's own Yahoo settings page (nothing about any particular league is built in).
   // Until that page has been read, only neutral defaults are used.
   const MON = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
@@ -68,7 +68,6 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     Object.keys(ST).filter(k => k.startsWith('yr:') && ST[k] && ST[k].lid).map(k => ST[k]).forEach(y => { seen[y.lid] = { lid: y.lid, tid: y.tid, league: y.league }; });
     (ST.leagueList || []).forEach(l => { if (!seen[l.lid] && l.league) seen[l.lid] = { lid: l.lid, tid: l.tid, league: l.league }; });
     return Object.values(seen).sort((a, b) => a.league < b.league ? -1 : 1); }
-  let tabTs = 0;
   function league() { const ls = leaguesKnown(); if (ST.activeLeague && ls.some(l => l.league === ST.activeLeague)) return ST.activeLeague; const y = ST.yrLast && ST['yr:' + ST.yrLast]; if (y && y.league) return y.league; return ls[0] ? ls[0].league : ST.mmLast; }
   function weeks(lg) { return Object.keys(ST).filter(k => k.startsWith('mmw:' + lg + ':') && ST[k] && ST[k].start).map(k => ST[k]).sort((a, b) => a.start < b.start ? -1 : 1); }
   const addDay = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
@@ -130,7 +129,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // weeks of results), and which of your players Yahoo managers are dropping in numbers
   function streamOpts(m, y, oppTid, A) { if (!y) return null; const cats = (m.cats || []).filter(c => E.LBL[c]); const weak = [], strong = [];
     const PR = window.CTX && window.CTX.profiles ? (() => { try { return window.CTX.profiles(ST, y.lid, cats); } catch (e) { return null; } })() : null; const ot = oppTid && PR && PR.teams[String(oppTid)];
-    const bs = ST['bbmstand:' + y.lid]; const nk = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const bs = ST['bbmstand:' + y.lid];
     const am = bs && oppTid ? amMatch(y.lid, y.tid)[String(oppTid)] || null : null;
     cats.forEach(c => { const k = ot && ot.cat[c]; if (k && k.n >= 3) { const lr = (k.l + k.t / 2) / k.n, wr = (k.w + k.t / 2) / k.n; if (lr >= 0.7) weak.push(c); else if (wr >= 0.7) strong.push(c); return; }
       const v = am && am.val[c]; if (v != null) { if (v <= -1) weak.push(c); else if (v >= 1) strong.push(c); } });
@@ -181,10 +180,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return b >= 30 ? Math.max(0.7, Math.min(1, a / b)) : 0.93; }
   function playoffWeek(lg, y) { const RL = rulesFor(lg, y); const wk = (RL.poWeeks || [])[0]; return wk || null; }
   function objFor(lg, y, isNext) { const sc = scoringOf(lg).mode; if (sc !== 'cats') return sc; const po = playoffWeek(lg, y); const tw = thisWeekNo(y); if (!po || !tw) return sc; return (tw + (isNext ? 1 : 0)) >= po ? 'win' : 'cats'; }
-  const CMP = {};
   // ---- availability: never recommend a player another team has. Three Yahoo sources, most direct last: every team's roster
   // (league scan), the transactions since that scan, and Yahoo's own roster status for each player the plan wants to add ----
-  function takenSet(y) { const out = new Set(); if (!y) return out; const me = String(y.tid); const t0 = usToday();
+  function takenSet(y) { const out = new Set(); if (!y) return out; const me = String(y.tid);
     const lg = ST['lgscan:' + y.lid]; const since = lg ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(lg.ts)) : '0';
     if (lg && lg.teams && Date.now() - lg.ts < 4 * 864e5) lg.teams.forEach(t => { if (String(t.tid) !== me) (t.players || []).forEach(n => out.add(K(n))); });
     const tx = ST['tx:' + y.lid]; if (tx && tx.rows) tx.rows.filter(r => (txDate(r) || '') >= since && String(r.tid) !== me).sort((a, b) => ((txDate(a) || '') + String(a.mins || 0).padStart(4, '0')) < ((txDate(b) || '') + String(b.mins || 0).padStart(4, '0')) ? -1 : 1)
@@ -259,7 +257,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const taken = takenSet(y); if (taken.size) model = Object.assign({}, model, { players: model.players.filter(pl => !(pl.type === 'fa' && taken.has(K(pl.name)))) });
     const lvG = (() => { const l = y && ST['ylive:' + y.lid]; return l && l.start === m.start && l.opp && l.opp.games ? l.opp.games : null; })(); // Yahoo's games count for your opponent this week
     const lv = y && ST['ylive:' + y.lid]; const liveOk = lv && lv.me && lv.opp && lv.start === m.start && (Object.values(lv.me.st || {}).some(v => v > 0) || Object.values(lv.opp.st || {}).some(v => v > 0));
-    const bxL = y && ST['bx:' + y.lid]; const punt = puntFor(m.league) || [];
+    const punt = puntFor(m.league) || [];
     const opts = { live: liveOk ? { me: lv.me.st, opp: lv.opp.st } : null, punt, slots: slotsFrom(y), yahooRows: y ? y.rows : [], addsLeft: A.left, roster: (yNewer || (y && Date.now() - y.ts < 2 * 3600e3)) && !m.synthetic ? y.rows.map(r => ({ name: r.name, team: r.team, pid: r.pid })) : null, idmap,
       rules: { ilSlots: RL.ilSlots, ilUsed, ilEligible, waiverUntil }, sched: ST.nbasched || window.NBA_SCHED || null, obj: objFor(m.league, y, isNext), oppGames: lvG && !isNext ? Object.assign({ util: utilOf(m.league) }, lvG) : null, sdMul: trackCal(m.league).mul, scale: (ST['calib:' + m.league] || {}).scale || null, actual: y ? Object.fromEntries(Object.entries(ST['ylu:' + y.lid] || {}).filter(([d, e]) => e && e.rows && e.rows.length && Date.now() - e.ts < 6 * 3600e3).map(([d, e]) => [d, e.rows.filter(r => r.slot !== 'BN' && !/^IL/.test(r.slot)).map(r => r.name)])) : null, playoffs: RL.playoffs || null, leagueFit, oppAdds, recentAdds: rm.adds, recentDrops: rm.drops, oppMode: s.oppMode || 'max', today: usToday(), dropRank: s.dropRank, protect: s.protect || [], exclude: s.exclude || [], allowDrop: s.allowDrop || [], swap: m.synthetic ? false : !!s.swap, lookAhead: 4, next: isNext ? null : nextModel(m), forceDrop: s.forceDrop || {}, pickAdds: Array.isArray(s.pickAdds) ? {} : s.pickAdds || {}, test: s.test || null, streams: streamOpts(m, y, oppTid, A) };
     { const PK = pickOf(m.league); opts.minGain = PK.min; opts.swapMin = PK.swap; }
@@ -282,7 +280,6 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     p.week = isNext ? 'next' : 'this'; p.synthetic = !!m.synthetic; p.start = m.start; p.end = m.end;
     selfCheck(p, y, isNext);
     if (isNext) return p;
-    lastPlan = p;
     const planRec = { league: m.league, me: p.me, opp: p.opp, days: (p.nowDays || p.days).map(d => ({ date: d.date, label: d.label, open: d.open, start: d.start.map(x => x.name), bench: d.bench.map(x => x.name), toStart: d.toStart, toBench: d.toBench })), moves: p.moves, ts: Date.now() };
     ST['plan:' + m.league] = planRec; browser.storage.local.set({ ['plan:' + m.league]: planRec });
     return p;
@@ -400,7 +397,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const injWord = s => ({ Q: 'questionable', D: 'doubtful', O: 'out', GTD: 'a game-time decision', DTD: 'day-to-day', P: 'probable' }[String(s).toUpperCase().split(/\s/)[0]] || String(s).toLowerCase());
   function ctxBlock() {
     const yp = ypageNow(); if (!yp || !window.CTX) return '';
-    const l = leaguesKnown().find(x => x.lid === yp.lid); const y = yrFor(l.league); const m = mm(); const same = m && m.league === l.league;
+    const l = leaguesKnown().find(x => x.lid === yp.lid); const y = yrFor(l.league);
     const M = modelFor(l.league);
     // get fresh BBM numbers before advising: none yet, or this week's projections over an hour old
     const bx = ST['bx:' + yp.lid]; const restAge = bx && bx.ts && bx.ts.rest ? Date.now() - bx.ts.rest : Infinity; const busy = ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3;
@@ -415,14 +412,6 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const age = `<span class="sub${fr.worst > 6 * 3600e3 ? ' minus' : ''}">${esc(fr.line)}${ctxRefreshing[yp.lid] ? ' · refreshing…' : ''}</span>`;
     return `<div class="card ctx">${body.replace('<span class="sub" id="ctxAge"></span>', age)}</div>`;
   }
-  // which co-pilot page to show for the Yahoo page you're on
-  const VIEWS = { standings: { t: 'Standings', parts: ['standings', 'league'] }, league: { t: 'Standings', parts: ['standings', 'league'] }, trade: { t: 'Trade', parts: ['ctx', 'trades'] }, add: { t: 'Pickup', parts: ['ctx'] }, players: { t: 'Player list', parts: ['brief', 'stream', 'pick', 'ctx'] },
-    matchup: { t: 'Matchup', parts: ['live', 'hero', 'stream', 'pick', 'next'] }, team: { t: 'Your team', parts: ['ilback', 'week'] }, overview: { t: 'Overview', parts: ['ilback', 'brief', 'live', 'hero', 'stream', 'pick', 'week', 'next', 'trades', 'standings', 'league', 'watch'] } };
-  let showAll = false;
-  function pageView() { const yp = ST.ypage; const lg = league(); const l = leaguesKnown().find(x => x.league === lg);
-    if (!yp || !l || yp.lid !== l.lid || Date.now() - yp.ts > 30 * 60e3) return 'overview';
-    if (yp.kind === 'team') { const y = yrFor(lg); return y && String(yp.tid) === String(y.tid) ? 'team' : 'overview'; }
-    return VIEWS[yp.kind] ? yp.kind : 'overview'; }
   // ---- one-page app: five pages on a bottom bar. The panel never jumps by itself: the page matching the Yahoo screen
   // you're on just gets a dot, and that page shows what the co-pilot reads from it at the top ----
   const TABS = [['week', 'Week', '<path d="M3 5h18v16H3z"/><path d="M3 10h18M8 3v4M16 3v4"/>'], ['team', 'Team', '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><path d="M16 4.6a3 3 0 0 1 0 6.4M18 14.8c1.8.7 2.9 2.4 3.2 5.2"/>'], ['players', 'Players', '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>'], ['strategy', 'Strategy', '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'], ['league', 'League', '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 6h3a3 3 0 0 1-3 4M7 6H4a3 3 0 0 0 3 4"/>']];
@@ -447,9 +436,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (wkPick && wkPick.lg === m0.league && Date.now() - wkPick.ts < 6 * 3600e3) return wkPick.sel;
     return m0.end && usToday() > m0.end ? 'next' : 'this'; }
   const weekBar = (sel, m0, mN) => `<div class="seg wkbar"><button data-wk="this" class="${sel === 'this' ? 'on' : ''}">This week<i>vs ${esc(m0.opp || '')}</i></button><button data-wk="next" class="${sel === 'next' ? 'on' : ''}">Next week<i>vs ${esc((mN && mN.opp) || '')}</i></button></div>`;
-  const viewBar = v => `<div class="vbar"><span>${showAll ? 'Everything' : v === 'overview' ? '<b>Overview</b>' : 'On Yahoo: <b>' + VIEWS[v].t + '</b>'}</span>${v !== 'overview' || showAll ? `<button class="lnk" id="showAll">${showAll ? 'This page only' : 'Show everything'}</button>` : ''}</div>`;
   function wireHealth() { const b = $('healthB'); if (b) b.onclick = () => { showSettings(true, 'diag'); }; }
-  function wireViewBar() { const b = $('showAll'); if (b) b.onclick = () => { showAll = !showAll; render(); }; }
   function updateCtx() { const b = $('ctxBox'); if (b) b.innerHTML = ctxBlock(); else render(); }
   function renderB() {
     const m = mm(); const o = $('out');
@@ -459,7 +446,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       paint(o, healthHtml(lg0) + `${ctxOnly ? `<div id="ctxBox">${ctxBlock()}</div>` : ''}<div class="card">${why}</div>${setPane(lg0, `<div class="card sets">${bbmAuthHtml()}${diagHtml(lg0, null)}</div>`)}`); wireConn();
       const dl0 = $('diagDl'); if (dl0) dl0.onclick = () => { const keep = Object.keys(ST).filter(k => /^(bbmFail:|sync:|diag|fullsync:|ysetp:|yWeek|bxTrace:|bx:|ypage|syncLock|yr:)/.test(k)); const rep = { at: new Date().toISOString(), version: (browser.runtime && browser.runtime.getManifest ? browser.runtime.getManifest().version : ''), store: Object.fromEntries(keep.map(k => [k, /^bx:/.test(k) ? { ts: ST[k].ts, err: ST[k].err } : ST[k]])) };
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(rep, null, 1)], { type: 'application/json' })); a.download = 'copilot-diagnostics.json'; document.body.appendChild(a); a.click(); a.remove(); };
-      wireViewBar(); return; }
+      return; }
     const pThis = compute(); const nxOK = !!nextModel(m); const wsel = weekSel(m, nxOK); curWsel = wsel; const pNext = wsel === 'next' ? compute('next') : null;
     // check on Yahoo that the players the plan wants to add are really free (re-plans by itself when the answers arrive)
     { const yv = yrFor(m.league); const cand = []; [pThis, pNext].forEach(pp0 => pp0 && pp0.moves.forEach(x => { cand.push(x.add); (x.alts || []).forEach(a => cand.push(a.add)); })); verifyAvail(yv, cand); }
@@ -468,13 +455,13 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     { const yF0 = yrFor(lg); const yF = yF0 ? Object.assign({}, yF0, { next: ynextOf(yF0) }) : null; if (M && yF && yF.next && yF.next.oppTid && M.ctx.has.next) { const fk = 'h2hfc:' + yF.lid + ':' + yF.next.start; if (!ST[fk]) { const me = M.L.teams.find(t => t.tid === M.L.me), op = M.L.teams.find(t => t.tid === String(yF.next.oppTid)); if (me && op) { try { const r = window.H2H.nextWeek(M.ctx, me.ids, op.ids); ST[fk] = { ts: Date.now(), W: r.W, cats: Object.fromEntries(r.cats.map(c => [c.c, +c.p.toFixed(3)])) }; browser.storage.local.set({ [fk]: ST[fk] }); } catch (e) {} } } } }
     const LT = {}; const ltOf = (add, drop) => { const k = add + '|' + drop; if (k in LT) return LT[k]; let v = null; if (M) { const a = M.find(add), d = M.find(drop); if (a && d) { try { const r = window.H2H.pickup(M.ctx, M.L, a, [d]); v = r.drops && r.drops[0] ? r.drops[0].ros : null; } catch (e) {} } } LT[k] = v; return v; };
     const stale = Date.now() - m.ts > 3 * 3600e3;
-    const W = p.W.plan; const wcls = W >= 0.58 ? 'good' : W >= 0.45 ? 'warn' : 'bad';
+    const W = p.W.plan;
     let h = '';
     if (stale) h += `<div class="warn">Numbers are ${ago(m.ts).replace(' ago', '')} old. Press Sync before acting.</div>`;
     const cNote = h.length;
-    const cs = p.cats.slice().sort((a, b) => b.p - a.p); const cls = v => v > 0.6 ? 'cs-a' : v >= 0.45 ? 'cs-c' : 'cs-b';
+    const cs = p.cats.slice().sort((a, b) => b.p - a.p);
     const c0 = h.length;
-    const catsMode = p.obj === 'cats'; const heroNum = catsMode ? `${(p.Ecats || 0).toFixed(1)}<small>/${p.ncat}</small>` : pct(W);
+    const catsMode = p.obj === 'cats';
     { const Wv = catsMode ? (p.Wmaj || 0) : W; const vk = Wv >= 0.6 ? 'g' : Wv >= 0.4 ? 'a' : 'r'; const vt = Wv >= 0.6 ? 'Favourite' : Wv >= 0.4 ? 'Close week' : 'Underdog';
       const fmtT = (c, v) => v == null ? '–' : /%/.test(c.label) ? (v <= 1 ? (v * 100).toFixed(1) : (+v).toFixed(1)) + '%' : (+v).toFixed(v >= 100 ? 0 : 1);
       const heroNum = catsMode ? `${(p.Ecats || 0).toFixed(1)}<small>/${p.ncat}</small>` : pct(W); const tcls = v => v > 0.6 ? 'cs-a' : v >= 0.4 ? 'cs-c' : 'cs-b';
@@ -486,7 +473,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <div class="omrow"><span class="sub">Their lineup:</span><span class="seg small"><button data-om="max" class="${p.oppMode === 'max' ? 'on' : ''}" title="Assume the opponent fills every start">fills every start</button><button data-om="set" class="${p.oppMode === 'set' ? 'on' : ''}" title="Opponent lineup exactly as set">as set now</button></span></div></div>`; }
     const order = cs.map(c => c.label);
     const miniWeek = list => { const ch = list.filter(c => Math.abs(c.to - c.from) >= 0.01).sort((a, b) => order.indexOf(a.c) - order.indexOf(b.c)); if (!ch.length) return '<span class="sub">no category changes by 1 point of win chance or more</span>';
-      return ch.map(c => { const d = Math.round((c.to - c.from) * 100); return `<span class="mt plain" title="Chance to win ${esc(c.c)}: ${pct(c.from)} → ${pct(c.to)}"><b>${esc(c.c)}</b> ${pct(c.from)} → ${pct(c.to)}</span>`; }).join(''); };
+      return ch.map(c => `<span class="mt plain" title="Chance to win ${esc(c.c)}: ${pct(c.from)} → ${pct(c.to)}"><b>${esc(c.c)}</b> ${pct(c.from)} → ${pct(c.to)}</span>`).join(''); };
     const miniLater = list => { const ch = list.filter(c => Math.abs(c.d) >= 0.015).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 5); if (!ch.length) return '<span class="sub">even across categories</span>';
       return ch.map(c => { const d = Math.round(c.d * 100); return `<span class="mt plain" title="Change in chance to win ${esc(c.c)} each week"><b>${esc(c.c)}</b> <i class="${d >= 0 ? 'plus' : 'minus'}">${d >= 0 ? '+' : '−'}${Math.abs(d)} points</i></span>`; }).join(''); };
     const noteLine = (nv, who) => nv ? `<div class="nt" title="${esc(nv.text)}"><b>${esc(nv.by || 'BBM')} on ${esc(sur(who))}:</b> “${esc(nv.text.length > 120 ? nv.text.slice(0, 117) + '…' : nv.text)}”</div>` : '';
@@ -723,7 +710,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
 
 
   // ---- lineup management: plan vs what Yahoo actually has set, day by day ----
-  let selDay = null, luAll = false, wbNote = ''; const pageSeen = {}; const luBusy = {}, luFail = {};
+  let selDay = null, luAll = false, wbNote = ''; const luBusy = {}, luFail = {};
   const LU = lid => ST['ylu:' + lid] || {};
   const lastOf = n => { const w = K(n).split(' '); return w[w.length - 1]; };
   function actualFor(lid, date) { const e = LU(lid)[date]; return e && e.rows ? e : null; }
@@ -885,7 +872,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const v = (st, c) => { if (!st) return '–'; if (c === 'fg%') return st.fga ? (st.fg / st.fga * 100).toFixed(1) + '%' : '–'; if (c === 'ft%') return st.fta ? (st.ft / st.fta * 100).toFixed(1) + '%' : '–'; const x = st[c === '2d' ? '2d' : c]; return x == null ? '–' : (+x).toFixed(c === 's' || c === 'b' || c === '3' || c === 'to' || c === '2d' ? 1 : 1); };
     const vol = (st, c) => c === 'fg%' && st && st.fga ? ` <i>${(+st.fga).toFixed(1)} att</i>` : c === 'ft%' && st && st.fta ? ` <i>${(+st.fta).toFixed(1)} att</i>` : '';
     return `<table class="stt2"><thead><tr><th></th>${cols.map(c => `<th>${c[0]}${c[1].g ? `<i>${c[1].g} g</i>` : ''}</th>`).join('')}</tr></thead><tbody>${cats.map(c => `<tr><td>${esc(window.STRAT.Name(c))}</td>${cols.map(x => `<td>${v(x[1].st, c)}${vol(x[1].st, c)}</td>`).join('')}</tr>`).join('')}${cols[0] && cols[0][1].m ? `<tr><td>Minutes</td>${cols.map(x => `<td>${x[1].m ? (+x[1].m).toFixed(1) : '–'}</td>`).join('')}</tr>` : ''}</tbody></table>`; }
-  function strategyCard(lg, M, opt) { const STR = window.STRAT; const V = strategyState(lg, M); if (!V) return '';
+  function strategyCard(lg, M, opt) { const V = strategyState(lg, M); if (!V) return '';
     const sub = [['build', 'Build'], ['roster', 'Roster'], ['block', 'Trade block'], ['finder', 'Finder'], ['how', 'How it works']]; if (!sub.some(x => x[0] === window.STAB)) window.STAB = 'build';
     let h = `<div class="seg trtabs stabs">${sub.map(([k, t]) => `<button data-stab="${k}" class="${window.STAB === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     if (!V.snap) return `<div class="card strat">${h}<div class="strnone">Waiting for Basketball Monster's Analysis Monster, which comes with the next sync.</div></div>`;
@@ -1056,7 +1043,6 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const open = days.filter(d => d.open && d.date >= t).map(d => d.date);
     if (lid && open.length) setTimeout(() => refreshLineups(lg, open, false), 50);
     // default day: the date showing on your Yahoo team page, else today
-    const pageDate = y && y.src === 'page' && Date.now() - y.ts < 30 * 60e3 ? y.date : null;
     // the day shown is the one you tap (today to start with); it never follows the Yahoo screen by itself
     if (!selDay || !days.some(d => d.date === selDay)) selDay = (days.find(d => d.date >= t) || days[days.length - 1] || {}).date;
     const slots = p.slots.length;
@@ -1131,7 +1117,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const add = act.rows.filter(r => r.hasGame && !/^IL/.test(r.slot) && !inP(r.name) && !/^(O|OUT|INJ|SUSP)$/i.test(r.inj || '')).slice(0, free).map(r => r.name);
       return add.length ? Object.assign({}, d, { start: d.start.concat(add) }) : d; });
     if (!days.length) { wbNote = 'Nothing left to set this week: every remaining day is already played or has no games.'; render(); return; } wbNote = ''; const id = Date.now();
-    const W = { id, lid: y.lid, lg: pl.league, done: false, days: days.map(d => d.date), results: [], retry: !!retry }; const save = () => browser.storage.local.set({ yWeek: Object.assign({}, W, { results: W.results.slice() }) });
+    const W = { id, lid: y.lid, lg: pl.league, done: false, days: days.map(d => d.date), results: [], retry: !!retry };
     await browser.storage.local.set({ yWeek: W, yCmd: { cmd: 'week', lid: y.lid, tid: y.tid, days, ts: id } });
     bgRun(y.lid, y.tid, id);
   }
@@ -1163,7 +1149,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const f = n => a.rows.find(r => K(r.name) === K(n)) || a.rows.find(r => lastOf(r.name) === lastOf(n)); return pd.start.some(n => { const r = f(n); return r && !r.locked && r.hasGame && !isS(r); }); });
     if (left.length) sendWeek(y, pl, left, true); }
   // ---------- sync ----------
-  let syncMsg = '', syncing = false; const planFrom = {};
+  let syncing = false; const planFrom = {};
   function syncBar() {
     const lg = league(); const y = leaguesKnown().find(l => l.league === lg); const st = y && ST['sync:' + y.lid]; const lk = ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3;
     const pr = ST.syncProgress && Date.now() - ST.syncProgress.ts < 3 * 60e3 ? ST.syncProgress.msg : '';
@@ -1187,7 +1173,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const ls = leaguesKnown(); const lg = league();
     const yoL = yahooOn(); // the other league gets a dot when it's the one on your Yahoo screen (the panel doesn't switch by itself)
     $('lgTabs').innerHTML = ls.map(l => `<button data-lg="${esc(l.league)}" class="${l.league === lg ? 'on' : ''}" title="${esc(l.league)}${yoL && yoL.league === l.league && l.league !== lg ? ' · on Yahoo now' : ''}"><span>${esc(l.league)}</span>${yoL && yoL.league === l.league && l.league !== lg ? '<i class="ldot"></i>' : ''}</button>`).join('');
-    $('lgTabs').querySelectorAll('[data-lg]').forEach(b => b.onclick = () => { ST.activeLeague = b.dataset.lg; tabTs = Date.now(); confirmWeek = null; browser.storage.local.set({ activeLeague: b.dataset.lg }); render(); });
+    $('lgTabs').querySelectorAll('[data-lg]').forEach(b => b.onclick = () => { ST.activeLeague = b.dataset.lg; browser.storage.local.set({ activeLeague: b.dataset.lg }); render(); });
     syncBar();
     // no leagues yet: the background finds them on Yahoo by itself (your teams are in Yahoo's top bar); only a Yahoo sign-in needs you
     if (!ls.length) { const found = Object.keys(ST.ymine || {}).length; const busy = syncing || (ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3);

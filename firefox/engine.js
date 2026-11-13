@@ -325,7 +325,7 @@
     }
     // add/drop planner: score = this-week gain + next week (real matchup if loaded) + discounted typical weeks
     const adds = Math.max(0, opts.addsLeft == null ? 2 : opts.addsLeft);
-    const dropRank = opts.dropRank || (ctx.cats.length === 11 ? 100 : 120); const seasonTol = opts.seasonTol == null ? 0.3 : opts.seasonTol; const protect = new Set((opts.protect || []).concat(opts.recentAdds || []).map(key)); const allow = new Set((opts.allowDrop || []).map(key));
+    const protect = new Set((opts.protect || []).concat(opts.recentAdds || []).map(key)); const allow = new Set((opts.allowDrop || []).map(key));
     const blocked = new Set((opts.exclude || []).concat(opts.recentDrops || []).map(key));
     const seenFA = new Set(); const fas = ctx.fas.filter(f => { const k = key(f.name); if (seenFA.has(k)) return false; seenFA.add(k); return firstOpen >= 0 && !blocked.has(k) && !seasonOut(f); });
     const R0 = opts.rules || {}; let ilFree = Math.max(0, (R0.ilSlots || 0) - (R0.ilUsed || 0)); const ilOK = new Set((R0.ilEligible || []).map(key));
@@ -411,7 +411,7 @@
     // taken off. A stream is only suggested when what's left is worth at least 0.15 categories this week.
     let streams = null;
     if (opts.streams) { const SO = opts.streams; const ncat = ctx.cats.length; const catsOf = v => ctx.obj === 'cats' ? v * ncat : v / (ctx.Lw || 0.27);
-      const punted = c => (ctx.punt || []).includes(c); const pat = SO.pattern || {}; const MIN = SO.min == null ? 0.15 : SO.min;
+      const punted = c => (ctx.punt || []).includes(c); const MIN = SO.min == null ? 0.15 : SO.min;
       const pOf = c => best0.cp[c].p;
       const BL = Object.assign({ dead: 0.15, safe: 0.75 }, SO.bands || {}); // the strategy's swing band, one definition everywhere
       const inPlay = ctx.cats.filter(c => !punted(c) && pOf(c) >= BL.dead && pOf(c) < BL.safe);

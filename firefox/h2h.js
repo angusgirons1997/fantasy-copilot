@@ -37,13 +37,6 @@
   // overall worth of a player on a view: value per game x games (used for picking who to cut or fill)
   const worth = (ctx, id, view) => { const p = ctx.P[id]; const v = p && (p[view] || p.ros); return v ? (v.lv || 0) * (v.g || 0) : -99; };
   // keep the roster legal after an uneven trade: cut the weakest, or fill with the best free agent
-  function settle(ctx, ids, size, fas, keep) {
-    let out = ids.slice(), cut = [], fill = [];
-    while (out.length > size) { const c = out.filter(id => !(keep || []).includes(id)).sort((a, b) => worth(ctx, a, 'ros') - worth(ctx, b, 'ros'))[0]; if (!c) break; out = out.filter(x => x !== c); cut.push(c); }
-    const pool = (fas || []).filter(id => !out.includes(id)).sort((a, b) => worth(ctx, b, 'ros') - worth(ctx, a, 'ros'));
-    while (out.length < size && pool.length) { const f = pool.shift(); out.push(f); fill.push(f); }
-    return { ids: out, cut, fill };
-  }
   // league = { me: tid, teams: [{tid, ids}], oppNow: tid, fas: [ids] }
   function evalChange(ctx, L, myAfter, theirTid, theirAfter) { const was = ctx.valuing; ctx.valuing = true; try { return evalChange0(ctx, L, myAfter, theirTid, theirAfter); } finally { ctx.valuing = was; } }
   function evalChange0(ctx, L, myAfter, theirTid, theirAfter) {
@@ -67,24 +60,6 @@
     return out;
   }
   // a trade: give (my ids) for get (their ids); returns verdict, effects and a counter-offer
-  function trade(ctx, L, theirTid, give, get) {
-    const me = L.teams.find(t => t.tid === L.me), th = L.teams.find(t => t.tid === theirTid); if (!me || !th) return { err: 'Rosters not loaded yet' };
-    const apply = (g, r) => { const m1 = settle(ctx, me.ids.filter(id => !g.includes(id)).concat(r), me.ids.length, L.fas, r); const t1 = settle(ctx, th.ids.filter(id => !r.includes(id)).concat(g), th.ids.length, L.fas, g); return { m1, t1, ev: evalChange(ctx, L, m1.ids, theirTid, t1.ids) }; };
-    const wpo = ctx.wpo || 0; const sc = ev => (1 - wpo) * ((ev.ros || {}).d || 0) + wpo * ((ev.po || ev.ros || {}).d || 0); const tsc = ev => (1 - wpo) * ((ev.ros || {}).theirs || 0) + wpo * ((ev.po || ev.ros || {}).theirs || 0);
-    const base = apply(give, get); const ros = base.ev.ros || {}; const d = sc(base.ev), td = tsc(base.ev);
-    const verdict = d >= 0.02 ? (td >= -0.01 ? 'accept' : 'accept-lopsided') : d >= -0.01 ? 'close' : 'decline';
-    // counter: one extra player from them, or one fewer from you; prefer offers they'd plausibly take
-    const cands = [];
-    th.ids.filter(id => !get.includes(id)).sort((a, b) => worth(ctx, b, 'ros') - worth(ctx, a, 'ros')).slice(0, 8).forEach(id => { const r = apply(give, get.concat([id])); cands.push({ kind: 'ask', id, d: sc(r.ev), td: tsc(r.ev) }); });
-    if (give.length >= 2) give.forEach(id => { const r = apply(give.filter(x => x !== id), get); cands.push({ kind: 'keep', id, d: sc(r.ev), td: tsc(r.ev) }); });
-    // sweeteners: one of your lesser players added to make it work for them
-    const sweet = []; me.ids.filter(id => !give.includes(id)).sort((a, b) => worth(ctx, a, 'ros') - worth(ctx, b, 'ros')).slice(0, 5).forEach(id => { const r = apply(give.concat([id]), get); sweet.push({ kind: 'add', id, d: sc(r.ev), td: tsc(r.ev) }); });
-    let counter = null;
-    if (verdict === 'accept-lopsided') counter = sweet.filter(c => c.d >= 0.02 && c.td >= -0.01).sort((a, b) => b.d - a.d)[0] || null; // still good for you, easier for them to say yes
-    else if (verdict !== 'accept') { const better = cands.concat(sweet).filter(c => c.d > d + 0.005); counter = better.filter(c => c.td >= -0.01).sort((a, b) => b.d - a.d)[0] || better.sort((a, b) => b.d - a.d)[0] || null; }
-    if (counter) counter.likely = counter.td >= -0.01;
-    return { verdict, score: d, theirScore: td, wpo, ev: base.ev, myCut: base.m1.cut, myFill: base.m1.fill, theirCut: base.t1.cut, counter };
-  }
   // pickup: add one player, best drops ranked (this week vs your opponent + rest of season)
   function pickup(ctx, L, add, candidates) {
     const me = L.teams.find(t => t.tid === L.me); if (!me) return { err: 'Your roster is not loaded yet' };
@@ -110,7 +85,6 @@
   }
   // ---- next week's matchup on next week's projections ----
   function nextWeek(ctx, myIds, oppIds) { const A = teamWeek(ctx, myIds, 'next'), B = teamWeek(ctx, oppIds, 'next'); const r = matchup(ctx, A, B); return { W: r.W, cats: ctx.cats.map(c => ({ c, label: LBL[c], p: r.cp[c] })), games: { me: Math.round(A.games), opp: Math.round(B.games) } }; }
-  // ---- trade finder: deals that help you and that the other team should also like ----
-  root.H2H = { live, nextWeek, teamWeek, matchup, vsField, trade, pickup, evalChange, settle, worth, LBL, weekWin, Phi };
+  root.H2H = { live, nextWeek, teamWeek, matchup, pickup, worth, LBL, weekWin, Phi };
   if (typeof module !== 'undefined') module.exports = root.H2H;
 })(typeof window !== 'undefined' ? window : globalThis);

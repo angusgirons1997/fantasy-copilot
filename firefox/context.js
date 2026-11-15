@@ -175,7 +175,7 @@
     if (offer && (owners.length > 1 || give.length > 3 || get.length > 3 || !give.length || !get.length)) return h + `<div class="sub">Open a single trade offer to see the verdict on it.</div>`;
     if (!give.length || !get.length) {
       if (N && N.helpers.length) h += `<div class="hlp"><span class="label">Your players who help there</span>${N.helpers.map(x => `<span class="hlpr"><b>${sn(x.id)}</b> <span class="muted">${esc(L(x.cats).join(', '))}</span></span>`).join('')}</div>`;
-      return h + `<div class="sub" style="margin-top:6px">Tick players on both sides for the verdict.</div>` + (miss.length ? `<div class="sub minus">Not found in Basketball Monster: ${esc(miss.join(', '))}</div>` : ''); }
+      return h + `<div class="sub" style="margin-top:8px">Tick players on both sides for the verdict.</div>` + (miss.length ? `<div class="sub minus">Not found in Basketball Monster: ${esc(miss.join(', '))}</div>` : ''); }
     if (owners.length > 1) return h + `<div class="sub">The players you've ticked are on more than one team.</div>`;
     const d = S && root.TRADE.evalDeal(S, them, give, get);
     if (!d) return h + `<div class="sub">Couldn't find ${esc(name)}'s roster yet. It arrives with the next sync.</div>`;
@@ -216,7 +216,7 @@
     h += `<div class="label" style="margin-top:4px">Best drops</div>` + top.map((d, i) => `<div class="drow${i ? '' : ' best'}"><div class="who"><b>${esc(M.P[d.drop].n)}</b><div class="when">${gw(g(M, d.drop))}${M.snapRisk(d.drop) ? ' · <span class="minus">likely snapped up</span>' : ''}</div></div><div class="nums">${sm('This week', d.week)}${d.seas != null ? sm('Rest of season', d.seas, true) : sm('Rest of season', d.ros)}</div></div>`).join('');
     const chosen = yp.dpid && M.ofYid(yp.dpid, yp.players[yp.dpid]);
     if (chosen) { const c = r.drops.find(d => d.drop === chosen); const b = r.drops[0];
-      if (c && b && c.drop !== b.drop) h += `<div class="warn" style="margin-top:6px">You've picked <b>${nm(chosen)}</b>: dropping <b>${nm(b.drop)}</b> instead is better for your team${b.seas != null && c.seas != null ? ` (${(b.seas - c.seas).toFixed(1)} categories more over the season)` : ` (${pts(b.score - c.score)} ${WWC()})`}.</div>`;
+      if (c && b && c.drop !== b.drop) h += `<div class="warn" style="margin-top:8px">You've picked <b>${nm(chosen)}</b>: dropping <b>${nm(b.drop)}</b> instead is better for your team${b.seas != null && c.seas != null ? ` (${(b.seas - c.seas).toFixed(1)} categories more over the season)` : ` (${pts(b.score - c.score)} ${WWC()})`}.</div>`;
       else if (c) h += `<div class="vd good">${nm(chosen)} is the right drop.</div>`; }
     h += joshLine(M, add);
     return h;
@@ -231,7 +231,7 @@
     if (!ids.length) return { html: html + '<div class="sub">No available players on this page. Filter Yahoo\'s list to available players.</div>', labels: {} };
     const hits = B.list.map((x, i) => ({ x, i })).filter(z => ids.includes(z.x.id));
     html += `<div class="hl">${hits.length ? `${hits.length} of the ${ids.length} available players here ${hits.length > 1 ? 'are' : 'is'} in your top ${B.list.length}` : `None of the ${ids.length} available players here make your top ${B.list.length}`}</div>`;
-    if (hits.length) html += `<table class="pl">${hits.map(({ x, i }) => { const s = x.gain * B.weeks; return `<tr class="plr"><td><b>${i + 1}. ${esc(M.P[x.id].n)}</b><div class="sub">${esc(tn(M.P[x.id].t))} · drop ${esc(sur(M.P[x.drop].n))}</div></td><td class="v"><div class="gnum ${s >= 0 ? 'plus' : 'minus'}">${(s >= 0 ? '+' : '−') + Math.abs(s).toFixed(1)} this season</div></td></tr>`; }).join('')}</table>`;
+    if (hits.length) html += `<table class="pl">${hits.map(({ x, i }) => { const s = x.gain * B.weeks; return `<tr class="plr"><td><b>${i + 1}. ${esc(M.P[x.id].n)}</b><div class="sub">${esc(tn(M.P[x.id].t))} · drop ${esc(sur(M.P[x.drop].n))}</div></td><td class="v"><div class="gnum">${(s >= 0 ? '+' : '−') + Math.abs(s).toFixed(1)} this season</div></td></tr>`; }).join('')}</table>`;
     html += `<div class="sub" style="margin-top:4px">The full list, every Basketball Monster free agent ranked the same way, is below.</div>`;
     return { html, labels: {} };
   }
@@ -299,7 +299,7 @@
     const yg = lv.me.games && lv.opp.games ? [lv.me.games.remaining, lv.opp.games.remaining] : null; // Yahoo's own count when available
     let h = `<div class="hero hv-${vk} live"><div class="hero-top"><div class="hero-pct">${Math.round(r.W * 100)}%</div><div class="hero-vs">to win, live against<br><b>${esc(lv.opp.name || y.oppName || 'opponent')}</b></div><div class="score"><b>${now[0]}–${now[1]}${now[2] ? '–' + now[2] : ''}</b><span>right now</span></div></div>
       <div class="hvk" style="margin:4px 0 0"><span class="fk ${vk}">${vt}</span></div>
-      <div class="h" style="margin-top:10px"><span>Chance to win each category</span><span class="sub">at the finish</span></div>
+      <div class="h" style="margin-top:12px"><span>Chance to win each category</span><span class="sub">at the finish</span></div>
       <div class="cgrid">${r.cats.slice().sort((a, b) => b.p - a.p).map(c => `<div class="tile ${c.p > 0.6 ? 'cs-a' : c.p >= 0.4 ? 'cs-c' : 'cs-b'}"><b>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</b><span>${Math.round(c.p * 100)}%</span><i>now ${fmt(c, c.nowMe)} v ${fmt(c, c.nowOpp)}</i></div>`).join('')}</div>
       <div class="sub">Games left: <b>${yg ? yg[0] : r.gamesLeft.me}</b> for you, <b>${yg ? yg[1] : r.gamesLeft.opp}</b> for them${yg ? ' (Yahoo)' : ''}. ${(() => { const mins = Math.round((Date.now() - (lv.ts || 0)) / 60000); const when = mins < 2 ? 'just now' : mins < 90 ? mins + ' min ago' : Math.round(mins / 60) + ' h ago'; return mins > 45 ? `<span class="warnt">Yahoo's totals read ${when}: open your matchup on Yahoo to refresh them.</span>` : `Yahoo's totals read ${when}${lv.src === 'tab' ? ' from the open matchup page' : ''}.`; })()}</div>
       <details class="hwhy" data-k="lwhy"><summary>Why</summary><div class="sub">Banked so far plus what Basketball Monster projects for the games left.</div><table class="stt2 inv"><thead><tr><th></th><th>You now</th><th>Them now</th><th>You at the end</th><th>Them at the end</th></tr></thead><tbody>${r.cats.slice().sort((a, b) => b.p - a.p).map(c => `<tr><td>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</td><td>${fmt(c, c.nowMe)}</td><td>${fmt(c, c.nowOpp)}</td><td>${fmt(c, c.me)}</td><td>${fmt(c, c.opp)}</td></tr>`).join('')}</tbody></table><div class="sub">${Math.round(r.W * 100)}% chance to win the week.</div></details></div>`;
@@ -365,9 +365,9 @@
     const pf = M.prof && M.prof.teams[String(y.next.oppTid)];
     if (pf && pf.weeks) { const lb = c => ((H && H.LBL) || {})[c] || c; const by = M.ctx.cats.filter(c => pf.cat[c] && pf.cat[c].n).map(c => ({ c, r: (pf.cat[c].w + pf.cat[c].t / 2) / pf.cat[c].n }));
       const won = by.filter(x => x.r > 0.6).map(x => lb(x.c)), lost = by.filter(x => x.r < 0.4).map(x => lb(x.c)); const one = pf.weeks === 1;
-      h += `<div class="sub" style="margin-top:6px">Their Yahoo results so far (${pf.weeks} week${one ? '' : 's'}, ${pf.w}-${pf.l}-${pf.t}):${won.length ? ` ${one ? 'won' : 'won most weeks in'} <b>${esc(won.join(', '))}</b>` : ''}${won.length && lost.length ? ';' : ''}${lost.length ? ` ${one ? 'lost' : 'lost most weeks in'} <b>${esc(lost.join(', '))}</b>` : ''}${!won.length && !lost.length ? ' even across categories' : ''}.</div>`; }
-    if (strong.length) h += `<div class="sub" style="margin-top:6px">They're stronger in <b>${esc(strong.join(', '))}</b>${weak.length ? `; you're stronger in <b>${esc(weak.join(', '))}</b>` : ''}.</div>`;
-    if (streams.length) h += `<div class="label" style="margin-top:10px">Four-game free agents next week</div>` + streams.map(id => `<div class="pr"><b>${nm(id)}</b><span>${M.P[id].next.g} games</span></div>`).join('');
+      h += `<div class="sub" style="margin-top:8px">Their Yahoo results so far (${pf.weeks} week${one ? '' : 's'}, ${pf.w}-${pf.l}-${pf.t}):${won.length ? ` ${one ? 'won' : 'won most weeks in'} <b>${esc(won.join(', '))}</b>` : ''}${won.length && lost.length ? ';' : ''}${lost.length ? ` ${one ? 'lost' : 'lost most weeks in'} <b>${esc(lost.join(', '))}</b>` : ''}${!won.length && !lost.length ? ' even across categories' : ''}.</div>`; }
+    if (strong.length) h += `<div class="sub" style="margin-top:8px">They're stronger in <b>${esc(strong.join(', '))}</b>${weak.length ? `; you're stronger in <b>${esc(weak.join(', '))}</b>` : ''}.</div>`;
+    if (streams.length) h += `<div class="label" style="margin-top:12px">Four-game free agents next week</div>` + streams.map(id => `<div class="pr"><b>${nm(id)}</b><span>${M.P[id].next.g} games</span></div>`).join('');
     return h + '</div>';
   }
   root.CTX = { calibrate, forecastPairs, uplift, projScore, fillRows, profiles, schedOf, curWeek, weekModel, model, freshness, tradeCard, dealView, addCard, listCard, liveCard, nextCard };

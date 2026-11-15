@@ -331,7 +331,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const exp = f.Ecats != null ? f.Ecats : Object.values(f.cats || {}).reduce((a, b) => a + b, 0);
       return `${esc(t.start.slice(5))} vs ${esc(t.opp || '')}: forecast ${exp.toFixed(1)} of ${n} categories · result ${won}-${n - won} ${won > n / 2 ? '✓' : won < n / 2 ? '✗' : '='}`; }).join('<br>');
     const cal = trackCal(lg); const calLine = cal.n >= 25 ? ` Forecast width adjusted ×${cal.mul} from ${cal.n} results.` : ` Learning from results (${cal.n} of 25 so far).`;
-    return forecastCheck(lg) + `<div style="margin-top:8px"><b>Track record</b><div class="sub">${wk}</div><div class="sub" style="margin-top:3px">Categories forecast ${b.filter(x => x.n).map(x => Math.round(x.r[0] * 100) + '–' + Math.min(100, Math.round(x.r[1] * 100)) + '%: won ' + Math.round(x.w) + '/' + x.n).join(' · ')}.${calLine}</div></div>`;
+    return forecastCheck(lg) + `<div style="margin-top:8px"><b>Track record</b><div class="sub">${wk}</div><div class="sub" style="margin-top:4px">Categories forecast ${b.filter(x => x.n).map(x => Math.round(x.r[0] * 100) + '–' + Math.min(100, Math.round(x.r[1] * 100)) + '%: won ' + Math.round(x.w) + '/' + x.n).join(' · ')}.${calLine}</div></div>`;
   }
   function diagHtml(lg, p) {
     const y = leaguesKnown().find(l => l.league === lg); const st = y && ST['sync:' + y.lid];
@@ -433,8 +433,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return `<details data-k="bbmauth" style="margin-top:8px"><summary>Basketball Monster sign-in: ${a.user ? esc(a.user) : '<span class="sub">not saved</span>'}</summary><div class="yc">
       <div class="sub">When Basketball Monster signs you out, the co-pilot signs back in with these and carries on. They stay in this browser's add-on storage and are only ever sent to basketballmonster.com.</div>
       <input id="bbmUser" placeholder="Basketball Monster email or username" value="${esc(a.user || '')}" autocomplete="off"><input id="bbmPass" type="password" placeholder="${a.pass ? 'Password saved (type to change)' : 'Password'}" autocomplete="new-password">
-      <label class="sub" style="display:flex;gap:6px;align-items:flex-start;margin-top:6px"><input type="checkbox" id="bbmKeep" ${ST.bbmAuthKeep ? 'checked' : ''}> Also keep them in the browser's safety copy, so they survive Firefox clearing its data (that copy travels with your Firefox account if you use Sync).</label>
-      <div class="row" style="margin-top:6px;gap:8px"><button class="btn small" id="bbmSave">Save and test</button>${a.user ? '<button class="lnk" id="bbmForget">Forget</button>' : ''}</div><div class="msg" id="bbmMsg">Status: ${state}</div></div></details>`; }
+      <label class="sub" style="display:flex;gap:8px;align-items:flex-start;margin-top:8px"><input type="checkbox" id="bbmKeep" ${ST.bbmAuthKeep ? 'checked' : ''}> Also keep them in the browser's safety copy, so they survive Firefox clearing its data (that copy travels with your Firefox account if you use Sync).</label>
+      <div class="row" style="margin-top:8px;gap:8px"><button class="btn small" id="bbmSave">Save and test</button>${a.user ? '<button class="lnk" id="bbmForget">Forget</button>' : ''}</div><div class="msg" id="bbmMsg">Status: ${state}</div></div></details>`; }
   function wireBbm() {
     const wo = $('wipedOk'); if (wo) wo.onclick = () => { ST.wipedSeen = true; browser.storage.local.set({ wipedSeen: true }); render(); };
     const sv = $('bbmSave'); if (sv) sv.onclick = async () => { const u = $('bbmUser').value.trim(), pw = $('bbmPass').value; const a = ST.bbmAuth || {}; if (!u || (!pw && !a.pass)) { $('bbmMsg').textContent = 'Enter your email and password.'; return; }
@@ -549,9 +549,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const heroNum = catsMode ? `${(p.Ecats || 0).toFixed(1)}<small>/${p.ncat}</small>` : pct(W); const tcls = v => v > 0.6 ? 'cs-a' : v >= 0.4 ? 'cs-c' : 'cs-b';
       h += `<div class="hero hv-${vk}"><div class="hero-top"><div class="hero-pct">${heroNum}</div><div class="hero-vs">${catsMode ? 'categories expected against' : 'chance to beat'}<br><b>${esc(p.opp)}</b>${p.playoffs ? ' · playoff week' : ''}</div><div class="hvk"><span class="fk ${vk}">${vt}</span>${catsMode ? `<i>${pct(p.Wmaj || 0)} to take the week</i>` : ''}</div></div>
       <div class="bl">${bottomLine(p)}</div>
-      <div class="h" style="margin-top:10px"><span>Chance to win each category</span><span class="sub">you need ${p.need} of ${p.ncat}</span></div>
+      <div class="h" style="margin-top:12px"><span>Chance to win each category</span><span class="sub">you need ${p.need} of ${p.ncat}</span></div>
       <div class="cgrid">${cs.map((c, i) => `<div class="tile ${tcls(c.p)}${i === p.need - 1 ? ' line' : ''}" title="${esc(c.label)}: you ${fmtT(c, c.me)}, them ${fmtT(c, c.opp)}"><b>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</b><span>${Math.round(c.p * 100)}%</span><i>${fmtT(c, c.me)} v ${fmtT(c, c.opp)}</i></div>`).join('')}</div>
-      <div class="sub" style="margin-top:6px">Under each: your projected total against theirs for the week${p.live ? ', including games already played' : ''}${cs.some(c => c.label === 'turnovers') ? ' (fewer turnovers wins)' : ''}.</div>
+      <div class="sub" style="margin-top:8px">Under each: your projected total against theirs for the week${p.live ? ', including games already played' : ''}${cs.some(c => c.label === 'turnovers') ? ' (fewer turnovers wins)' : ''}.</div>
       <div class="omrow"><span class="sub">Their lineup:</span><span class="seg small"><button data-om="max" class="${p.oppMode === 'max' ? 'on' : ''}" title="Assume the opponent fills every start">fills every start</button><button data-om="set" class="${p.oppMode === 'set' ? 'on' : ''}" title="Opponent lineup exactly as set">as set now</button></span></div></div>`; }
     const c1 = h.length; const A = p.adds;
     const c2 = h.length;
@@ -626,10 +626,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         + row('Weekly adds', sp.addLimit ? String(sp.addLimit) : miss)
         + row('Waivers', sp.waiverDays == null ? miss : sp.waiverDays ? `${sp.waiverDays} day${sp.waiverDays > 1 ? 's' : ''} after a drop` : 'No waivers')
         + row('Playoffs', po) + (sp.tradeEnd ? row('Trade deadline', esc(sp.tradeEnd)) : '');
-      h += `<div class="sub" style="margin-top:6px">Read ${sp.ts ? ago(sp.ts) : ''}. Yahoo's settings are checked again every week. <button class="lnk" id="yReload">Reload from Yahoo now</button></div>`; }
+      h += `<div class="sub" style="margin-top:8px">Read ${sp.ts ? ago(sp.ts) : ''}. Yahoo's settings are checked again every week. <button class="lnk" id="yReload">Reload from Yahoo now</button></div>`; }
     h += `<details class="more" data-k="lgover"${s.addLimit != null || s.scoring ? ' open' : ''}><summary>Change what Yahoo says${s.addLimit != null || s.scoring ? ' (changed)' : ''}</summary>
       <div class="row">Weekly adds <input id="adds" type="number" min="0" max="10" placeholder="${sp && sp.addLimit ? sp.addLimit : A.limit}" value="${s.addLimit != null ? s.addLimit : ''}"> <span class="sub">empty: use Yahoo's</span></div>
-      ${(() => { const sc = scoringOf(lg); return `<div class="row" style="margin-top:6px">Scoring<select id="scoring"><option value="auto" ${!s.scoring ? 'selected' : ''}>Use Yahoo's${sc.src !== 'set' ? ' (' + (sc.mode === 'cats' ? 'each category counts' : 'most categories wins') + ')' : ''}</option><option value="cats" ${s.scoring === 'cats' ? 'selected' : ''}>Each category counts</option><option value="win" ${s.scoring === 'win' ? 'selected' : ''}>Most categories wins the week</option></select></div>`; })()}</details></div>`;
+      ${(() => { const sc = scoringOf(lg); return `<div class="row" style="margin-top:8px">Scoring<select id="scoring"><option value="auto" ${!s.scoring ? 'selected' : ''}>Use Yahoo's${sc.src !== 'set' ? ' (' + (sc.mode === 'cats' ? 'each category counts' : 'most categories wins') + ')' : ''}</option><option value="cats" ${s.scoring === 'cats' ? 'selected' : ''}>Each category counts</option><option value="win" ${s.scoring === 'win' ? 'selected' : ''}>Most categories wins the week</option></select></div>`; })()}</details></div>`;
     // 2. your build
     const cur = puntFor(lg) || []; const MM = modelFor(lg); const bb = MM && MM.ctx.puntBbm || []; const th = Object.assign({}, STR ? STR.TH0 : {}, s.th || {}); const pc = x => Math.round(x * 100);
     const l = leaguesKnown().find(x => x.league === lg); const snap = l && ST['strat:' + l.lid];
@@ -637,13 +637,13 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <div class="sub">Tap categories to punt. This is the only place your punt is set: Basketball Monster's own punt settings don't change anything here.</div>
       <div class="trypick">${cats.map(c => `<button class="pchip${cur.includes(c) ? ' on' : ''}" data-punt="${c}">${esc(NM(c))}</button>`).join('')}</div>
       ${bb.length && bb.slice().sort().join() !== cur.slice().sort().join() ? `<div class="sub"><button class="lnk" id="puntCopy">Copy Basketball Monster's punt (${esc(bb.map(NM).join(', '))})</button></div>` : ''}
-      <div class="label lbl2" style="margin-top:10px">Bands</div>
+      <div class="label lbl2" style="margin-top:12px">Bands</div>
       <div class="sub">How each category is read, from the share of teams Basketball Monster projects you to beat in it.</div>
       <div class="row bandrow"><i class="fd n"></i>Lost under <input class="thin" id="thDead" type="number" min="0" max="50" value="${pc(th.dead)}">%</div>
       <div class="row bandrow"><i class="fd a"></i>Swing up to <input class="thin" id="thSafe" type="number" min="30" max="95" value="${pc(th.safe)}">%</div>
       <div class="row bandrow"><i class="fd gr"></i>Winning up to <input class="thin" id="thLock" type="number" min="50" max="100" value="${pc(th.locked)}">%</div>
       <div class="row bandrow"><i class="fd g"></i>Locked above that</div>
-      <div class="sub" style="margin-top:6px">${snap ? `Bands set ${new Date(snap.ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}. They stay put until you set them again.` : 'Bands are set at the first sync with Basketball Monster\'s Analysis Monster.'} <button class="lnk" id="bandsReset">Set again from today's numbers</button></div></div>`;
+      <div class="sub" style="margin-top:8px">${snap ? `Bands set ${new Date(snap.ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}. They stay put until you set them again.` : 'Bands are set at the first sync with Basketball Monster\'s Analysis Monster.'} <button class="lnk" id="bandsReset">Set again from today's numbers</button></div></div>`;
     // 3. how eager the advice is
     const pk = s.pick && PICK[s.pick] ? s.pick : 'std';
     h += `<div class="card sets" id="set-advice"><div class="h"><span>Advice</span></div>
@@ -795,7 +795,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       if (av && av.st === 'W') tags.push(['n', 'On waivers' + (av.wv ? ' until ' + fmtD(av.wv) : '')]);
       const cm = catMoves(r.cats || x.cats, 0.01); const gk = seasonChip(season);
       const P = M.P[x.id], D = M.P[drop]; const alt = !sel && x.alt ? x.alt : null;
-      return `<details class="pr fa" data-k="fa${esc(x.id)}"><summary><div class="l1"><span class="frk">${i + 1}</span><b>${esc(name)}</b><span class="fv ${season >= 0 ? 'plus' : 'minus'}">${cn(season)}</span></div>
+      return `<details class="pr fa" data-k="fa${esc(x.id)}"><summary><div class="l1"><span class="frk">${i + 1}</span><b>${esc(name)}</b><span class="fv${tags.length && tags[0][0] === 'g' ? ' plus' : ''}">${cn(season)}</span></div>
         <div class="l2">${tags.length ? `<div class="ftags">${tags.map(t => `<span class="fk ${t[0]}">${esc(t[1])}</span>`).join('')}</div>` : ''}<div class="ln">${esc(teamN(P.t))}${P.inj ? ` · <span class="minus">${esc(injChip(P.inj))}</span>` : ''} · drop ${esc(sur(nm(drop)))}</div>${cm.up.length ? `<div class="ln"><span>Helps</span> ${esc(listW(cm.up.slice(0, 4)))}</div>` : ''}${cm.dn.length ? `<div class="ln"><span>Costs</span> ${esc(listW(cm.dn.slice(0, 3)))}</div>` : ''}</div></summary>
         <div class="ld"><div class="sub">Test: add ${esc(sur(name))}, drop <b>${esc(nm(drop))}</b>${sel && bd.drop !== x.drop ? ' (your choice)' : ', the drop that leaves your team best off'}.</div>
           <div class="gains"><div><span>This week</span>${tm.week != null ? `<span class="gnum ${tm.week >= 0 ? 'plus' : 'minus'}">${cn(tm.week, 2)}</span>` : '<span class="sub">–</span>'}</div><div><span>Next week</span>${tm.next != null ? `<span class="gnum ${tm.next >= 0 ? 'plus' : 'minus'}">${cn(tm.next, 2)}</span>` : '<span class="sub">–</span>'}</div><div><span>Rest of season</span><span class="fk ${gk[0]}">${gk[1]}</span><span class="gnum ${season >= 0 ? 'plus' : 'minus'}">${cn(season)}</span></div></div>
@@ -819,7 +819,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (ys.length) h += `<div class="label lbl2">Yahoo, now</div><div class="tbl">${ys.map(t => `<div class="tr${String(t.tid) === String(y.tid) ? ' me' : ''}${poN && t.rank === poN ? ' cut' : ''}"><span>${t.rank}</span><span class="nm">${String(t.tid) === String(y.tid) ? 'You' : esc(t.name)}</span><span>${t.w}-${t.l}-${t.t}</span></div>`).join('')}</div>${poN ? `<div class="sub">Top ${poN} make the playoffs.</div>` : ''}`;
     else h += `<div class="sub">Yahoo's standings arrive with the next sync.</div>`;
     if (bs && bs.teams && bs.teams.length) { const T = bs.teams.slice().sort((a, b) => (b.winPct || 0) - (a.winPct || 0));
-      h += `<div class="label lbl2" style="margin-top:10px">Basketball Monster projection, rest of season <span class="muted">· Analysis Monster · ${esc(ago(bs.ts))}</span></div><div class="tbl">${T.map((t, i) => `<div class="tr${t.me ? ' me' : ''}"><span>${i + 1}</span><span class="nm">${t.me ? 'You' : esc(t.name)}</span><span title="Share of categories Basketball Monster projects them to win from here">${Math.round((t.winPct || 0) * 100)}%</span><span class="muted" title="Categories Basketball Monster projects you to win, lose and tie against them">${t.vsMe ? `you ${t.vsMe.w}-${t.vsMe.l}-${t.vsMe.t}` : ''}</span></div>`).join('')}</div>
+      h += `<div class="label lbl2" style="margin-top:12px">Basketball Monster projection, rest of season <span class="muted">· Analysis Monster · ${esc(ago(bs.ts))}</span></div><div class="tbl">${T.map((t, i) => `<div class="tr${t.me ? ' me' : ''}"><span>${i + 1}</span><span class="nm">${t.me ? 'You' : esc(t.name)}</span><span title="Share of categories Basketball Monster projects them to win from here">${Math.round((t.winPct || 0) * 100)}%</span><span class="muted" title="Categories Basketball Monster projects you to win, lose and tie against them">${t.vsMe ? `you ${t.vsMe.w}-${t.vsMe.l}-${t.vsMe.t}` : ''}</span></div>`).join('')}</div>
         <div class="sub">Basketball Monster's own projection: the share of categories each team wins from here, counting only the games each team can start. It doesn't include results so far; Yahoo's table above does.</div>`; }
     else h += `<div class="sub" style="margin-top:8px">Basketball Monster's projection arrives with the next sync.</div>`;
     return h + '</div>'; }
@@ -926,10 +926,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       h += `<div class="cbd2">${V.cats.slice().sort((a, b) => ord.indexOf(B[a]) - ord.indexOf(B[b])).map(c => { const b = B[c], bn = V.bandNow ? V.bandNow[c] : b; const w = V.snap.win[c]; const me = V.rows.find(r => r.tid === M.L.me); const rk = me && me.val[c] != null ? 1 + V.rows.filter(r => r.tid !== me.tid && r.val[c] != null && r.val[c] > me.val[c]).length : null;
         return `<details class="cb" data-k="cb${esc(c)}"><summary><i class="fd ${BW[b][1]}"></i><b>${N(c).replace(/^./, x => x.toUpperCase())}</b><span class="fk ${BW[b][1]}">${BW[b][0]}</span><span class="muted">${b === 'punt' ? 'by choice' : `beats ${beat(w)} of ${nOpp} teams`}</span>${bn !== b && b !== 'punt' ? `<span class="chip toss-up">now ${BW[bn][0].toLowerCase()}</span>` : ''}</summary>
           <div class="sub">${rk ? `${nth(rk)} of ${V.rows.length} on Basketball Monster's rest-of-season team values. ` : ''}${me && me.tot && me.tot[c] != null ? `Projected team total: ${me.tot[c]}. ` : ''}${bn !== b && b !== 'punt' && V.winNow ? `Today it beats ${beat(V.winNow[c])} of ${nOpp}: that would count as ${BW[bn][0].toLowerCase()}. Nothing changes until you set the bands again.` : ''}</div></details>`; }).join('')}</div>`;
-      h += `<div class="sub" style="margin-top:6px">Bands set ${dt(V.snap.ts)} from Basketball Monster's Analysis Monster. <button class="lnk" data-strev>Set again from today's numbers</button></div>`;
+      h += `<div class="sub" style="margin-top:8px">Bands set ${dt(V.snap.ts)} from Basketball Monster's Analysis Monster. <button class="lnk" data-strev>Set again from today's numbers</button></div>`;
       // try a different build: pick categories to punt and see what changes, without touching your set punt
       const tryP = (S(lg).tryPunt || []).filter(c => V.cats.includes(c));
-      h += `<div class="h" style="margin-top:14px"><span>Try a different build</span></div><div class="sub">Pick categories to punt. Nothing changes in your settings.</div><div class="trypick">${V.cats.map(c => `<button class="pchip${tryP.includes(c) ? ' on' : ''}" data-tryp="${esc(c)}">${N(c)}</button>`).join('')}</div>`;
+      h += `<div class="h" style="margin-top:16px"><span>Try a different build</span></div><div class="sub">Pick categories to punt. Nothing changes in your settings.</div><div class="trypick">${V.cats.map(c => `<button class="pchip${tryP.includes(c) ? ' on' : ''}" data-tryp="${esc(c)}">${N(c)}</button>`).join('')}</div>`;
       if (tryP.length) { const G2 = V.groups(tryP, V.snap.win); const won2 = V.cats.filter(c => G2.band[c] === 'safe' || G2.band[c] === 'locked'), sw2 = G2.grp.swing, lost2 = V.cats.filter(c => G2.band[c] === 'dead');
         const rd2 = readsFor(lg, tryP); const R1 = V.mine.slice().sort((a, b) => b.lv - a.lv).slice(0, 6); const R2 = R1.map(r => V.line(r.id, G2.grp, rd2)).filter(Boolean);
         const fit2 = R2.filter(r => r.kind === 'fits'), waste2 = R2.filter(r => r.kind === 'wasted' || r.kind === 'holds');
@@ -958,7 +958,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const f0 = S(lg).find || {}; const kind = f0.kind === 'all' ? 'all' : 'fits'; const TIER = [[1, 30, 'Stars'], [31, 75, 'Starters'], [76, 130, 'Rotation players'], [131, 9999, 'Depth']];
       const L0 = V.league.filter(x => x.read && (kind === 'all' || x.kind === 'fits')).sort((a, b) => b.read.g - a.read.g);
       h += `<div class="seg small sortbar">${[['fits', FIT.fits[1]], ['all', 'Any']].map(([k, t]) => `<button data-fkind="${k}" class="${kind === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
-      h += `<div class="sub" style="margin-bottom:6px">Players on other teams, by what each would add to your team over the rest of the season in place of ${V.rd && V.rd.d0 ? esc(M.P[V.rd.d0].n) + ', your least valuable player' : 'your least valuable player'}. Free agents are on the Players page.</div>`;
+      h += `<div class="sub" style="margin-bottom:8px">Players on other teams, by what each would add to your team over the rest of the season in place of ${V.rd && V.rd.d0 ? esc(M.P[V.rd.d0].n) + ', your least valuable player' : 'your least valuable player'}. Free agents are on the Players page.</div>`;
       h += TIER.map(([a, b, name], ti) => { const T0 = L0.filter(x => x.brank >= a && x.brank <= b); return T0.length ? `<details class="more"${ti < 2 ? ' open' : ''}><summary>${name}: ${T0.length}</summary>${T0.slice(0, 12).map(x => playerRow(x, { owner: true })).join('')}</details>` : ''; }).join('') || '<div class="strnone">Nobody yet.</div>';
     } else if (window.STAB === 'how') h += howItWorks(lg, V);
     return `<div class="card strat">${h}</div>`; }
@@ -990,7 +990,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const B = rd.B; const bd = (planNow[lg] || {}).bd;
     h += `<div class="h mvh"><span>2 · Waiver wire</span><span class="sub">the same list as Players</span></div>`;
     h += B.list.length ? B.list.slice(0, 3).map((x, i) => { const sel = bd && K(bd.add) === K(M.P[x.id].n); const tag = sel && bd.worth ? (bd.wait ? ['a', 'Wait until Monday'] : ['g', bd.chosen ? 'Your pick' : 'Best pickup']) : null; const sv = (sel ? B.swap(x.id, bd.drop).g : x.gain) * w;
-      return `<div class="mvl"><span>${i + 1}</span><b>${esc(M.P[x.id].n)}</b>${tag ? ` <span class="fk ${tag[0]}">${tag[1]}</span>` : ''} <i>for ${esc(M.P[sel ? bd.drop : x.drop].n)}</i> <b class="${sv >= 0 ? 'plus' : 'minus'}">${cn(sv)}</b></div>`; }).join('') + `<div class="mvf"><button class="lnk" data-gotab="players">Open the full list</button></div>` : `<div class="strnone">No free agents to rate yet.</div>`;
+      return `<div class="mvl"><span>${i + 1}</span><b>${esc(M.P[x.id].n)}</b>${tag ? ` <span class="fk ${tag[0]}">${tag[1]}</span>` : ''} <i>for ${esc(M.P[sel ? bd.drop : x.drop].n)}</i> <b>${cn(sv)}</b></div>`; }).join('') + `<div class="mvf"><button class="lnk" data-gotab="players">Open the full list</button></div>` : `<div class="strnone">No free agents to rate yet.</div>`;
     // 3 · build around
     const keep = V.mine.filter(r => r.kind === 'fits' && r.read).sort((a, b) => b.read.val - a.read.val).slice(0, 5);
     h += `<div class="h mvh"><span>3 · Build around</span><span class="sub">${keep.length} player${keep.length === 1 ? '' : 's'}</span></div>` + (keep.length ? `<div class="sub mvsubl">${keep.map(r => `${esc(r.n)} <b class="plus">${cn(r.read.val * w)}</b>`).join(' · ')}: what your team would lose without each, over the rest of the season. No free agent or trade at their value does better.</div>` : `<div class="strnone">Nobody on your roster clearly earns his spot yet.</div>`);
@@ -1097,7 +1097,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (!steps.length) return '';
     h += `<ol class="ilsteps">${steps.map(x => `<li>${x}</li>`).join('')}</ol>`;
     if (L) h += `<div class="acts"><a class="btn small" href="${esc(L)}" target="_blank" rel="noopener">Open your team on Yahoo</a></div>`;
-    return h + `<div class="sub" style="margin-top:6px">Roster and statuses from your Yahoo team page ${esc(ago(y.ts))}.</div></div>`; }
+    return h + `<div class="sub" style="margin-top:8px">Roster and statuses from your Yahoo team page ${esc(ago(y.ts))}.</div></div>`; }
   function lineupCard(p, lg) { const MI = modelFor(lg); const injOf = n => { if (!MI) return ''; const id = MI.find(n); const v = id && MI.P[id] && MI.P[id].inj; return v && /^(Q|D|GTD|O|OUT|DTD|P)\b/i.test(v) && !/^Off/i.test(v) ? v : ''; };
     const y = yrFor(lg); const lid = y && y.lid; const t = usToday(); const days = p.nowDays || p.days;
     const due = p.nowDays ? p.moves.filter(x => x.date <= t) : [], later = p.nowDays ? p.moves.filter(x => x.date > t) : [];
@@ -1138,13 +1138,13 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
           ${g.out.length || g.noGame.length ? `<div class="wkl dim"><span class="lab">Not playing</span><span>${g.out.map(z => `<span class="wn">${nmS(z)}${z.noGameY ? '' : ' (out)'}</span>`).join('')}${g.noGame.map(n => `<span class="wn">${esc(sur(n))}</span>`).join('')}</span></div>` : ''}</div>`; }).join('');
     } else {
     h += `<div class="dayhead"><b>${esc(fmtD(d.date))}</b><span class="sub">${games} with games for ${slots} spots${crowded ? ` · <b class="minus">${games - slots} must sit</b>` : ''}</span></div>`;
-    if (!d.open) h += `<div class="sub" style="margin:6px 0 2px">This day is done.</div>`;
-    else if (!games) h += `<div class="sub" style="margin:6px 0 2px">Nobody on your roster plays.</div>`;
+    if (!d.open) h += `<div class="sub" style="margin:8px 0 2px">This day is done.</div>`;
+    else if (!games) h += `<div class="sub" style="margin:8px 0 2px">Nobody on your roster plays.</div>`;
     else if (ilBlocked(y)) h += `<div class="vd bad">Yahoo is blocking lineup changes until your roster is legal (see Back from injury above)</div>`;
     else if (extraOpen(d, G).length) h += `<div class="vd warn">Check ${esc(extraOpen(d, G).map(x => sur(x.name)).join(', '))}: Yahoo shows a game the plan doesn't have</div>`;
     else h += c.known ? (c.changes ? `<div class="vd warn">${c.changes} change${c.changes > 1 ? 's' : ''} to make on Yahoo</div>` : `<div class="vd good">Lineup is set correctly</div>`) : `<div class="vd">Checking your Yahoo lineup…</div>`;
     const lat = later.filter(x => x.date <= d.date);
-    if (lat.length && !due.length) h += `<div class="sub" style="margin:0 0 10px">${lat.map(x => `Pickup planned for ${esc(fmtD(x.date))}: <b>${esc(x.add)}</b>${x.drop ? ' for ' + esc(sur(x.drop)) : ''}.`).join(' ')} This day's lineup changes once you've made it.</div>`;
+    if (lat.length && !due.length) h += `<div class="sub" style="margin:0 0 12px">${lat.map(x => `Pickup planned for ${esc(fmtD(x.date))}: <b>${esc(x.add)}</b>${x.drop ? ' for ' + esc(sur(x.drop)) : ''}.`).join(' ')} This day's lineup changes once you've made it.</div>`;
     if (d.open && games) {
       h += `<div class="label lbl2">Start <span>${d.start.length} of ${slots}</span></div>` + d.start.map(x => { const s0 = c.start.find(z => z.name === x.name) || {};
         return `<div class="lrow">${lnm(x.name, x.slot || '–', x.opp || '')}${G.yNo(x.name) ? '<span class="chip lost" title="Yahoo shows no game for him this day">Yahoo: no game</span>' : ''}${injOf(x.name) ? `<span class="chip ${/^(O|OUT|D)/i.test(injOf(x.name)) ? 'lost' : 'toss-up'}">${esc(injWord(injOf(x.name)).replace(/^a /, ''))}</span>` : ''}${s0.moveIn && /^IL/.test(s0.now || '') ? '<span class="chip chase" title="He is on your injured list: see Back from injury for who to drop first">Off the injured list: drop someone first</span>' : s0.moveIn ? '<span class="chip safe">Move in</span>' : s0.locked && s0.now && /^(BN|IL)/.test(s0.now) ? '<span class="chip">Locked on bench</span>' : !s0.onY && act ? '<span class="chip chase">After pickup</span>' : ''}</div>`; }).join('');
@@ -1238,7 +1238,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     syncBar();
     // no leagues yet: the background finds them on Yahoo by itself (your teams are in Yahoo's top bar); only a Yahoo sign-in needs you
     if (!ls.length) { const found = Object.keys(ST.ymine || {}).length; const busy = syncing || (ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3);
-      paint($('out'), authHtml() + `<div class="card"><b>${found || busy ? 'Setting up your leagues…' : 'Finding your Yahoo leagues…'}</b><div class="sub" style="margin-top:6px">${found ? 'Found ' + found + (found === 1 ? ' league' : ' leagues') + ' on Yahoo. The first sync downloads a lot from Basketball Monster and takes a couple of minutes.' : 'This happens by itself. If it takes more than a minute, open any Yahoo Fantasy page in a tab and it picks your leagues up from there.'}</div></div>${setPane('', `<div class="card sets">${bbmAuthHtml()}</div>`)}`); wireConn();
+      paint($('out'), authHtml() + `<div class="card"><b>${found || busy ? 'Setting up your leagues…' : 'Finding your Yahoo leagues…'}</b><div class="sub" style="margin-top:8px">${found ? 'Found ' + found + (found === 1 ? ' league' : ' leagues') + ' on Yahoo. The first sync downloads a lot from Basketball Monster and takes a couple of minutes.' : 'This happens by itself. If it takes more than a minute, open any Yahoo Fantasy page in a tab and it picks your leagues up from there.'}</div></div>${setPane('', `<div class="card sets">${bbmAuthHtml()}</div>`)}`); wireConn();
       if (!busy && Date.now() - (window.__findTs || 0) > 60e3) { window.__findTs = Date.now(); runSync(true); } return; }
     try { renderB(); } catch (e) { $('out').innerHTML = '<div class="card">Something went wrong: ' + esc(e.message) + '</div>'; console.error(e); }
   }

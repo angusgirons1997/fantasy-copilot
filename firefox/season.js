@@ -343,7 +343,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       ST.wiped ? '<span class="minus">The browser emptied the add-on\'s storage ' + ago(ST.wiped.ts) + '; your leagues and settings were put back from the safety copy</span>' : '',
       (() => { const y = yrFor(league()); if (!y) return ''; const lv = ST['ylive:' + y.lid], sd = ST['ystand:' + y.lid], tx = ST['tx:' + y.lid];
         return 'Live totals: ' + (lv ? 'week ' + lv.week + ', ' + ago(lv.ts) : 'not yet') + ' · Standings: ' + (sd ? sd.teams.length + ' teams, ' + ago(sd.ts) : 'not yet') + ' · Transactions: ' + (tx ? (tx.rows || []).length + ' moves, ' + ago(tx.ts) : 'not yet'); })()].filter(Boolean).join('<br>');
-    return `<details data-k="diag" style="margin-top:8px"><summary>Diagnostics</summary><div class="sub" style="margin-top:4px">${st ? (st.mode || '') + ' sync ' + ago(st.ts) + (st.err ? ' · <span class="minus">' + esc(st.err) + '</span>' : '') : 'No sync yet'}</div><div class="sub mono" style="margin-top:4px">${lines}</div><div class="sub" style="margin-top:4px">${extra}</div><button class="lnk" id="diagDl" style="margin-top:4px">Download report</button> <button class="lnk" id="fcDl" style="margin-top:4px">Download forecast data</button><div class="sub">Forecast data: projections, rosters, forecasts and weekly results for the forecast check. No passwords or sign-ins.</div></details>`;
+    return `<details data-k="diag" style="margin-top:8px"><summary>Diagnostics</summary><div class="sub" style="margin-top:4px">${st ? (st.mode || '') + ' sync ' + ago(st.ts) + (st.err ? ' · <span class="minus">' + esc(st.err) + '</span>' : '') : 'No sync yet'}</div><div class="sub mono" style="margin-top:4px">${lines}</div><div class="sub" style="margin-top:4px">${extra}</div><button class="lnk" id="diagDl" style="margin-top:4px">Download report</button> <button class="lnk" id="fcDl" style="margin-top:4px">Download forecast data</button> <button class="lnk" id="testDl" style="margin-top:4px">Download test data</button><div class="sub">Forecast data: projections, rosters, forecasts and weekly results for the forecast check. Test data: everything the panel shows, for checking every page offline before a release. Neither has passwords or sign-ins.</div></details>`;
   }
   // ---- Yahoo connection (official API, one-time) ----
 
@@ -607,6 +607,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     wireSettings(lg);
     const hc = $('hideConn'); if (hc) hc.onclick = () => { s.hideConn = true; saveS(lg); render(); };
     wireConn();
+    // everything the panel reads, for the offline render checks (tools/test/t_render.js); sign-in data never leaves: any key named
+    // like a sign-in is left out (the Basketball Monster email and password live only in bbmAuth)
+    const tdl = $('testDl'); if (tdl) tdl.onclick = () => { const keep = Object.keys(ST).filter(k => !/auth|pass|token|secret|cookie|cred/i.test(k));
+      const rep = { at: new Date().toISOString(), version: (browser.runtime && browser.runtime.getManifest ? browser.runtime.getManifest().version : ''), store: Object.fromEntries(keep.map(k => [k, ST[k]])) };
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(rep)], { type: 'application/json' })); a.download = 'copilot-test-data.json'; document.body.appendChild(a); a.click(); a.remove(); toast('Saved to Downloads', 'ok'); };
     // the forecast check's and the advice backtest's raw material (allow-list: projections, rosters, schedules, forecasts, results,
     // the advice log and player weeks; never sign-in data)
     const fdl = $('fcDl'); if (fdl) fdl.onclick = () => { const keep = Object.keys(ST).filter(k => /^(lgweek|lgfc|h2hfc|h2hres|track|ysched|lgscan|yr|ystand|ysetp|sset|calib|bx|ytrend|ylive|advlog|pjlog|pjact):/.test(k) || /^(idmap|yidmap|activeLeague)$/.test(k));

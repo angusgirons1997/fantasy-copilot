@@ -55,7 +55,8 @@ function slopes(my){return pairs(my,null,(x,sg)=>phi(x)/sg)||Array(NC).fill(0);}
 function gain(p,sl){let g=0;for(let i=0;i<NC;i++)if(!S.punt.includes(i))g+=sl[i]*(p.z[i]-REPL[i]);return g;}
 const valueOf=p=>{let s=0,d=0;p.z.forEach((v,i)=>{if(!S.punt.includes(i)){s+=v;d++;}});return d?s/d:0;};
 function status(w,i){if(S.punt.includes(i))return['punt','Punted'];if(w>=.85)return['lock','Locked'];if(w>=.62)return['win','Winning'];if(w>=.38)return['swing','Swing'];if(w>=.15)return['lose','Behind'];return['gone','Long shot'];}
-const teamName=t=>{const p=L.picks.find(x=>teamOf(x.o)===t&&x.tn&&x.tn!=='You');return p?p.tn:'Team '+t;};
+// other managers name their teams: escaped here, since every use goes into HTML
+const teamName=t=>{const p=L.picks.find(x=>teamOf(x.o)===t&&x.tn&&x.tn!=='You');return p?String(p.tn).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])):'Team '+t;};
 const sur=n=>n.replace(/ (Jr\.|Sr\.|II|III|IV)$/,'').split(' ').slice(-1)[0];
 const PROD=(()=>{const pool=P.filter(p=>p.vr<=180);return CATS.map((_,i)=>pool.filter(p=>p.z[i]>=1).length/pool.length);})();
 function runs(){const last=L.picks.slice(-8).filter(p=>teamOf(p.o)!==slot());if(last.length<6)return[];const out=[];

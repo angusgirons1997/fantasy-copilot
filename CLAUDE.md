@@ -57,7 +57,9 @@ pages contradict each other before 7.32.0.
 1. Lint:
    - `eslint --no-eslintrc -c <config>` with no-undef and no-unused-vars on the changed files.
    - boot.js, content.js, panel.js and yroster.js have known content-script globals.
-2. Render every tab with test stores (normal, injured-list, injured, recent-add variants) and check:
+2. Render every tab with test stores (normal, injured-list, injured, recent-add variants) and check the items below.
+   `node tools/test/t_render.js <copilot-test-data.json>` does the render and the step 3 consistency check offline, in jsdom.
+   Settings → Diagnostics → Download test data gives the export: everything except sign-ins. Contrast still needs Firefox.
    - no page errors
    - contrast and size audit in light and dark
 3. Consistency check: Players #1 and its drop must equal:

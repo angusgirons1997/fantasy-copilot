@@ -65,6 +65,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         if (btn && btn.name) b.set(btn.name, btn.getAttribute('value') || '');
         const link = !btn && [...form.querySelectorAll('a[href*="__doPostBack"]')].find(x => /log ?in|sign ?in/i.test(x.textContent || '')); if (link) b.set('__EVENTTARGET', (link.getAttribute('href').match(/__doPostBack\('([^']+)'/) || [])[1] || '');
         const action = new URL(form.getAttribute('action') || 'Login.aspx', BBMH + '/Login.aspx').href;
+        // the password only ever goes to Basketball Monster, over https, whatever the sign-in form says
+        { const u = new URL(action); if (u.protocol !== 'https:' || !/^(www\.)?basketballmonster\.com$/i.test(u.hostname)) throw new Error('the sign-in form points away from Basketball Monster (' + u.hostname + '): password not sent'); }
         const t = await req(action, { method: 'POST', body: b, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 'BBM sign-in');
         ok = bbmIn(t) || bbmIn(await req(BBMH + '/default.aspx', null, 'BBM sign-in check')); if (!ok) why = 'Basketball Monster didn\'t accept the saved email and password'; }
     } catch (e) { why = e.message; }

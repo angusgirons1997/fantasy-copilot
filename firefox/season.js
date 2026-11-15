@@ -353,7 +353,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // the model also carries what the trade tools need: regular-season weeks left, the bar a deal must clear, Trade Monster's results
   function modelFor(lg) { return memo('model|' + lg, () => { const M = modelForRaw(lg); if (!M) return M; const l = leaguesKnown().find(x => x.league === lg), y = yrFor(lg);
     const sp = (l && ST['ysetp:' + l.lid]) || {}; const po = (sp.poWeeks || [])[0] || null; const cw = l && window.CTX.curWeek(ST, l.lid, y);
-    M.weeksLeft = cw && po ? Math.max(1, po - cw) : null; M.tradeBar = M.ctx.cats.length >= 11 ? 5 : 4; M.tm = l ? ST['bbmtm:' + l.lid] || null : null; M.finish = null; M.needs = tid => teamNeeds(lg, M, tid); return M; }); }
+    M.weeksLeft = cw && po ? Math.max(1, po - cw) : null; M.tm = l ? ST['bbmtm:' + l.lid] || null : null; M.finish = null; M.needs = tid => teamNeeds(lg, M, tid); return M; }); }
   function modelForRaw(lg) { const l = leaguesKnown().find(x => x.league === lg); if (!l || !window.CTX) return null; const y = yrFor(lg); const m = mm(); const same = m && m.league === lg;
     try { return window.CTX.model(ST, l.lid, { punt: puntFor(lg), yr: y, obj: scoringOf(lg).mode, today: usToday(), rules: rulesFor(lg, y), cats: same ? m.cats.filter(c => E.LBL[c]) : null, weekEnd: same ? m.end : null }); } catch (e) { console.error(e); return null; } }
   // ---- the one measure (every page reads it): expected categories won a week over the rest of the season, against every other

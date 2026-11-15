@@ -31,8 +31,9 @@
     S.after = (changes) => { const out = {}; S.V.forEach(v => { const list = S.base[v].map(t => changes[t.tid] ? { tid: t.tid, ids: changes[t.tid], vec: H.teamWeek(ctx, changes[t.tid], v) } : t);
       out[v] = {}; Object.keys(changes).forEach(tid => { const r = S.winOf(v, tid, list); out[v][tid] = { d: (r.W - S.w0[v][tid].W) * ncat(ctx), cp: r.cp }; }); }); return out; };
     S.size = me.ids.length; S.board = (M && M.board) || null; // the panel's one measure, when it's there
-    // weeks of regular season left (season.js passes Yahoo's; else from the days BBM projects, less 3 playoff weeks) and the bar
-    S.weeks = (M && M.weeksLeft) || Math.max(1, Math.round((ctx.days.ros || 140) / 7) - 3); S.bar = (M && M.tradeBar) || (ctx.cats.length >= 11 ? 5 : 4);
+    // weeks of regular season left (season.js passes Yahoo's; else from the days BBM projects, less 3 playoff weeks). The trade
+    // bar is tradeBarOf in season.js (Settings → Advice): the one bar for sells and trades.
+    S.weeks = (M && M.weeksLeft) || Math.max(1, Math.round((ctx.days.ros || 140) / 7) - 3);
     ctx.gMax = Math.max(1, ...Object.values(ctx.P).map(p => (p.ros && p.ros.g) || 0));
     // replacement level: the value of the 10th-best free agent, so a player is only worth what he adds over one
     const fv = (L.fas || []).map(id => leagueVal(ctx, id)).sort((a, b) => b - a); S.repl = fv.length ? fv[Math.min(9, fv.length - 1)] : -0.3;

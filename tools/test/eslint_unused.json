@@ -1,1 +1,4 @@
-{"root": true, "env": {"browser": true, "es2022": true, "webextensions": true}, "parserOptions": {"ecmaVersion": 2022, "sourceType": "script"}, "globals": {"module": "readonly", "globalThis": "readonly", "E": "readonly", "browser": "readonly", "chrome": "readonly"}, "rules": {"no-undef": "error", "no-unused-vars": ["warn", {"vars": "all", "args": "none", "caughtErrors": "none"}]}}
+{"root": true, "env": {"browser": true, "es2022": true, "webextensions": true}, "parserOptions": {"ecmaVersion": 2022, "sourceType": "script"}, "globals": {"module": "readonly", "globalThis": "readonly", "E": "readonly", "browser": "readonly", "chrome": "readonly"}, "rules": {"no-undef": "error", "no-unused-vars": ["warn", {"vars": "all", "args": "none", "caughtErrors": "none"}]},
+ "overrides": [
+  {"files": ["**/boot.js", "**/content.js", "**/panel.js"], "globals": {"P": "readonly", "YID": "readonly", "DATA_VERSION": "readonly", "EMPTYZ11": "readonly", "DATAINFO": "writable"}},
+  {"files": ["**/yroster.js"], "globals": {"content": "readonly"}}]}

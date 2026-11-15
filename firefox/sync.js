@@ -508,7 +508,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       if (nx) { log('projection scorecard'); const bbm = {}; const teams = ((all['ystand:' + y.lid] || {}).teams || []).length || 12; const yh = await yProj(y.lid, teams); const want = new Set(Object.keys(yh));
         Object.entries(nx).forEach(([id, r]) => { const n = (ros[id] || {}).n || r.n; if (!n || !want.has(n) || !r.st) return; const st = r.st; bbm[n] = [r.g || 0].concat(PJ.map(q => r3(q === 'fg' && st.fg == null && st.fgp != null ? st.fgp * (st.fga || 0) : q === 'ft' && st.ft == null && st.ftp != null ? st.ftp * (st.fta || 0) : st[q] || 0))); });
         if (Object.keys(yh).length > 30) await put({ [k]: { ts: Date.now(), start: mon, bbm, yh } }); } }
-    const done = Object.keys(all).filter(q => q.startsWith('pjlog:' + y.lid + ':')).map(q => q.split(':').pop()).filter(st => addDay(st, 6) < t0 && !all['pjact:' + st]).sort();
+    const want = new Set(Object.keys(all).filter(q => q.startsWith('pjlog:' + y.lid + ':')).map(q => q.split(':').pop()));
+    // the advice backtest needs the 4 weeks after each logged decision, whether or not the scorecard logged them
+    (((all['advlog:' + y.lid] || {}).log) || []).forEach(e => { if (e.weekEnd) for (let i = 0; i < 4; i++) want.add(addDay(e.weekEnd, 1 + 7 * i)); });
+    const done = [...want].filter(st => addDay(st, 6) < t0 && !all['pjact:' + st]).sort();
     if (done.length) { const st = done[0]; const tk = 'pjactTry:' + st; if (all[tk] && Date.now() - all[tk] < 6 * 3600e3) return; log('last week\'s results');
       const r = await bbmRange(st, addDay(st, 6)); await put(r ? { ['pjact:' + st]: { ts: Date.now(), start: st, by: r } } : { [tk]: Date.now() }); } }
   async function syncLeague(y0, mode, onStep) {

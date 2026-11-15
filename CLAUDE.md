@@ -97,5 +97,15 @@ pages contradict each other before 7.32.0.
   rankings for that date range give the actuals (`pjact:<monday>`, restoring the owner's page settings).
   `CTX.projScore` compares BBM, Yahoo and their average. Agreed rule: switch to the average only if, after four
   weeks, it is clearly better (≥2% lower error) in two thirds of categories.
+- **Advice backtest:** the forecast check tests probabilities, not whether the advice wins. Once a day, when the season
+  panel renders, `logAdvice` in `season.js` keeps `advlog:<lid>`. It's a raw record only and never feeds advice. It holds:
+  - the board's pick with its predicted gain, and the top 10
+  - Basketball Monster's top free agent and Yahoo's most added, each with its best drop
+  - your roster
+- **Scoring the advice offline:** `node tools/advice-backtest.js copilot-forecast-data.json [--weeks 4]` scores each weekly
+  decision on the following weeks' actual player totals (`pjact`) and actual league totals (`lgweek`), in the board's unit,
+  against holding and both alternatives. It reports:
+  - realized vs predicted gain
+  - how well the board's order holds up
 - **Tests:** browser-free tests are in `tools/test`. Panel render tests run against the add-on loaded in
   Firefox (`web-ext run`). Never commit store exports: they hold the owner's league data.

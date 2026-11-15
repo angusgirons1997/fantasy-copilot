@@ -380,6 +380,21 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const tm = window.H2H.timing(M.ctx, M.L, top.id, drop) || {}; const adds = A ? A.left : 1;
     const worth = !!chosen || season >= bar; const wait = worth && (!adds || (tm.week != null && tm.week < -0.15));
     return { id: top.id, drop, add: M.P[top.id].n, dropName: M.P[drop].n, season, week: tm.week, next: tm.next, worth, wait, why: !adds ? 'adds' : wait ? 'week' : null, chosen: !!chosen, bar }; }
+  // ---- advice log: the board's pick, its top 10 and two simple alternatives, once a day per league. A raw record only (it never
+  // feeds advice): tools/advice-backtest.js later checks each pick on what the players actually did, against its prediction and
+  // against the alternatives: Basketball Monster's top free agent and Yahoo's most added, each with its own best drop. ----
+  function logAdvice(lg) { const y = yrFor(lg); const B = boardFor(lg), M = modelFor(lg); if (!y || !y.lid || !B || !M || !B.list.length) return;
+    const k = 'advlog:' + y.lid, day = usToday(); const old = ST[k] || { v: 1, log: [] }; if (old.log.length && old.log[old.log.length - 1].day === day) return;
+    const pk = boardPick(lg); if (!pk) return; const n = id => M.P[id].n, r4 = x => +x.toFixed(4); const kp = boardKeep(lg, M);
+    const fas = M.L.fas.filter(id => !kp.block.has(id) && !kp.taken.has(K(M.P[id].n)));
+    const alt = id => { if (!id) return null; let b = null; B.order.slice(0, 10).forEach(o => { const g = B.swap(id, o.id).g; if (!b || g > b.g) b = { drop: o.id, g }; }); return b && { add: n(id), drop: n(b.drop), gain: r4(b.g) }; };
+    const bbmTop = fas.slice().sort((a, b) => window.H2H.worth(M.ctx, b, 'ros') - window.H2H.worth(M.ctx, a, 'ros'))[0];
+    const hotId = fas.map(id => ({ id, t: M.trend(n(id)) })).filter(x => x.t && (x.t.net || 0) > 0).sort((a, b) => (b.t.net || 0) - (a.t.net || 0)).map(x => x.id)[0];
+    const wkEnd = y.weekStart && y.weekStart <= day && y.weekEnd >= day ? y.weekEnd : addDay(day, 6 - (new Date(day + 'T12:00:00Z').getUTCDay() + 6) % 7);
+    const e = { day, week: y.week || null, weekEnd: wkEnd, punt: B.punt || null, cats: M.ctx.cats, weeks: +B.weeks.toFixed(2), sdMul: M.ctx.sdMul || 1, bar: pk.bar,
+      pick: { add: pk.add, drop: pk.dropName, gain: r4(pk.season / B.weeks), worth: pk.worth, wait: pk.wait, chosen: pk.chosen },
+      list: B.list.slice(0, 10).map(x => ({ add: n(x.id), drop: n(x.drop), gain: r4(x.gain) })), bbm: alt(bbmTop), hot: alt(hotId), roster: B.mine.map(x => n(x.id)) };
+    ST[k] = { v: 1, log: old.log.concat([e]).slice(-500) }; browser.storage.local.set({ [k]: ST[k] }); }
   // ---- player reads on the same measure. Yours: what he's worth to you, whether a free agent does more (he's a drop), and whether
   // a one-for-one trade at his Basketball Monster value adds a clear margin (he's a sell). Other teams' players: what each would
   // add to you in place of your least valuable player. A player who holds up a category (taking him out loses it) is never a sell. ----
@@ -536,6 +551,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
           const tot = {}; const tw = id => { const v = window.H2H.teamWeek(M.ctx, T[id].ids, 'next'); tot[id] = Object.fromEntries(Object.entries(v.m).map(([k, x]) => [k, +x.toFixed(2)])); tot[id].g = +v.games.toFixed(1); return v; };
           const out = pr.map(([a, b]) => { const A = T[String(a)], B = T[String(b)]; if (!A || !B) return null; const r = window.H2H.matchup(M.ctx, tw(String(a)), tw(String(b))); return { a: String(a), b: String(b), cp: Object.fromEntries(M.ctx.cats.map(c => [c, +r.cp[c].toFixed(3)])) }; }).filter(Boolean);
           if (out.length) { ST[fk] = { ts: Date.now(), week: wN, start: nx.start, sdMul: M.ctx.sdMul || 1, me: M.L.me, pairs: out, tot }; browser.storage.local.set({ [fk]: ST[fk] }); } } catch (e) { console.error(e); } finally { M.ctx.valuing = was; } } } }
+    try { logAdvice(lg); } catch (e) { console.error(e); } // the advice backtest's raw material
     const stale = Date.now() - m.ts > 3 * 3600e3;
     const W = p.W.plan;
     let h = '';
@@ -591,8 +607,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     wireSettings(lg);
     const hc = $('hideConn'); if (hc) hc.onclick = () => { s.hideConn = true; saveS(lg); render(); };
     wireConn();
-    // the forecast check's raw material (allow-list: projections, rosters, schedules, forecasts, results; never sign-in data)
-    const fdl = $('fcDl'); if (fdl) fdl.onclick = () => { const keep = Object.keys(ST).filter(k => /^(lgweek|lgfc|h2hfc|h2hres|track|ysched|lgscan|yr|ystand|ysetp|sset|calib|bx|ytrend|ylive):/.test(k) || /^(idmap|yidmap|activeLeague)$/.test(k));
+    // the forecast check's and the advice backtest's raw material (allow-list: projections, rosters, schedules, forecasts, results,
+    // the advice log and player weeks; never sign-in data)
+    const fdl = $('fcDl'); if (fdl) fdl.onclick = () => { const keep = Object.keys(ST).filter(k => /^(lgweek|lgfc|h2hfc|h2hres|track|ysched|lgscan|yr|ystand|ysetp|sset|calib|bx|ytrend|ylive|advlog|pjlog|pjact):/.test(k) || /^(idmap|yidmap|activeLeague)$/.test(k));
       const rep = { at: new Date().toISOString(), version: (browser.runtime && browser.runtime.getManifest ? browser.runtime.getManifest().version : ''), store: Object.fromEntries(keep.map(k => [k, ST[k]])) };
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(rep)], { type: 'application/json' })); a.download = 'copilot-forecast-data.json'; document.body.appendChild(a); a.click(); a.remove(); toast('Saved to Downloads', 'ok'); };
     const dl = $('diagDl'); if (dl) dl.onclick = () => { const keep = Object.keys(ST).filter(k => /^(selfcheck:|bbmFail:|sync:|diag|hist:|track:|sset:|idmap|fullsync:|ysetp:|yWeek|bxTrace:|ypage|yidmap|yr:|tx:|ylive:|ystand:|nbaErr|yadds:|selftest|health$|wiped$|yFindTrace$|ymine$|leagueList$|nextDue$|syncLock$|installId$)/.test(k)); if (ST.bbmAuth) { keep.push('bbmAuthInfo'); ST.bbmAuthInfo = { user: !!ST.bbmAuth.user, lastOk: ST.bbmAuth.lastOk, lastErr: ST.bbmAuth.lastErr, fails: ST.bbmAuth.fails }; } keep.push('nbaschedInfo'); ST.nbaschedInfo = ST.nbasched ? { ts: ST.nbasched.ts, teams: Object.keys(ST.nbasched.by || {}).length } : null; const rep = { at: new Date().toISOString(), version: (browser.runtime && browser.runtime.getManifest ? browser.runtime.getManifest().version : ''), plan: p ? { W: p.W, adds: p.adds, moves: p.moves.map(x => ({ add: x.add, drop: x.drop, il: x.il, week: x.week, futWk: x.futWk, alts: (x.alts || []).map(a => a.add) })), recon: p.recon, fit: p.fit, ms: p.ms } : null, store: Object.fromEntries(keep.map(k => [k, ST[k]])) };

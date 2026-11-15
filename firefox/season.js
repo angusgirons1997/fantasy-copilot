@@ -307,12 +307,21 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return po + `<b>${stance}</b>.` + (swing.length ? ` The week turns on <b>${list(swing)}</b>.` : ' No category is close.');
   }
   // the forecast check, in Settings: how good the pre-week category forecasts have been against Yahoo's final results
+  // what the field really does (actual ÷ projected per category) and which projections are closer (Basketball Monster, Yahoo, average)
+  function fieldAndProjections(lg) { const y = yrFor(lg); if (!y || !window.CTX.uplift) return ''; const u = window.CTX.uplift(ST, y.lid), ps = window.CTX.projScore(ST); const NM = c => window.STRAT ? window.STRAT.name(c) : c; let h = '';
+    const pct = r => (r >= 1 ? '+' : '−') + Math.abs(Math.round((r - 1) * 100)) + '%';
+    if (u.weeks) { const L = Object.entries(u.opp).filter(([c]) => !/^(fga|fta)$/.test(c)); h += `<div style="margin-top:8px"><b>Your opponents against their projections</b><div class="sub">${u.weeks} week${u.weeks === 1 ? '' : 's'}. ${L.map(([c, o]) => `${c === 'g' ? 'games' : NM(c)} ${pct(o.ratio)}`).join(' · ')}</div>${Object.keys(u.me).length ? `<div class="sub">You: ${Object.entries(u.me).filter(([c]) => !/^(fga|fta)$/.test(c)).map(([c, o]) => `${c === 'g' ? 'games' : NM(c)} ${pct(o.ratio)}`).join(' · ')}</div>` : ''}<div class="sub">Above 0% means teams beat what their rosters projected (streaming, lineups). Not used in the advice yet: it needs about four weeks first.</div></div>`; }
+    else h += `<div style="margin-top:8px"><b>Your opponents against their projections</b><div class="sub">Builds from next week.</div></div>`;
+    if (ps.weeks) { const C = Object.keys(ps.bbm).filter(c => ps.bbm[c] != null); const f = (src, c) => ps[src][c] == null ? '–' : /%/.test(c) ? (ps[src][c] * 100).toFixed(1) : ps[src][c].toFixed(2);
+      h += `<div style="margin-top:8px"><b>Projection scorecard</b><div class="sub">${ps.weeks} week${ps.weeks === 1 ? '' : 's'}: typical miss per game (lower is better), Basketball Monster / Yahoo / the average of both.</div><div class="sub">${C.map(c => `${NM(c)} ${f('bbm', c)} / ${f('yh', c)} / <b>${f('blend', c)}</b>`).join(' · ')}</div><div class="sub">The average is ${ps.blendWins >= Math.ceil(ps.cats * 2 / 3) ? 'clearly' : 'not clearly'} better in ${ps.blendWins} of ${ps.cats} categories.${ps.weeks < 4 ? ' The decision waits for four weeks: switch only if the average is clearly better in two thirds of categories.' : ''}</div></div>`; }
+    else h += `<div style="margin-top:8px"><b>Projection scorecard</b><div class="sub">Builds from next week: Basketball Monster's and Yahoo's projections are saved before each Monday and scored against what players did.</div></div>`;
+    return h; }
   function forecastCheck(lg) { const y = yrFor(lg); if (!y || !window.CTX.calibrate) return ''; const c = window.CTX.calibrate(ST, y.lid); const pc = x => Math.round(x * 100);
-    if (!c.n) return `<div style="margin-top:8px"><b>Forecast check</b><div class="sub">Builds from next week: every matchup in your league is forecast before it starts and checked against Yahoo's result.</div></div>`;
+    if (!c.n) return `<div style="margin-top:8px"><b>Forecast check</b><div class="sub">Builds from next week: every matchup in your league is forecast before it starts and checked against Yahoo's result.</div></div>` + fieldAndProjections(lg);
     const skill = c.brier != null ? Math.round((1 - c.brier / 0.25) * 100) : null;
     return `<div style="margin-top:8px"><b>Forecast check</b><div class="sub">${c.n} category forecasts over ${c.weeks} week${c.weeks === 1 ? '' : 's'}. Brier score ${c.brier.toFixed(3)} (0.25 is a coin flip${skill != null ? `; ${skill >= 0 ? skill + '% better' : -skill + '% worse'} than one` : ''}).</div>
       <div class="sub">${c.bins.filter(b => b.n).map(b => `forecast ${pc(b.r[0])}–${Math.min(100, pc(b.r[1]))}%: won ${pc(b.won)}% (${b.n})`).join(' · ')}</div>
-      <div class="sub">${c.n >= 25 ? `Forecast width ×${c.mul}${c.fit !== c.mul ? ` (best fit ×${c.fit}, eased in until there are 200 results)` : ''}. It applies to every number, the season measure included.` : `The width starts adjusting at 25 results.`}</div></div>`; }
+      <div class="sub">${c.n >= 25 ? `Forecast width ×${c.mul}${c.fit !== c.mul ? ` (best fit ×${c.fit}, eased in until there are 200 results)` : ''}. It applies to every number, the season measure included.` : `The width starts adjusting at 25 results.`}</div></div>` + fieldAndProjections(lg); }
   function trackHtml(lg) {
     const T = Object.keys(ST).filter(k => k.startsWith('track:' + lg + ':') && ST[k] && ST[k].actual).map(k => ST[k]).sort((a, b) => a.start < b.start ? 1 : -1); if (!T.length) return forecastCheck(lg) + '<div class="sub" style="margin-top:8px"><b>Track record</b>: builds from the end of week 1.</div>';
     const b = [[0, .4], [.4, .6], [.6, .8], [.8, 1.01]].map(r => ({ r, n: 0, w: 0 }));
@@ -524,8 +533,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     { const yL = yrFor(lg); const nx = yL && ynextOf(yL); const sch = yL && ST['ysched:' + yL.lid]; const wN = yL && yL.week ? yL.week + 1 : null; const pr = sch && wN && sch.weeks && sch.weeks[wN];
       if (M && nx && nx.start && pr && pr.length && M.ctx.has.next && usToday() < nx.start) { const fk = 'lgfc:' + yL.lid + ':' + nx.start; const old = ST[fk];
         if (!old || Date.now() - old.ts > 6 * 3600e3) { const was = M.ctx.valuing; try { M.ctx.valuing = false; const T = {}; M.L.teams.forEach(t => T[t.tid] = t);
-          const out = pr.map(([a, b]) => { const A = T[String(a)], B = T[String(b)]; if (!A || !B) return null; const r = window.H2H.matchup(M.ctx, window.H2H.teamWeek(M.ctx, A.ids, 'next'), window.H2H.teamWeek(M.ctx, B.ids, 'next')); return { a: String(a), b: String(b), cp: Object.fromEntries(M.ctx.cats.map(c => [c, +r.cp[c].toFixed(3)])) }; }).filter(Boolean);
-          if (out.length) { ST[fk] = { ts: Date.now(), week: wN, start: nx.start, sdMul: M.ctx.sdMul || 1, pairs: out }; browser.storage.local.set({ [fk]: ST[fk] }); } } catch (e) { console.error(e); } finally { M.ctx.valuing = was; } } } }
+          const tot = {}; const tw = id => { const v = window.H2H.teamWeek(M.ctx, T[id].ids, 'next'); tot[id] = Object.fromEntries(Object.entries(v.m).map(([k, x]) => [k, +x.toFixed(2)])); tot[id].g = +v.games.toFixed(1); return v; };
+          const out = pr.map(([a, b]) => { const A = T[String(a)], B = T[String(b)]; if (!A || !B) return null; const r = window.H2H.matchup(M.ctx, tw(String(a)), tw(String(b))); return { a: String(a), b: String(b), cp: Object.fromEntries(M.ctx.cats.map(c => [c, +r.cp[c].toFixed(3)])) }; }).filter(Boolean);
+          if (out.length) { ST[fk] = { ts: Date.now(), week: wN, start: nx.start, sdMul: M.ctx.sdMul || 1, me: M.L.me, pairs: out, tot }; browser.storage.local.set({ [fk]: ST[fk] }); } } catch (e) { console.error(e); } finally { M.ctx.valuing = was; } } } }
     const stale = Date.now() - m.ts > 3 * 3600e3;
     const W = p.W.plan;
     let h = '';

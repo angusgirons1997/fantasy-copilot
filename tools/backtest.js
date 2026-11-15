@@ -49,6 +49,7 @@ leagues.forEach(lid => { const y = ST['yr:' + lid]; const lg = y.league; const r
   res.spreadNow = { SD_SCALE: 2.5, learned: CTX.calibrate(ST, lid).mul };
   out[lid] = res; });
 
+Object.keys(out).forEach(lid => { out[lid].field = CTX.uplift(ST, lid); }); const PS = CTX.projScore(ST);
 const pct = x => x == null ? '–' : Math.round(x * 100) + '%';
 Object.values(out).forEach(r => { console.log(`\n=== ${r.league}`);
   [r.outOfSample, r.retro].forEach(s => { if (!s || !s.n) { console.log(`${s ? s.label : ''}: no data`); return; }
@@ -58,5 +59,7 @@ Object.values(out).forEach(r => { console.log(`\n=== ${r.league}`);
     console.log('  calibration: ' + s.bins.filter(b => b.n).map(b => `${b.range}: forecast ${pct(b.forecast)}, won ${pct(b.won)} (${b.n})`).join(' · '));
     console.log('  by category: ' + Object.entries(s.byCategory).map(([c, v]) => `${c} ×${v.fit} (${v.n})`).join(', ')); });
   if (Object.keys(r.retroMeans).length) console.log('  actual ÷ projected totals (median): ' + Object.entries(r.retroMeans).map(([c, v]) => `${c} ${v.actualOverProjected}`).join(', '));
-  if (r.retroErr) console.log('  ' + r.retroErr); });
-if (process.argv.includes('--json')) fs.writeFileSync(process.argv[2].replace(/\.json$/, '') + '.backtest.json', JSON.stringify(out, null, 1));
+  if (r.retroErr) console.log('  ' + r.retroErr);
+  if (r.field && r.field.weeks) { const f = o => Object.entries(o).map(([c, v]) => `${c} ${Math.round((v.ratio - 1) * 100)}%`).join(', '); console.log(`  the field over ${r.field.weeks} weeks (actual vs projected): opponents ${f(r.field.opp)}; you ${f(r.field.me)}`); } });
+if (PS.weeks) { console.log(`\n=== projection scorecard, ${PS.weeks} weeks (typical miss per game: Basketball Monster / Yahoo / average)`); Object.keys(PS.bbm).forEach(c => console.log(`  ${c}: ${[PS.bbm[c], PS.yh[c], PS.blend[c]].map(x => x == null ? '–' : x.toFixed(3)).join(' / ')}`)); console.log(`  average clearly better in ${PS.blendWins} of ${PS.cats} categories`); }
+if (process.argv.includes('--json')) fs.writeFileSync(process.argv[2].replace(/\.json$/, '') + '.backtest.json', JSON.stringify({ leagues: out, projections: PS }, null, 1));

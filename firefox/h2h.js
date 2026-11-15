@@ -5,7 +5,12 @@
   const VARK = { p: 2.2, 3: 1.4, r: 1.6, a: 1.6, s: 1.2, b: 1.5, to: 1.2, fg: 1.0, ft: 1.6, '2d': 1.0 };
   const KEYS = ['p', '3', 'r', 'a', 's', 'b', 'to', '2d', 'fg', 'fga', 'ft', 'fta'];
   const RATIO = { 'fg%': ['fg', 'fga'], 'ft%': ['ft', 'fta'] };
-  const SD_SCALE = 2.5; // week-to-week swings are wider than box-score noise alone (calibrated earlier against Matchup Monster)
+  const SD_SCALE = 2.5; // fallback for a category not measured below (double-doubles)
+  // how wide a week swings around its forecast, per category, measured on the 2025-26 season (24 weeks of Basketball Monster
+  // stats, 1,500 random 13-man rosters): the forecast is each player's previous 4 weeks (rates and games), so the width covers
+  // game-to-game randomness, games missed or added, and rate changes. Basketball Monster's projections should do no worse than
+  // that forecast, so these err wide; the forecast check (ctx.sdMul) narrows or widens them from your leagues' results.
+  const SCALE = { p: 3.15, r: 2.35, a: 1.9, 3: 1.65, s: 1.5, b: 1.35, to: 1.75, fg: 2.85, ft: 1.85, 'fg%': 1.0, 'ft%': 1.15 };
   function erf(x) { const s = Math.sign(x); x = Math.abs(x); const t = 1 / (1 + 0.3275911 * x); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return s * y; }
   const Phi = x => 0.5 * (1 + erf(x / Math.SQRT2));
   function weekWin(ps, need) { let dp = [1]; ps.forEach(p => { const n = new Array(dp.length + 1).fill(0); dp.forEach((x, i) => { n[i] += x * (1 - p); n[i + 1] += x * p; }); dp = n; }); let w = 0; for (let i = need; i < dp.length; i++) w += dp[i]; return w; }
@@ -20,11 +25,11 @@
       KEYS.forEach(k => { let x = st[k]; if (k === '2d' && x == null) x = ctx.ddRate && ctx.ddRate[p.id] != null ? ctx.ddRate[p.id] : 0; if (k === 'fg' && x == null && st.fgp != null) x = st.fgp * (st.fga || 0); if (k === 'ft' && x == null && st.ftp != null) x = st.ftp * (st.fta || 0); m[k] += (x || 0) * w; }); });
     return { m, games: used / weeks };
   }
-  const sdm = ctx => SD_SCALE * (ctx.sdMul || 1);
+  const sdm = (ctx, c) => (SCALE[c] || SD_SCALE) * (ctx.sdMul || 1);
   function catP(ctx, A, B, c) {
     if (RATIO[c]) { const [mk, ak] = RATIO[c]; const pa = A.m[ak] ? A.m[mk] / A.m[ak] : 0, pb = B.m[ak] ? B.m[mk] / B.m[ak] : 0;
-      const va = A.m[ak] ? pa * (1 - pa) * 1.3 / A.m[ak] : 0, vb = B.m[ak] ? pb * (1 - pb) * 1.3 / B.m[ak] : 0; const sd = Math.sqrt(va + vb) * sdm(ctx) || 0.01; return Phi((pa - pb) / sd); }
-    const d = A.m[c] - B.m[c]; const sd = Math.sqrt((VARK[c] || 1) * (A.m[c] + B.m[c])) * sdm(ctx) || 1; return Phi((c === 'to' ? -d : d) / sd);
+      const va = A.m[ak] ? pa * (1 - pa) * 1.3 / A.m[ak] : 0, vb = B.m[ak] ? pb * (1 - pb) * 1.3 / B.m[ak] : 0; const sd = Math.sqrt(va + vb) * sdm(ctx, c) || 0.01; return Phi((pa - pb) / sd); }
+    const d = A.m[c] - B.m[c]; const sd = Math.sqrt((VARK[c] || 1) * (A.m[c] + B.m[c])) * sdm(ctx, c) || 1; return Phi((c === 'to' ? -d : d) / sd);
   }
   function matchup(ctx, A, B) { const cp = {}; ctx.cats.forEach(c => cp[c] = ctx.valuing && ctx.punt && ctx.punt.includes(c) ? 0.2 : catP(ctx, A, B, c)); /* punted categories: assume you usually lose them, whatever the move */ return { W: ctx.obj === 'cats' ? ctx.cats.reduce((t, c) => t + cp[c], 0) / ctx.cats.length : weekWin(ctx.cats.map(c => cp[c]), Math.floor(ctx.cats.length / 2) + 1), cp }; } // categories league: share of categories won
   // average over a set of opponents (rest of season / playoffs) or one opponent (this week)
@@ -76,8 +81,8 @@
     ctx.cats.forEach(c => { let p, me, op, gap = null, unit = '';
       if (RATIO[c]) { const [mk, ak] = RATIO[c]; const mM = (am[mk] || 0) + ra[mk], mA = (am[ak] || 0) + ra[ak], oM = (ao[mk] || 0) + rb[mk], oA = (ao[ak] || 0) + rb[ak];
         me = mA ? mM / mA : 0; op = oA ? oM / oA : 0; const va = mA ? me * (1 - me) * 1.3 * Math.max(ra[ak], 1) / (mA * mA) : 0, vb = oA ? op * (1 - op) * 1.3 * Math.max(rb[ak], 1) / (oA * oA) : 0;
-        const sd = Math.sqrt(va + vb) * sdm(ctx) || 0.004; p = Phi((me - op) / sd); gap = me - op; unit = 'pct'; }
-      else { me = (am[c] || 0) + ra[c]; op = (ao[c] || 0) + rb[c]; const sd = Math.sqrt((VARK[c] || 1) * Math.max(ra[c] + rb[c], 0.5)) * sdm(ctx); const d = c === 'to' ? op - me : me - op; p = Phi(d / sd); gap = d; }
+        const sd = Math.sqrt(va + vb) * sdm(ctx, c) || 0.004; p = Phi((me - op) / sd); gap = me - op; unit = 'pct'; }
+      else { me = (am[c] || 0) + ra[c]; op = (ao[c] || 0) + rb[c]; const sd = Math.sqrt((VARK[c] || 1) * Math.max(ra[c] + rb[c], 0.5)) * sdm(ctx, c); const d = c === 'to' ? op - me : me - op; p = Phi(d / sd); gap = d; }
       ps.push(p); out.push({ c, label: LBL[c], p, me, opp: op, gap, unit, nowMe: RATIO[c] ? ((am[RATIO[c][1]] ? am[RATIO[c][0]] / am[RATIO[c][1]] : null)) : (am[c] || 0), nowOpp: RATIO[c] ? ((ao[RATIO[c][1]] ? ao[RATIO[c][0]] / ao[RATIO[c][1]] : null)) : (ao[c] || 0),
         state: p >= 0.85 ? 'safe' : p >= 0.6 ? 'lean' : p >= 0.4 ? 'toss' : p >= 0.15 ? 'chase' : 'lost' }); });
     const W = weekWin(ps, Math.floor(ctx.cats.length / 2) + 1);

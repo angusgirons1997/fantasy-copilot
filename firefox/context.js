@@ -246,6 +246,29 @@
     Object.keys(ST).filter(k => k.startsWith('h2hfc:' + lid + ':')).forEach(k => { const st = k.split(':').pop(); if (weeks.has(st)) return; const fc = ST[k], res = ST['h2hres:' + lid + ':' + st]; if (!fc || !res || !res.me || !res.opp) return;
       Object.entries(fc.cats || {}).forEach(([c, q]) => { const a = resVal(res.me, c), b = resVal(res.opp, c); if (a == null || b == null || isNaN(a) || isNaN(b) || a === b) return; pairs.push({ p: q, y: (c === 'to' ? a < b : a > b) ? 1 : 0, s: fc.sdMul || 1, c, w: st, src: 'mine' }); }); });
     return pairs; }
+  // ---- the field: what each team actually produced against what its roster projected before the week (streaming, lineups,
+  // injuries all show up here). Per category, actual ÷ projected, for your opponents and for you. ----
+  function uplift(ST, lid) { const R = { opp: {}, me: {} }; let weeks = 0;
+    Object.keys(ST).filter(k => k.startsWith('lgfc:' + lid + ':')).forEach(k => { const fc = ST[k], lw = fc && fc.tot && ST['lgweek:' + lid + ':' + fc.week]; if (!lw || !lw.teams) return; weeks++;
+      Object.entries(fc.tot).forEach(([tid, pr]) => { const a = lw.teams[tid]; if (!a || !a.st) return; const side = String(tid) === String(fc.me) ? R.me : R.opp;
+        ['p', '3', 'r', 'a', 's', 'b', 'to', 'fg', 'ft', 'fga', 'fta', '2d'].forEach(c => { if (pr[c] > 0 && a.st[c] != null) { const o = side[c] = side[c] || { a: 0, p: 0, n: 0 }; o.a += a.st[c]; o.p += pr[c]; o.n++; } });
+        if (pr.g && a.games && a.games.played) { const o = side.g = side.g || { a: 0, p: 0, n: 0 }; o.a += a.games.played; o.p += pr.g; o.n++; } }); });
+    const fin = S => Object.fromEntries(Object.entries(S).map(([c, o]) => [c, { ratio: +(o.a / o.p).toFixed(3), n: o.n }]));
+    return { weeks, opp: fin(R.opp), me: fin(R.me) }; }
+  // ---- projection scorecard: Basketball Monster, Yahoo and their average, each against what players did per game over the
+  // same Monday-to-Sunday week. Error is games-weighted root mean square per category; lower is better. ----
+  const nkey = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '');
+  function projScore(ST) { const CATS = ['p', '3', 'r', 'a', 's', 'b', 'fg%', 'ft%', 'to']; const IX = { p: 1, 3: 2, r: 3, a: 4, s: 5, b: 6, to: 11 }; const acc = {}; const weeks = [];
+    ['bbm', 'yh', 'blend'].forEach(src => acc[src] = Object.fromEntries(CATS.map(c => [c, { e: 0, w: 0 }])));
+    Object.keys(ST).filter(k => k.startsWith('pjlog:')).forEach(k => { const L = ST[k], A = ST['pjact:' + (L && L.start)]; if (!L || !A || !A.by) return; if (weeks.includes(L.start)) return; weeks.push(L.start);
+      const act = {}; Object.entries(A.by).forEach(([n, r]) => act[nkey(n)] = r); const yh = {}; Object.entries(L.yh || {}).forEach(([n, r]) => yh[nkey(n)] = r);
+      Object.entries(L.bbm || {}).forEach(([n, b]) => { const kk = nkey(n), y = yh[kk], a = act[kk]; if (!y || !a || !a[0]) return; const g = a[0];
+        const per = i => a[i] / g; const bl = b.map((x, i) => i ? (x + y[i]) / 2 : x);
+        [['bbm', b], ['yh', y], ['blend', bl]].forEach(([src, P]) => {
+          Object.entries(IX).forEach(([c, i]) => { const e = P[i] - per(i); acc[src][c].e += g * e * e; acc[src][c].w += g; });
+          [['fg%', 7, 8], ['ft%', 9, 10]].forEach(([c, mi, ai]) => { if (!a[ai] || !P[ai]) return; const e = P[mi] / P[ai] - a[mi] / a[ai]; acc[src][c].e += a[ai] * e * e; acc[src][c].w += a[ai]; }); }); }); });
+    const out = { weeks: weeks.length }; ['bbm', 'yh', 'blend'].forEach(src => out[src] = Object.fromEntries(CATS.map(c => [c, acc[src][c].w ? Math.sqrt(acc[src][c].e / acc[src][c].w) : null])));
+    out.blendWins = CATS.filter(c => out.blend[c] != null && out.bbm[c] != null && out.blend[c] < out.bbm[c] * 0.98).length; out.cats = CATS.length; return out; }
   function calibrate(ST, lid) {
     const pairs = forecastPairs(ST, lid); const n = pairs.length; const weeks = new Set(pairs.map(x => x.w)).size;
     const inv = p => { p = Math.min(0.995, Math.max(0.005, p)); let lo = -6, hi = 6; for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; if (H.Phi(m) < p) lo = m; else hi = m; } return (lo + hi) / 2; };
@@ -347,5 +370,5 @@
     if (streams.length) h += `<div class="label" style="margin-top:10px">Four-game free agents next week</div>` + streams.map(id => `<div class="pr"><b>${nm(id)}</b><span>${M.P[id].next.g} games</span></div>`).join('');
     return h + '</div>';
   }
-  root.CTX = { calibrate, forecastPairs, fillRows, profiles, schedOf, curWeek, weekModel, model, freshness, tradeCard, dealView, addCard, listCard, liveCard, nextCard };
+  root.CTX = { calibrate, forecastPairs, uplift, projScore, fillRows, profiles, schedOf, curWeek, weekModel, model, freshness, tradeCard, dealView, addCard, listCard, liveCard, nextCard };
 })(typeof window !== 'undefined' ? window : globalThis);

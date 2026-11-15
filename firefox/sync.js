@@ -465,6 +465,52 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         const hit = rows.find(r => nk(r.name) === nk(n)) || (rows.length === 1 ? rows[0] : null); out[n] = hit ? { st: hit.status, team: hit.team, wv: hit.wv, ts: Date.now() } : { st: 'unknown', ts: Date.now() }; }
       catch (e) { if (e.auth) throw e; out[n] = { st: 'unknown', ts: Date.now(), err: e.message }; } await sleep(200); }
     const k = 'yavail:' + lid; const cur = ((await ST().get(k))[k]) || {}; const merged = Object.assign({}, cur, out); Object.keys(merged).forEach(n => { if (Date.now() - merged[n].ts > 24 * 3600e3) delete merged[n]; }); await put({ [k]: merged }); return out; }
+  // ---------- projection scorecard: both sources' per-game projections before a Monday-to-Sunday week, and what players did ----------
+  // order of the stored numbers: games, points, threes, rebounds, assists, steals, blocks, FG made, FG attempts, FT made, FT attempts, turnovers
+  const PJ = ['p', '3', 'r', 'a', 's', 'b', 'fg', 'fga', 'ft', 'fta', 'to'];
+  const RANK = 'https://basketballmonster.com/playerrankings.aspx';
+  const num = x => { const v = parseFloat(String(x).replace(/[^0-9.-]/g, '')); return isNaN(v) ? 0 : v; };
+  // Yahoo's "Next 7 Days (proj)" for every player on a team in the league, per game (Yahoo's own projections)
+  async function yProj(lid, teams) { const out = {}; const pages = Math.ceil(Math.max(10, teams) * 16 / 25);
+    for (let i = 0; i < pages; i++) { const d = html(await req(`${YH}/nba/${lid}/players?status=T&pos=P&cut_type=33&stat1=S_PS7&myteam=0&sort=AR&sdir=1&count=${i * 25}`, null, 'Yahoo projections ' + (i + 1)));
+      const t = [...d.querySelectorAll('table')].find(x => /GP\*?/.test((x.querySelector('thead') || {}).textContent || '') && /PTS/.test((x.querySelector('thead') || {}).textContent || '')); if (!t) break;
+      const head = [...t.querySelectorAll('thead tr:last-child th')].map(x => x.textContent.trim().replace(/\*$/, '')); const ix = k => head.indexOf(k);
+      const rows = [...t.querySelectorAll('tbody tr')]; rows.forEach(r => { const c = [...r.querySelectorAll('td')]; const a = c[ix('Players')] && c[ix('Players')].querySelector('a.name, a[class*="name"]'); const name = a ? a.textContent.trim() : null; if (!name) return;
+        const gp = num(c[ix('GP')] && c[ix('GP')].textContent); if (!gp) return; const fg = String(c[ix('FGM/A')] ? c[ix('FGM/A')].textContent : '').split('/').map(num), ft = String(c[ix('FTM/A')] ? c[ix('FTM/A')].textContent : '').split('/').map(num);
+        const v = { p: num(c[ix('PTS')].textContent), 3: num(c[ix('3PTM')].textContent), r: num(c[ix('REB')].textContent), a: num(c[ix('AST')].textContent), s: num(c[ix('ST')].textContent), b: num(c[ix('BLK')].textContent), fg: fg[0] || 0, fga: fg[1] || 0, ft: ft[0] || 0, fta: ft[1] || 0, to: num(c[ix('TO')].textContent) };
+        out[name] = [gp].concat(PJ.map(k => r3(v[k] / gp))); }); if (rows.length < 25) break; }
+    return out; }
+  // what every player did over a date range, from Basketball Monster's player rankings (totals); your page settings are put back after
+  async function bbmRange(start, end) { let d = html(await bbmGet(RANK, 'Player rankings open'));
+    const orig = { DateFilterControl: val(d, 'DateFilterControl'), PlayerFilterControl: val(d, 'PlayerFilterControl'), StatDisplayType: val(d, 'StatDisplayType'), DataSetControl: val(d, 'DataSetControl'), s: val(d, 'DateFilterControlSTART'), e: val(d, 'DateFilterControlEND') };
+    const cur = (d.querySelector('[name=DataSetControl] option') || {}).getAttribute ? d.querySelector('[name=DataSetControl] option').getAttribute('value') : null; let out = null;
+    try {
+      if (cur && orig.DataSetControl !== cur) d = await postAt(RANK, d, { __EVENTTARGET: 'DataSetControl', DataSetControl: cur }, null, 'Player rankings this season');
+      if (orig.DateFilterControl !== 'DateRange') d = await postAt(RANK, d, { __EVENTTARGET: 'DateFilterControl', DateFilterControl: 'DateRange' }, null, 'Player rankings date range');
+      if (orig.PlayerFilterControl !== 'AllPlayers') d = await postAt(RANK, d, { __EVENTTARGET: 'PlayerFilterControl', PlayerFilterControl: 'AllPlayers' }, null, 'Player rankings all players');
+      if (orig.StatDisplayType !== 'Total') d = await postAt(RANK, d, { __EVENTTARGET: 'StatDisplayType', StatDisplayType: 'Total' }, null, 'Player rankings totals');
+      d = await postAt(RANK, d, { DateFilterControlSTART: start, DateFilterControlEND: end }, ['pageTitleRowRefresh', ''], 'Player rankings ' + start);
+      if (val(d, 'DateFilterControlSTART') === start && val(d, 'StatDisplayType') === 'Total') { const t = [...d.querySelectorAll('table')].find(x => x.querySelectorAll('tr').length > 50);
+        if (t) { const head = [...t.querySelector('tr').children].map(c => c.textContent.trim()); const ix = k => head.indexOf(k); out = {};
+          [...t.querySelectorAll('tr')].slice(1).forEach(r => { const c = [...r.children].map(x => x.textContent.trim()); const n = c[ix('Name')]; const g = num(c[ix('g')]); if (!n || n === 'Name' || !g) return;
+            const fga = num(c[ix('fga')]), fta = num(c[ix('fta')]); out[n] = [g, num(c[ix('pts')]), num(c[ix('3')]), num(c[ix('reb')]), num(c[ix('ast')]), num(c[ix('stl')]), num(c[ix('blk')]), Math.round(num(c[ix('fg%')]) * fga), fga, Math.round(num(c[ix('ft%')]) * fta), fta, num(c[ix('to')])]; }); } }
+    } finally { // put your page settings back, in reverse
+      try { if (orig.StatDisplayType && orig.StatDisplayType !== 'Total') d = await postAt(RANK, d, { __EVENTTARGET: 'StatDisplayType', StatDisplayType: orig.StatDisplayType }, null, 'Player rankings restore stats');
+        if (orig.PlayerFilterControl && orig.PlayerFilterControl !== 'AllPlayers') d = await postAt(RANK, d, { __EVENTTARGET: 'PlayerFilterControl', PlayerFilterControl: orig.PlayerFilterControl }, null, 'Player rankings restore players');
+        if (orig.DateFilterControl === 'DateRange' && orig.s) d = await postAt(RANK, d, { DateFilterControlSTART: orig.s, DateFilterControlEND: orig.e }, ['pageTitleRowRefresh', ''], 'Player rankings restore dates');
+        else if (orig.DateFilterControl && orig.DateFilterControl !== 'DateRange') d = await postAt(RANK, d, { __EVENTTARGET: 'DateFilterControl', DateFilterControl: orig.DateFilterControl }, null, 'Player rankings restore view');
+        if (orig.DataSetControl && cur && orig.DataSetControl !== cur) await postAt(RANK, d, { __EVENTTARGET: 'DataSetControl', DataSetControl: orig.DataSetControl }, null, 'Player rankings restore season');
+      } catch (e) { trace('Player rankings restore', false, e.message); } }
+    trace('Player rankings ' + start + '→' + end, !!out, out ? Object.keys(out).length + ' players' : 'no table'); return out; }
+  // before a Monday (the Saturday and Sunday before it): log both projections; after a Sunday: log what happened (one week per sync)
+  async function projLog(y, all, log) { const t0 = usToday(); const mon = addDay(mondayOf(t0), 7); const k = 'pjlog:' + y.lid + ':' + mon;
+    if (t0 >= addDay(mon, -2) && (!all[k] || Date.now() - all[k].ts > 12 * 3600e3)) { const bx = all['bx:' + y.lid] || {}; const V = bx.views || {}; const nx = V.next || V.rest, ros = V.ros || {};
+      if (nx) { log('projection scorecard'); const bbm = {}; const teams = ((all['ystand:' + y.lid] || {}).teams || []).length || 12; const yh = await yProj(y.lid, teams); const want = new Set(Object.keys(yh));
+        Object.entries(nx).forEach(([id, r]) => { const n = (ros[id] || {}).n || r.n; if (!n || !want.has(n) || !r.st) return; const st = r.st; bbm[n] = [r.g || 0].concat(PJ.map(q => r3(q === 'fg' && st.fg == null && st.fgp != null ? st.fgp * (st.fga || 0) : q === 'ft' && st.ft == null && st.ftp != null ? st.ftp * (st.fta || 0) : st[q] || 0))); });
+        if (Object.keys(yh).length > 30) await put({ [k]: { ts: Date.now(), start: mon, bbm, yh } }); } }
+    const done = Object.keys(all).filter(q => q.startsWith('pjlog:' + y.lid + ':')).map(q => q.split(':').pop()).filter(st => addDay(st, 6) < t0 && !all['pjact:' + st]).sort();
+    if (done.length) { const st = done[0]; const tk = 'pjactTry:' + st; if (all[tk] && Date.now() - all[tk] < 6 * 3600e3) return; log('last week\'s results');
+      const r = await bbmRange(st, addDay(st, 6)); await put(r ? { ['pjact:' + st]: { ts: Date.now(), start: st, by: r } } : { [tk]: Date.now() }); } }
   async function syncLeague(y0, mode, onStep) {
     if (lockBy) await put({ syncLock: { ts: Date.now(), by: lockBy } });
     TR = []; const st = { lid: y0.lid, league: y0.league, mode, ts: Date.now(), ok: false }; const log = s => onStep && onStep((y0.league || 'league') + ': ' + s);
@@ -534,6 +580,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
           else await put({ [tk]: { w, ts: Date.now() } });
           break; } // one finished week per sync
       } catch (e) { trace('Yahoo league weeks', false, e.message); } }
+      // the projection scorecard (Basketball Monster against Yahoo, against what players did); never stops the rest of the sync
+      try { await projLog(y, Object.assign({}, all, await ST().get(null)), log); } catch (e) { trace('Projection scorecard', false, e.message); }
       // the NBA schedule (every team's game dates for the season): fetched whenever it's missing or 3 days old
       // the NBA schedule ships with the add-on (it doesn't change); once a week the sync also tries NBA's own file, which adds
       // the NBA Cup knockout games once they're set. If NBA's site refuses, nothing changes and nothing is reported.

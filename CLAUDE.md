@@ -88,3 +88,14 @@ pages contradict each other before 7.32.0.
   - per-category fits and actual ÷ projected means
 - The pickup and trade bars are in units of the one measure. If the spread moves a lot, check the bars
   against the owner's stated trade bar.
+- **Spread per category:** `SCALE` in `h2h.js`, measured on the 2025-26 season (`tools/spread-study.js`). This
+  replaced a single 2.5.
+- **The field:** `lgfc` also stores each team's projected totals. `CTX.uplift` compares them with actual totals
+  (streaming and lineups). It is shown in Settings only, not used in advice, until about four weeks of data.
+- **Projection scorecard:** from Saturday before each Monday, sync saves BBM `next` per-game projections and
+  Yahoo "Next 7 Days" projections for rostered players (`pjlog:<lid>:<monday>`). After the Sunday, BBM player
+  rankings for that date range give the actuals (`pjact:<monday>`, restoring the owner's page settings).
+  `CTX.projScore` compares BBM, Yahoo and their average. Agreed rule: switch to the average only if, after four
+  weeks, it is clearly better (≥2% lower error) in two thirds of categories.
+- **Tests:** browser-free tests are in `tools/test`. Panel render tests run against the add-on loaded in
+  Firefox (`web-ext run`). Never commit store exports: they hold the owner's league data.

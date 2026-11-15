@@ -19,6 +19,10 @@ async function render(store, opt) { opt = opt || {};
   const html = fs.readFileSync(path.join(FF, 'season.html'), 'utf8').replace(/<script src="[^"]+"><\/script>/g, '');
   const dom = new JSDOM(html, { url: 'moz-extension://test/season.html', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: vc });
   const w = dom.window; const ST = JSON.parse(JSON.stringify(store)); const listeners = [];
+  // the page's clock at a fixed moment (the export's own time), so "today" and every freshness check match the data
+  if (opt.now) { const off = Date.parse(opt.now) - Date.now(); const D0 = w.Date;
+    class FakeDate extends D0 { constructor(...a) { if (a.length) super(...a); else super(D0.now() + off); } static now() { return D0.now() + off; } }
+    w.Date = FakeDate; }
   const pick = keys => keys == null ? JSON.parse(JSON.stringify(ST)) : Object.fromEntries((Array.isArray(keys) ? keys : typeof keys === 'string' ? [keys] : Object.keys(keys)).filter(k => k in ST).map(k => [k, JSON.parse(JSON.stringify(ST[k]))]));
   w.browser = { storage: { local: { get: async k => pick(k), set: async o => { Object.entries(o).forEach(([k, v]) => { ST[k] = v; writes[k] = v; }); }, remove: async k => { [].concat(k).forEach(x => delete ST[x]); } }, onChanged: { addListener: f => listeners.push(f) } },
     runtime: { getManifest: () => JSON.parse(fs.readFileSync(path.join(FF, 'manifest.json'), 'utf8')), sendMessage: async () => ({ ok: true }), getURL: p => 'moz-extension://test/' + p },
@@ -44,7 +48,7 @@ module.exports = { render, variant };
 if (require.main === module) { const args = process.argv.slice(2); const file = args[0]; const opt = k => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : null; };
   if (!file) { console.log('usage: node tools/test/render.js <store export.json> [--variant normal|il|injured|recent] [--dump dir]'); process.exit(1); }
   const rep = JSON.parse(fs.readFileSync(file, 'utf8')); const v = opt('variant') || 'normal';
-  render(variant(rep.store || rep, v), { dump: opt('dump'), name: v }).then(r => { console.log('tabs', r.tabs.join(', '));
+  render(variant(rep.store || rep, v), { dump: opt('dump'), name: v, now: rep.at }).then(r => { console.log('tabs', r.tabs.join(', '));
     Object.entries(r.pages).forEach(([t, p]) => console.log(`\n== ${t}${p.broken ? ' (BROKEN)' : ''}: ${p.text.length} chars\n${p.text.slice(0, 700)}`));
     console.log('\nerrors', r.errors.length); r.errors.slice(0, 10).forEach(e => console.log('  ' + e.slice(0, 400))); console.log('writes', Object.keys(r.writes).join(', ')); process.exit(0); });
 }

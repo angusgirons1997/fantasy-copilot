@@ -202,15 +202,62 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       d.start = d.start.filter(x => { const k = K(x.name); if (seen.has(k)) { fixes.push(x.name + ' listed twice on ' + d.date); return false; } seen.add(k); return true; });
       d.bench = d.bench.filter(x => !seen.has(K(x.name)));
       if (slots.length && d.start.length > slots.length) { fixes.push(d.date + ': more starters than spots, trimmed'); d.bench = d.start.slice(slots.length).map(x => Object.assign({}, x)).concat(d.bench); d.start = d.start.slice(0, slots.length); }
-      if (di > 0 || !act || !act.rows.some(r => r.hasGame)) return;
-      const yr = n => act.rows.find(r => K(r.name) === K(n));
-      // a starter Yahoo shows without a game sits; a bench player Yahoo shows playing fills any empty spot
-      d.start = d.start.filter(x => { const r = yr(x.name); if (r && !r.hasGame) { fixes.push(x.name + ' has no game on Yahoo on ' + d.date + ': moved out of the lineup'); d.bench.push(Object.assign({}, x, { zero: true, noGameY: true })); return false; } return true; });
-      const free = () => { const used = d.start.map(x => x.slot); const left = slots.slice(); used.forEach(u => { const i = left.indexOf(u); if (i >= 0) left.splice(i, 1); }); return left; };
-      d.bench.filter(x => !x.zero && !x.protect).concat(act.rows.filter(r => r.hasGame && !/^IL/.test(r.slot) && !/^(O|OUT|INJ|SUSP)$/i.test(r.inj || '') && !d.start.concat(d.bench).some(z => K(z.name) === K(r.name))).map(r => ({ name: r.name, opp: (r.game || '').replace(/^\S+ \S+ /, ''), yahooOnly: true })))
-        .forEach(x => { if (d.start.length >= slots.length) return; const r = yr(x.name); if (!r || !r.hasGame) return; const el = r.elig || []; const sl = free().find(z => !el.length || el.includes(z)); if (!sl) return;
-          d.start.push(Object.assign({}, x, { slot: sl })); d.bench = d.bench.filter(z => K(z.name) !== K(x.name)); fixes.push(x.name + ' plays on ' + d.date + ' and a spot was empty: moved into the lineup'); }); }));
+      if (di > 0) return; resolveDay(d, y, act, slots, p, fixes); }));
     p.fixes = [...new Set(fixes)]; if (p.fixes.length) { const k = 'selfcheck:' + y.lid; const prev = ST[k]; if (!prev || JSON.stringify(prev.fixes) !== JSON.stringify(p.fixes)) { ST[k] = { ts: Date.now(), fixes: p.fixes }; browser.storage.local.set({ [k]: ST[k] }); } } }
+  // ---- Yahoo is the word on injuries and on each day's lineup ----
+  // out (never starts, whatever Basketball Monster projects) and game-time decisions (start only into a spot no healthy player
+  // with a game can fill). The status is Yahoo's tag on your team page, read from the newest of your roster and that day's page.
+  const HARD_OUT = /^(O|OUT|INJ|SUSP|NA|OFS)$/i, DOUBTFUL = /^(GTD|DTD|Q|D)$/i;
+  const tag = s => String(s || '').trim().split(/\s/)[0].toUpperCase();
+  const sameName = (a, b) => K(a) === K(b);
+  const rowIn = (rows, n) => (rows || []).find(r => sameName(r.name, n)) || (() => { const c = (rows || []).filter(r => lastOf(r.name) === lastOf(n)); return c.length === 1 ? c[0] : null; })();
+  const isStartSlot = s => !!s && s !== 'BN' && !/^IL/.test(s);
+  // the most starters (in priority order) that fit the starting spots: each player only in a spot Yahoo lets him play. A player
+  // locked in a spot (his game has started) keeps it. Returns { chosen, slotOf } with every chosen player matched to a spot.
+  function fitStarters(slots, cands) { const chosen = []; let slotOf = {};
+    const match = list => { const m = new Array(slots.length).fill(-1);
+      const tryP = (i, seen) => { for (let j = 0; j < slots.length; j++) { if (seen[j] || !list[i].elig(slots[j])) continue; seen[j] = true; if (m[j] < 0 || tryP(m[j], seen)) { m[j] = i; return true; } } return false; };
+      for (let i = 0; i < list.length; i++) if (!tryP(i, new Array(slots.length).fill(false))) return null;
+      const out = {}; m.forEach((i, j) => { if (i >= 0) out[list[i].name] = slots[j]; }); return out; };
+    cands.forEach(c => { if (chosen.length >= slots.length) return; const s = match(chosen.concat([c])); if (s) { chosen.push(c); slotOf = s; } });
+    return { chosen, slotOf }; }
+  // one open day of the plan, made to match Yahoo: nobody out starts, nobody Yahoo shows without a game starts, a game-time
+  // decision only takes a spot nobody healthy can fill, every empty spot gets the best healthy player with a game, and a player
+  // whose game has started stays where Yahoo has him. What's left on d.start is exactly what "Set lineups" sends to Yahoo.
+  function resolveDay(d, y, act, slots, p, fixes) {
+    if (!slots.length || !y || !y.rows) return;
+    const yInfo = !!(act && act.rows && act.rows.some(r => r.hasGame)); const dayRows = act && act.rows ? act.rows : null;
+    const newer = act && act.ts > (y.ts || 0) ? act.rows : y.rows, older = newer === y.rows ? dayRows : y.rows;
+    const statusOf = n => { const r = rowIn(newer, n) || rowIn(older, n) || byId(newer, n) || byId(older, n); return tag(r && r.inj); };
+    // by name, else through the Yahoo id ↔ Basketball Monster id map the panel keeps (a name spelt differently on each site)
+    const MI = modelFor(league()); const idm = ST.idmap || {};
+    const byId = (rows, n) => MI ? (rows || []).find(r => { const id = idm[r.pid]; return id && MI.P[id] && sameName(MI.P[id].n, n); }) : null;
+    const rowOf = n => rowIn(dayRows, n) || rowIn(y.rows, n) || byId(dayRows, n) || byId(y.rows, n);
+    const val = n => { const v = (p.rosVal || []).find(x => sameName(x.name, n)); return v ? v.perWk : -9; };
+    const all = d.start.map(x => ({ x, was: 'start' })).concat(d.bench.map(x => ({ x, was: 'bench' })));
+    // someone Yahoo shows playing that the plan doesn't know (no projection yet): a filler after the plan's own players
+    if (yInfo) dayRows.filter(r => r.hasGame && !/^IL/.test(r.slot) && !all.some(a => sameName(a.x.name, r.name))).forEach(r => all.push({ x: { name: r.name, opp: (r.game || '').replace(/^\S+ \S+ /, ''), yahooOnly: true }, was: 'extra' }));
+    // not on your Yahoo roster at all (Basketball Monster's copy still has a player you dropped): he can't be started
+    const fresh = Date.now() - (y.ts || 0) < 6 * 3600e3;
+    const info = all.map(a => { const r = rowOf(a.x.name); const st = statusOf(a.x.name); const gone = !r && a.was !== 'extra' && fresh; const noGame = !!(yInfo && r && !r.hasGame) || gone;
+      const lockedIn = !!(r && r.locked && isStartSlot(r.slot)), lockedOut = !!(r && r.locked && !isStartSlot(r.slot)), ilY = !!(r && /^IL/.test(r.slot));
+      const kind = lockedIn ? 'locked' : (a.x.zero || noGame || HARD_OUT.test(st) || lockedOut || ilY) ? 'out' : a.x.protect ? 'protect' : DOUBTFUL.test(st) ? 'doubt' : 'ok';
+      const el = r && r.elig && r.elig.length ? r.elig.filter(e => isStartSlot(e)) : null;
+      return Object.assign(a, { r, st, noGame, gone, ilY, kind, name: a.x.name, elig: lockedIn ? (s => s === r.slot) : el ? (s => el.includes(s)) : (s => s === a.x.slot || s === 'Util') }); });
+    const byVal = (u, v) => (u.was === 'extra') - (v.was === 'extra') || val(v.name) - val(u.name);
+    const cands = info.filter(i => i.kind === 'locked')
+      .concat(info.filter(i => i.kind === 'ok' && i.was === 'start'))
+      .concat(info.filter(i => i.kind === 'ok' && i.was !== 'start').sort(byVal))
+      .concat(info.filter(i => i.kind === 'doubt').sort((u, v) => (v.was === 'start') - (u.was === 'start') || byVal(u, v)));
+    const { chosen, slotOf } = fitStarters(slots, cands); const inS = new Set(chosen.map(i => i.name));
+    const before = new Set(d.start.map(x => K(x.name)));
+    d.start = chosen.map(i => Object.assign({}, i.x, { slot: slotOf[i.name] }));
+    d.bench = info.filter(i => !inS.has(i.name)).map(i => Object.assign({}, i.x, i.kind === 'out' ? { zero: true, injY: HARD_OUT.test(i.st) ? i.st : null, gone: i.gone, noGameY: (i.noGame && !i.gone) || i.x.noGameY || false, il: i.x.il || i.ilY, lockedOut: !!(i.r && i.r.locked) } : i.kind === 'doubt' ? { doubt: i.st } : {}));
+    info.forEach(i => { const was = before.has(K(i.name)), now = inS.has(i.name); if (was === now) return;
+      fixes.push(now ? `${i.name} starts on ${d.date}${i.was === 'extra' ? ' (Yahoo shows a game the plan didn\'t have)' : ''}: a spot was free`
+        : `${i.name} sits on ${d.date}: ${i.gone ? 'not on your Yahoo roster' : HARD_OUT.test(i.st) ? 'out on Yahoo (' + i.st + ')' : i.noGame ? 'no game on Yahoo' : i.kind === 'doubt' ? 'a game-time decision (' + i.st + ') and a healthy player can take the spot' : i.ilY ? 'in an injured-list spot' : 'locked on the bench'}`); }); }
+  // Yahoo's out tag for each of your players, by name (for marking his games before the week is planned)
+  function yOut(y) { const m = new Map(); ((y && y.rows) || []).forEach(r => { const t = tag(r.inj); if (HARD_OUT.test(t)) m.set(K(r.name), t); }); return m; }
   function computeRaw(which) {
     const m0 = mm(); if (!m0) return null; const isNext = which === 'next'; const m = isNext ? nextModel(m0) : m0; if (!m) return null;
     const s = S(m.league); const y = yrFor(m.league); const idmap = ST.idmap || {};
@@ -270,6 +317,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       opts.board = { val, cost, picks }; opts.pickAdds = {}; opts.forceDrop = {}; opts.exclude = [];
       if (opts.streams) { const pa = new Set(picks.map(x => K(x.add))), pd = new Set(picks.map(x => K(x.drop)));
         Object.assign(opts.streams, { only: BD.list.map(x => MI.P[x.id].n).filter(n => !pa.has(K(n))), pool: BD.order.map(x => MI.P[x.id].n).filter(n => !pd.has(K(n))), cost }); } } }
+    // Yahoo is the word on who's out: a player of yours Yahoo tags out (O, INJ, SUSP, NA) has no game to start this week, whatever
+    // Basketball Monster projects (its projections can lag Yahoo's injury news), so the planner picks who plays in his place
+    if (!isNext && y) { const yo = yOut(y); const outIds = new Set((y.rows || []).filter(r => HARD_OUT.test(tag(r.inj)) && idmap[r.pid]).map(r => idmap[r.pid])); const meS = s.swap ? 1 : 0;
+      if (yo.size) model = Object.assign({}, model, { players: model.players.map(pl => { if (pl.side !== meS || pl.type === 'fa') return pl; const t = yo.get(K(pl.name)) || (pl.bbm && outIds.has(pl.bbm) ? 'O' : null);
+        return t ? Object.assign({}, pl, { inj: t, games: pl.games.map(g => g ? Object.assign({}, g, { zero: true }) : g) }) : pl; }) }); }
     const p = E.plan(model, opts); p.bd = bd;
     // self-check: the plan must carry out exactly the pickup the one measure chose (kept in Diagnostics if it ever doesn't)
     if (!isNext && bd && bd.worth && !bd.wait) { const m0 = p.moves[0]; const ok = !m0 || (K(m0.add) === K(bd.add) && K(m0.drop || '') === K(bd.dropName)); const k = 'selfcheck:uni:' + m.league;
@@ -742,7 +794,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const luRow = x => ({ name: x.name, slot: x.slot, pid: x.pid, locked: !!x.locked, hasGame: !!x.hasGame, game: x.game || '', inj: x.inj || '', elig: x.elig || [], team: x.team || '' });
   async function refreshLineups(lg, dates, force) {
     const y = yrFor(lg); if (!y) return; const lid = y.lid; const cur = Object.assign({}, LU(lid)); let changed = false;
-    for (const d of dates) { const e = cur[d]; const near = d === usToday() || d === selDay; if (!force && e && Date.now() - e.ts < (near ? 5 : 30) * 60e3) continue; if (luBusy[lid + d] || (!force && luFail[lid + d] > Date.now())) continue; luBusy[lid + d] = true;
+    // a day read before your latest roster read, with different players on it (a pickup or drop since): read it again now
+    const sig = rows => (rows || []).map(r => K(r.name)).sort().join('|'); const ySig = sig(y.rows);
+    for (const d of dates) { const e = cur[d]; const near = d === usToday() || d === selDay; const moved = e && y.ts > e.ts && sig(e.rows) !== ySig;
+      if (!force && e && !moved && Date.now() - e.ts < (near ? 5 : 30) * 60e3) continue; if (luBusy[lid + d] || (!force && luFail[lid + d] > Date.now())) continue; luBusy[lid + d] = true;
       try { let rows = null, emp = [];
         { const r = await fetch(`https://basketball.fantasysports.yahoo.com/nba/${lid}/${y.tid}/team?date=${d}`, { credentials: 'include', cache: 'no-store' }); const doc = new DOMParser().parseFromString(await r.text(), 'text/html'); const yr = window.YPARSE && window.YPARSE(doc); if (yr && yr.date === d) { rows = yr.rows.map(luRow); emp = yr.empty || []; } }
         if (rows && rows.length) { cur[d] = { ts: Date.now(), rows, empty: emp }; changed = true; } }
@@ -750,14 +805,25 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       luBusy[lid + d] = false; }
     if (changed) { ST['ylu:' + lid] = cur; await browser.storage.local.set({ ['ylu:' + lid]: cur }); }
   }
+  // your roster as Yahoo has it right now, read from your team page (after a pickup or drop on Yahoo the panel doesn't wait for the
+  // next sync or for you to open your team page): written the same way the team page itself writes it, so everything follows
+  const rosterBusy = {};
+  async function rosterNow(lg, why) { const y = yrFor(lg); if (!y || !y.tid || rosterBusy[y.lid] > Date.now()) return; rosterBusy[y.lid] = Date.now() + 20e3;
+    try { const r = await fetch(`https://basketball.fantasysports.yahoo.com/nba/${y.lid}/${y.tid}/team`, { credentials: 'include', cache: 'no-store' }); const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+      const yr = window.YPARSE && window.YPARSE(doc); if (!yr || yr.lid !== String(y.lid) || !yr.rows || yr.rows.length < 5) { rosterBusy[y.lid] = Date.now() + 5 * 60e3; return; } yr.src = 'page'; yr.why = why || '';
+      ST['yr:' + yr.lid] = yr; await browser.storage.local.set({ ['yr:' + yr.lid]: yr, yrLast: yr.lid }); }
+    catch (e) { rosterBusy[y.lid] = Date.now() + 5 * 60e3; console.warn('roster read', e.message); } }
   // compare one day: who must move in, who must sit
   function dayCheck(d, act, onRosterKeys) {
     const isStart = r => r.slot !== 'BN' && !/^IL/.test(r.slot);
     const act0 = act ? act.rows : null; const find = n => act0 && (act0.find(r => K(r.name) === K(n)) || act0.find(r => lastOf(r.name) === lastOf(n)));
     // a locked player (his game has started) can't be moved any more, so he's never counted as a change
     const start = d.start.map(x => { const r = find(x.name); return Object.assign({}, x, { onY: !!r, now: r ? r.slot : null, locked: !!(r && r.locked), moveIn: !!(r && !isStart(r) && !r.locked) }); });
-    const play = d.bench.filter(x => !x.zero), out = d.bench.filter(x => x.zero);
+    const play = d.bench.filter(x => !x.zero);
     const sit = play.map(x => { const r = find(x.name); return Object.assign({}, x, { onY: !!r, now: r ? r.slot : null, locked: !!(r && r.locked), moveOut: !!(r && isStart(r) && !r.locked) }); });
+    // someone out still sitting in a starting spot on Yahoo costs nothing by himself (he won't play): "Set lineups" benches him
+    // anyway, but he only makes the day need changes when a planned starter needs his spot (that starter shows as "move in")
+    const out = d.bench.filter(x => x.zero);
     const noGame = act0 ? act0.filter(r => !d.start.concat(d.bench).some(x => K(x.name) === K(r.name) || lastOf(x.name) === lastOf(r.name)) && !/^IL/.test(r.slot)).map(r => r.name) : [];
     const changes = start.filter(x => x.moveIn).length + sit.filter(x => x.moveOut).length;
     return { start, sit, out, noGame, changes, known: !!act0 };
@@ -1120,11 +1186,18 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     h += `<ol class="ilsteps">${steps.map(x => `<li>${x}</li>`).join('')}</ol>`;
     if (L) h += `<div class="acts"><a class="btn small" href="${esc(L)}" target="_blank" rel="noopener">Open your team on Yahoo</a></div>`;
     return h + `<div class="sub" style="margin-top:8px">Roster and statuses from your Yahoo team page ${esc(ago(y.ts))}.</div></div>`; }
-  function lineupCard(p, lg) { const MI = modelFor(lg); const injOf = n => { if (!MI) return ''; const id = MI.find(n); const v = id && MI.P[id] && MI.P[id].inj; return v && /^(Q|D|GTD|O|OUT|DTD|P)\b/i.test(v) && !/^Off/i.test(v) ? v : ''; };
-    const y = yrFor(lg); const lid = y && y.lid; const t = usToday(); const days = p.nowDays || p.days;
+  function lineupCard(p, lg) { const MI = modelFor(lg); const y = yrFor(lg);
+    // injury tag on a player's row: Yahoo's first (it's what decides who starts), else Basketball Monster's
+    const injOf = n => { const r = y && rowIn(y.rows, n); const ty = tag(r && r.inj); if (ty && (HARD_OUT.test(ty) || DOUBTFUL.test(ty) || ty === 'P')) return ty;
+      if (!MI) return ''; const id = MI.find(n); const v = id && MI.P[id] && MI.P[id].inj; return v && /^(Q|D|GTD|O|OUT|DTD|P)\b/i.test(v) && !/^Off/i.test(v) ? v : ''; };
+    const lid = y && y.lid; const t = usToday(); const days = p.nowDays || p.days;
+    // the "Set lineups" run in progress (or just finished): each day's marker follows it live
+    const W8 = ST.yWeek && ST.yWeek.lid === lid && Date.now() - ST.yWeek.id < 6 * 3600e3 ? ST.yWeek : null; const busy = W8 && !W8.done && Date.now() - W8.id < 15 * 60e3;
+    const resOf = date => W8 && Date.now() - W8.id < 30 * 60e3 ? (W8.results || []).find(r => r.date === date) || null : null;
     const due = p.nowDays ? p.moves.filter(x => x.date <= t) : [], later = p.nowDays ? p.moves.filter(x => x.date > t) : [];
     const open = days.filter(d => d.open && d.date >= t).map(d => d.date);
     if (lid && open.length) setTimeout(() => refreshLineups(lg, open, false), 50);
+    if (y && Date.now() - (y.ts || 0) > 10 * 60e3) setTimeout(() => rosterNow(lg, 'older than 10 minutes'), 80);
     // default day: the date showing on your Yahoo team page, else today
     // the day shown is the one you tap (today to start with); it never follows the Yahoo screen by itself
     if (!selDay || !days.some(d => d.date === selDay)) selDay = (days.find(d => d.date >= t) || days[days.length - 1] || {}).date;
@@ -1133,8 +1206,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     // a player Yahoo shows playing that the plan doesn't have is settled once he's where the free starting spots put him
     const extraOpen = (d, g) => { const free = Math.max(0, slots - d.start.length); return g.extra.filter((r, i) => i < free && (r.slot === 'BN' || /^IL/.test(r.slot))); }; // beyond the free spots he'd only start in place of a planned starter, which shows as a change anyway
     const stripF = () => days.map(d => { const c = chk[d.date]; const g0 = groups(d, c); const games = g0.playing;
-      const st = !d.open ? 'past' : !games ? 'none' : !c.known ? 'unk' : c.changes || extraOpen(d, g0).length ? 'chg' : 'ok';
-      return `<button class="dchip ${st}${d.date === selDay ? ' sel' : ''}" data-day="${d.date}"><span>${esc(fmtD(d.date).split(',')[0])}</span><b>${new Date(d.date + 'T12:00:00Z').getUTCDate()}</b><i title="${games} of your players play">${games}</i></button>`; }).join('');
+      const rs = resOf(d.date); const running = busy && (W8.days || []).includes(d.date) && !rs; const todo = !c.known ? false : c.changes || extraOpen(d, g0).length;
+      const st = !d.open ? 'past' : !games ? 'none' : running ? 'busy' : rs && !rs.ok && todo ? 'fail' : !c.known ? 'unk' : todo ? 'chg' : 'ok';
+      const tip = { busy: 'Setting this day on Yahoo…', fail: 'Yahoo didn\'t take this day: ' + ((rs && rs.msg) || 'press Set again'), ok: 'Set on Yahoo and checked', chg: 'Needs changes on Yahoo', unk: 'Checking Yahoo…' }[st] || '';
+      return `<button class="dchip ${st}${d.date === selDay ? ' sel' : ''}" data-day="${d.date}"${tip ? ` title="${esc(tip)}"` : ''}><span>${esc(fmtD(d.date).split(',')[0])}</span><b>${new Date(d.date + 'T12:00:00Z').getUTCDate()}</b><i title="${games} of your players play">${games}</i></button>`; }).join('');
     // every player on your Yahoo roster for a day, in one of five groups. Yahoo's own page for that date says who has a game;
     // anyone Yahoo shows playing that the plan doesn't know about is listed on his own, never hidden under "no game"
     const groups = (d, c) => { const act = lid ? actualFor(lid, d.date) : null; const yRows = (act && act.rows) || (y && y.rows) || [];
@@ -1170,20 +1245,19 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (d.open && games) {
       h += `<div class="label lbl2">Start <span>${d.start.length} of ${slots}</span></div>` + d.start.map(x => { const s0 = c.start.find(z => z.name === x.name) || {};
         return `<div class="lrow">${lnm(x.name, x.slot || '–', x.opp || '')}${G.yNo(x.name) ? '<span class="chip lost" title="Yahoo shows no game for him this day">Yahoo: no game</span>' : ''}${injOf(x.name) ? `<span class="chip ${/^(O|OUT|D)/i.test(injOf(x.name)) ? 'lost' : 'toss-up'}">${esc(injWord(injOf(x.name)).replace(/^a /, ''))}</span>` : ''}${s0.moveIn && /^IL/.test(s0.now || '') ? '<span class="chip chase" title="He is on your injured list: see Back from injury for who to drop first">Off the injured list: drop someone first</span>' : s0.moveIn ? '<span class="chip safe">Move in</span>' : s0.locked && s0.now && /^(BN|IL)/.test(s0.now) ? '<span class="chip">Locked on bench</span>' : !s0.onY && act ? '<span class="chip chase">After pickup</span>' : ''}</div>`; }).join('');
-      if (c.sit.length) h += `<div class="label lbl2 bnl">Bench <span>has a game, sits</span></div>` + c.sit.map(x => `<div class="lrow sit">${lnm(x.name, 'BN', x.opp || '')}${x.protect ? `<span class="chip toss-up" title="Sitting him protects a close ${esc(x.protect)}">Sit: protects ${esc(x.protect)}</span>` : ''}${x.moveOut ? '<span class="chip lost">Move to bench</span>' : x.locked && x.now && !/^(BN|IL)/.test(x.now) ? '<span class="chip">Locked in</span>' : !x.onY && act ? '<span class="chip chase">After pickup</span>' : ''}</div>`).join('')
+      if (c.sit.length) h += `<div class="label lbl2 bnl">Bench <span>has a game, sits</span></div>` + c.sit.map(x => `<div class="lrow sit">${lnm(x.name, 'BN', x.opp || '')}${x.protect ? `<span class="chip toss-up" title="Sitting him protects a close ${esc(x.protect)}">Sit: protects ${esc(x.protect)}</span>` : x.doubt ? `<span class="chip toss-up" title="Yahoo lists him as ${esc(injWord(x.doubt))}: he only starts when no healthy player can take the spot">${esc(x.doubt)}: sits while a healthy player can start</span>` : x.yahooOnly ? '<span class="chip" title="Yahoo shows a game; Basketball Monster has no projection for him yet">No projection: sits</span>' : ''}${x.moveOut ? '<span class="chip lost">Move to bench</span>' : x.locked && x.now && !/^(BN|IL)/.test(x.now) ? '<span class="chip">Locked in</span>' : !x.onY && act ? '<span class="chip chase">After pickup</span>' : ''}</div>`).join('')
       if (G.extra.length) { const free = slots - d.start.length; h += `<div class="label lbl2 chkl">Check <span>Yahoo shows a game the plan doesn't have</span></div>` + G.extra.map((r, i) => `<div class="lrow sit">${lnm(r.name, r.slot, (r.game || '').replace(/^\S+ \S+ /, ''))}${i < free ? '<span class="chip safe" title="A starting spot is empty this day">Spot free: start him</span>' : r._known ? '<span class="chip toss-up" title="Yahoo shows a game this day; Basketball Monster\'s schedule doesn\'t, so the plan left him out">Basketball Monster shows no game: your call</span>' : '<span class="chip toss-up" title="Yahoo shows a game, but Basketball Monster has no projection for him yet, so the plan can\'t weigh him">No projection: your call</span>'}</div>`).join(''); }
-      if (G.out.length || G.noGame.length || G.il.length) h += `<div class="label lbl2">Not playing</div>` + G.out.map(x => `<div class="lrow dim">${lnm(x.name, 'BN', x.opp || '')}${x.noGameY ? '<span class="chip">No game</span>' : `<span class="chip lost">${x.il ? 'Injured list' : 'Out'}</span>`}</div>`).join('')
+      if (G.out.length || G.noGame.length || G.il.length) h += `<div class="label lbl2">Not playing</div>` + G.out.map(x => `<div class="lrow dim">${lnm(x.name, 'BN', x.opp || '')}${x.gone ? '<span class="chip">Not on your roster</span>' : x.noGameY ? '<span class="chip">No game</span>' : `<span class="chip lost">${x.il ? 'Injured list' : x.injY ? 'Out on Yahoo (' + esc(x.injY) + ')' : 'Out'}</span>`}</div>`).join('')
         + G.noGame.map(n => `<div class="lrow dim">${lnm(n, 'BN', '')}<span class="chip">No game</span></div>`).join('')
         + G.il.map(n => `<div class="lrow dim">${lnm(n, 'IL', '')}</div>`).join('');
     }
     }
     // actions
-    const W8 = ST.yWeek && ST.yWeek.lid === lid && Date.now() - ST.yWeek.id < 6 * 3600e3 ? ST.yWeek : null; const busy = W8 && !W8.done && Date.now() - W8.id < 15 * 60e3;
     const pl = ST['plan:' + lg]; const wd = pl ? weekDays(pl) : []; const pend = days.filter(x => x.open && chk[x.date].known && chk[x.date].changes).length;
     if (busy) h += `<div class="setbar"><span class="sub">Setting lineups on Yahoo… ${W8.results.length} of ${(W8.days || []).length} days done${W8.tab ? ' (in a background Yahoo tab)' : ''}${W8.retry ? ' · second pass' : ''}</span></div>`;
     // what happened, day by day, for half an hour after a run
     if (W8 && W8.done && W8.results && W8.results.length && Date.now() - W8.id < 30 * 60e3) { const okN = W8.results.filter(r => r.ok).length, bad = W8.results.filter(r => !r.ok);
-      h += `<div class="setres ${bad.length ? 'bad' : 'good'}"><b>${bad.length ? `${okN} of ${W8.results.length} days set on Yahoo` : `All ${W8.results.length} days set on Yahoo`}</b>${W8.results.map(r => `<div class="srr"><i class="${r.ok ? 'plus' : 'minus'}">${r.ok ? '✓' : '✗'}</i>${esc(fmtD(r.date))}<span class="sub">${r.ok ? (r.changes ? r.changes + ' change' + (r.changes > 1 ? 's' : '') : 'already right') : esc(r.msg || 'failed')}</span></div>`).join('')}</div>`; }
+      h += `<div class="setres ${bad.length ? 'bad' : 'good'}"><b>${bad.length ? `${okN} of ${W8.results.length} days set on Yahoo` : `Done: all ${W8.results.length} days set on Yahoo and checked`}</b>${W8.results.map(r => `<div class="srr"><i class="${r.ok ? 'plus' : 'minus'}">${r.ok ? '✓' : '✗'}</i>${esc(fmtD(r.date))}<span class="sub">${r.ok ? (r.changes ? r.changes + ' change' + (r.changes > 1 ? 's' : '') : 'already right') : esc(r.msg || 'failed')}</span></div>`).join('')}</div>`; }
     if (!busy) { if (due.length) h += `<div class="setbar"><span class="sub">Make the pickup in step 1 first (or skip it), then set the lineups.</span></div>`;
       h += `<button class="btn ${pend ? '' : 'ghost'}" id="weekB" ${y && wd.length ? '' : 'disabled'}>${pend ? `Set lineups for the rest of the week (${pend} day${pend > 1 ? 's' : ''} need changes)` : 'Set lineups for the rest of the week'}</button>${wd.length ? `<div class="sub" style="text-align:center;margin-top:4px">${esc(fmtD(wd[0].date).split(',')[0])} ${new Date(wd[0].date + 'T12:00:00Z').getUTCDate()} to ${esc(fmtD(wd[wd.length - 1].date).split(',')[0])} ${new Date(wd[wd.length - 1].date + 'T12:00:00Z').getUTCDate()}: every day left in this matchup</div>` : ''}`;
       if (d.open && games && c.changes) h += `<button class="btn quiet" id="dayB">Only set ${esc(fmtD(d.date))}</button>`; }
@@ -1193,12 +1267,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   function weekDays(pl) { const t = usToday(); const il = (pl.moves || []).filter(x => x.type === 'il'); return pl.days.filter(d => d.date >= t && (d.start.length || d.bench.length || il.length)).map(d => ({ date: d.date, start: d.start, bench: d.bench, il: il.filter(x => x.date <= d.date).map(x => x.il) })); }
   // lineups for the rest of the week: through the Yahoo API when connected (no tab needed), else through an open Yahoo tab
   async function sendWeek(y, pl, onlyDate, retry) {
-    // a player Yahoo shows playing that the plan doesn't have goes into a starting spot only when one is free (never ahead of a planned starter)
-    const slotsN = (slotsFrom(y) || []).length;
-    const days = weekDays(pl).filter(d => !onlyDate || (Array.isArray(onlyDate) ? onlyDate.includes(d.date) : d.date === onlyDate)).map(d => { const act = actualFor(y.lid, d.date); if (!act || !slotsN || !act.rows.some(r => r.hasGame)) return d;
-      const inP = n => d.start.concat(d.bench).some(x => K(x) === K(n) || lastOf(x) === lastOf(n)); let free = slotsN - d.start.length; if (free <= 0) return d;
-      const add = act.rows.filter(r => r.hasGame && !/^IL/.test(r.slot) && !inP(r.name) && !/^(O|OUT|INJ|SUSP)$/i.test(r.inj || '')).slice(0, free).map(r => r.name);
-      return add.length ? Object.assign({}, d, { start: d.start.concat(add) }) : d; });
+    // exactly the lineup the panel shows for each day (resolveDay already settled injuries, games and free spots against Yahoo):
+    // what's sent is what's checked afterwards, so a day that took turns green
+    const days = weekDays(pl).filter(d => !onlyDate || (Array.isArray(onlyDate) ? onlyDate.includes(d.date) : d.date === onlyDate));
     if (!days.length) { wbNote = 'Nothing left to set this week: every remaining day is already played or has no games.'; render(); return; } wbNote = ''; const id = Date.now();
     const W = { id, lid: y.lid, lg: pl.league, done: false, days: days.map(d => d.date), results: [], retry: !!retry };
     await browser.storage.local.set({ yWeek: W, yCmd: { cmd: 'week', lid: y.lid, tid: y.tid, days, ts: id } });
@@ -1281,6 +1352,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   setInterval(() => { if (window.SYNC && window.SYNC.newsCheck) window.SYNC.newsCheck().catch(() => {}); }, 15 * 60e3);
   browser.storage.onChanged.addListener((ch, area) => {
     if (area !== 'local') return; let re = false;
+    // you've just left a Yahoo add/drop page (a pickup made or cancelled): read your roster now, so the plan and the day markers follow
+    if (ch.ypage) { const a = ch.ypage.newValue, b = ch.ypage.oldValue; if (b && b.kind === 'add' && (!a || a.url !== b.url)) { const l = leaguesKnown().find(x => String(x.lid) === String(b.lid)); if (l) setTimeout(() => rosterNow(l.league, 'after add/drop'), 1500); } }
     if (ch.ydate && ch.ydate.newValue) { ST.ydate = ch.ydate.newValue; if (Object.keys(ch).length === 1) { render(); return; } }
     let data = false;
     Object.entries(ch).forEach(([k, v]) => { ST[k] = v.newValue; if (!/^(trseen:|ydate|syncProgress|syncLock|yWeek|yCmd|yLock|plan:|selfcheck:|nextDue|diag|selftest|bxTrace:|bbmnewsTrace|keepTs|tidyTs)/.test(k)) { DV++; data = true; }

@@ -7,6 +7,13 @@ Browser-free checks (run from the repo root):
 - `node tools/test/t_render.js <copilot-test-data.json>` renders every page and sub-page of the season panel offline (jsdom,
   no network) in four roster variants. It checks for page errors and runs the release consistency check. Get the export from
   Settings → Diagnostics → Download test data. `render.js` is the harness behind it (`--dump dir` saves each page's HTML).
+- `node tools/test/t_lineup.js <export>` checks lineup setting end to end on a real roster, offline, at the export's own time:
+  - nobody out starts
+  - a game-time decision only takes a spare spot
+  - a dropped player never starts
+  - a simulated "Set lineups" turns every day's marker green, with pulsing markers while it runs and red for a refused day
+
+  It also covers the Yahoo-side assignment on its own.
 - `node tools/test/t_advice.js` checks the advice backtest (`tools/advice-backtest.js`) on a hand-built league with a known answer.
 - `node tools/test/t_tags.js` tests Basketball Monster analyst-tag parsing. It needs `npm i jsdom`.
 - `node tools/test/mkfake.js <store.json> [out.json]` adds synthetic finished weeks, forecasts and projection logs to a store

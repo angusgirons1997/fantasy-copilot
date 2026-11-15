@@ -17,7 +17,7 @@ const has = (t, name) => nk(t).includes(nk(name));
 const SELL = ['Surplus in won categories', 'Value in lost categories']; const LABELS = ['Fits your build', 'A free agent does more', 'Small impact', "Doesn't help you"].concat(SELL);
 
 (async () => { for (const v of ['normal', 'il', 'injured', 'recent']) { console.log(`\n=== ${v}`);
-  const r = await render(variant(base, v), {}); const P = r.pages;
+  const r = await render(variant(base, v), { now: rep.at }); const P = r.pages;
   ok(r.tabs.length >= 4, `${r.tabs.length} pages: ${r.tabs.join(', ')}`);
   ok(!r.errors.length, 'no page errors', r.errors.join('\n    '));
   const broken = Object.entries(P).filter(([, p]) => p.broken).map(([k]) => k); ok(!broken.length, 'nothing shows "Something went wrong"', broken.join(', '));

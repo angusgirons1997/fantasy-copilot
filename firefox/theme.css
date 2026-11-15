@@ -172,6 +172,10 @@ details summary{cursor:pointer;font-size:12px;color:var(--mute);font-weight:500}
 .dchip span{font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--mute)}.dchip b{font:700 15px/1.1 var(--disp)}.dchip i{font-style:normal;font-size:12px;color:var(--mute)}
 .dchip::after{content:"";position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%}
 .dchip.ok::after{background:var(--good)}.dchip.chg::after{background:var(--warn)}.dchip.unk::after{background:var(--mute);opacity:.5}
+.dchip.fail::after{background:var(--bad)}
+.dchip.busy::after{background:var(--warn);animation:dchip-pulse 1s ease-in-out infinite}
+@keyframes dchip-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(1.6)}}
+@media (prefers-reduced-motion: reduce){.dchip.busy::after{animation:none;background:var(--mute)}}
 .dchip.past{opacity:.45}.dchip.none{opacity:.6}
 .dchip.sel{background:var(--inv);color:var(--inv-ink)}.dchip.sel span,.dchip.sel i{color:var(--inv-ink);opacity:.7}
 .dayhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:12px;flex-wrap:wrap}.dayhead>b{font:600 15px var(--disp)}

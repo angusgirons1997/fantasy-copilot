@@ -46,6 +46,31 @@ pages contradict each other before 7.32.0.
   settings after postbacks.
 - UI: no abbreviations, light and dark themes, plain colour-coded words plus the primitive numbers.
 
+## Lineups (agreed with the owner, 7.37.0: don't re-decide these)
+
+- **Injuries:** Yahoo's tag on the team page decides. `HARD_OUT` (O, OUT, INJ, SUSP, NA, OFS) never starts. The player's games
+  are marked `zero` before `E.plan`, whatever Basketball Monster projects. A `DOUBTFUL` player (GTD, DTD, Q, D) starts only into a
+  spot no healthy player with a game can fill.
+- **One pass per day:** `resolveDay` in `season.js` runs on every open day. It benches:
+  - anyone out
+  - anyone with no Yahoo game
+  - anyone no longer on the Yahoo roster
+  - anyone in an IL spot
+
+  It then fills free spots with the best healthy player with a game, using Yahoo's eligibility, and leaves locked players where
+  they are. What the Team page shows is exactly what "Set lineups" sends (`plan:` → `weekDays` → `yroster.js` `assign`).
+- **The Yahoo side:** `assign` starts only the listed starters. It never fills a gap from the bench list.
+- **After a pickup or drop:** leaving a Yahoo add/drop page re-reads the roster (`rosterNow`), as does a roster older than 10
+  minutes. Any day read before a roster change is read again. The owner then presses Set: lineups are never pushed without the
+  click.
+- **Day markers:**
+  - pulse while Set runs
+  - green once Yahoo has re-read and confirmed that day
+  - red if Yahoo refused it
+
+  An out player left in a starting spot doesn't make a day yellow by himself. Set benches him anyway.
+- **Test:** `node tools/test/t_lineup.js <export>` covers all of the above, including a simulated Set turning every day green.
+
 ## Security
 
 - Never type passwords. The BBM password is only in the add-on's local storage (obfuscated) and is only

@@ -50,18 +50,20 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const lockedRows = rows.filter(r => r.locked); const act = rows.filter(r => isAct(r.slot)).map(r => r.slot).concat((empty || []).filter(isAct));
     lockedRows.forEach(r => { const i = act.indexOf(r.slot); if (i >= 0) act.splice(i, 1); });
     const free = rows.filter(r => !r.locked);
-    const st = new Set(startP), playing = new Set(startP.concat(benchP)); const order = startP.concat(benchP);
+    const st = new Set(startP), playing = new Set(startP.concat(benchP));
+    // only the players the panel lists to start go into starting spots. A planned starter who isn't on this day's roster leaves his
+    // spot to the panel's next plan: it is never filled from the bench list here (that list includes players who are out)
     const want = free.filter(r => st.has(r.pid) && !/^IL/.test(r.slot));
-    // planned starters not on this roster yet (pickup not made): fill with planned bench players who play
-    const missing = Math.max(0, (start || []).length - startP.length);
-    if (missing) free.filter(r => !st.has(r.pid) && playing.has(r.pid) && !/^IL/.test(r.slot)).sort((a, b) => order.indexOf(a.pid) - order.indexOf(b.pid)).slice(0, missing).forEach(r => want.push(r));
     const match = new Array(act.length).fill(-1);
     const tryP = (i, seen) => { for (let j = 0; j < act.length; j++) { if (seen[j] || !want[i].elig.includes(act[j])) continue; seen[j] = true; if (match[j] < 0 || tryP(match[j], seen)) { match[j] = i; return true; } } return false; };
     want.forEach((_, i) => tryP(i, new Array(act.length).fill(false)));
     const asg = {}; free.forEach(r => { asg[r.pid] = /^IL/.test(r.slot) ? r.slot : (ilP.has(r.pid) && r.elig.some(e => /^IL/.test(e)) ? r.elig.find(e => /^IL/.test(e)) : 'BN'); });
     const used = {}; match.forEach((i, j) => { if (i >= 0) { asg[want[i].pid] = act[j]; used[act[j]] = (used[act[j]] || 0) + 1; } });
     const cap = {}; act.forEach(x => cap[x] = (cap[x] || 0) + 1);
-    free.forEach(r => { if (!playing.has(r.pid) && asg[r.pid] === 'BN' && isAct(r.slot) && (used[r.slot] || 0) < cap[r.slot]) { asg[r.pid] = r.slot; used[r.slot] = (used[r.slot] || 0) + 1; } });
+    // someone the panel didn't mention (no game that day, usually) keeps his starting spot if it's still free, unless Yahoo has
+    // him out and he has a game: then he goes to the bench
+    const outY = r => /^(O|OUT|INJ|SUSP|NA|OFS)$/i.test(String(r.inj || '').trim().split(/\s/)[0]) && r.hasGame;
+    free.forEach(r => { if (!playing.has(r.pid) && !outY(r) && asg[r.pid] === 'BN' && isAct(r.slot) && (used[r.slot] || 0) < cap[r.slot]) { asg[r.pid] = r.slot; used[r.slot] = (used[r.slot] || 0) + 1; } });
     const changes = free.filter(r => (ilP.has(r.pid) && asg[r.pid] !== r.slot) || (playing.has(r.pid) && isAct(r.slot) !== isAct(asg[r.pid]))).length;
     lockedRows.forEach(r => { asg[r.pid] = r.slot; });
     return { asg, changes };

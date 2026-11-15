@@ -235,14 +235,28 @@
     html += `<div class="sub" style="margin-top:4px">The full list, every Basketball Monster free agent ranked the same way, is below.</div>`;
     return { html, labels: {} };
   }
+  // ---- forecast check: every pre-week category forecast (every matchup in the league, logged before the week starts, plus your own
+  // next-week forecast from before) against Yahoo's final results. Fits how wide the forecasts should be (the spread multiplier that
+  // makes them most likely given what happened) and scores them: the Brier score (0 = perfect, 0.25 = a coin flip). ----
+  const resVal = (st, c) => !st ? null : c === 'fg%' ? (st['fg%'] != null ? st['fg%'] : st.fga ? st.fg / st.fga : null) : c === 'ft%' ? (st['ft%'] != null ? st['ft%'] : st.fta ? st.ft / st.fta : null) : st[c];
+  function forecastPairs(ST, lid) { const pairs = []; const weeks = new Set();
+    Object.keys(ST).filter(k => k.startsWith('lgfc:' + lid + ':')).forEach(k => { const fc = ST[k], lw = fc && ST['lgweek:' + lid + ':' + fc.week]; if (!lw || !lw.teams || !fc.pairs) return; weeks.add(fc.start);
+      fc.pairs.forEach(m => { const A = lw.teams[m.a], B = lw.teams[m.b]; if (!A || !B) return;
+        Object.entries(m.cp).forEach(([c, q]) => { const a = resVal(A.st, c), b = resVal(B.st, c); if (a == null || b == null || isNaN(a) || isNaN(b) || a === b) return; pairs.push({ p: q, y: (c === 'to' ? a < b : a > b) ? 1 : 0, s: fc.sdMul || 1, c, w: fc.week, src: 'league' }); }); }); });
+    Object.keys(ST).filter(k => k.startsWith('h2hfc:' + lid + ':')).forEach(k => { const st = k.split(':').pop(); if (weeks.has(st)) return; const fc = ST[k], res = ST['h2hres:' + lid + ':' + st]; if (!fc || !res || !res.me || !res.opp) return;
+      Object.entries(fc.cats || {}).forEach(([c, q]) => { const a = resVal(res.me, c), b = resVal(res.opp, c); if (a == null || b == null || isNaN(a) || isNaN(b) || a === b) return; pairs.push({ p: q, y: (c === 'to' ? a < b : a > b) ? 1 : 0, s: fc.sdMul || 1, c, w: st, src: 'mine' }); }); });
+    return pairs; }
   function calibrate(ST, lid) {
-    const pairs = []; Object.keys(ST).filter(k => k.startsWith('h2hfc:' + lid + ':')).forEach(k => { const fc = ST[k], res = ST['h2hres:' + lid + ':' + k.split(':').pop()]; if (!fc || !res || !res.me || !res.opp) return;
-      Object.entries(fc.cats || {}).forEach(([c, p]) => { const r = c === 'fg%' ? [res.me.fg / res.me.fga, res.opp.fg / res.opp.fga] : c === 'ft%' ? [res.me.ft / res.me.fta, res.opp.ft / res.opp.fta] : [res.me[c], res.opp[c]]; if (r[0] == null || r[1] == null || isNaN(r[0]) || isNaN(r[1]) || r[0] === r[1]) return;
-        pairs.push([p, (c === 'to' ? r[0] < r[1] : r[0] > r[1]) ? 1 : 0]); }); });
-    if (pairs.length < 25) return { mul: 1, n: pairs.length };
+    const pairs = forecastPairs(ST, lid); const n = pairs.length; const weeks = new Set(pairs.map(x => x.w)).size;
     const inv = p => { p = Math.min(0.995, Math.max(0.005, p)); let lo = -6, hi = 6; for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; if (H.Phi(m) < p) lo = m; else hi = m; } return (lo + hi) / 2; };
-    let best = { mul: 1, ll: Infinity }; for (let m = 0.6; m <= 1.81; m += 0.05) { let ll = 0; pairs.forEach(([p, y]) => { const q = Math.min(0.995, Math.max(0.005, H.Phi(inv(p) / m))); ll -= y ? Math.log(q) : Math.log(1 - q); }); if (ll < best.ll) best = { mul: +m.toFixed(2), ll }; }
-    return { mul: best.mul, n: pairs.length };
+    const at = (x, m) => Math.min(0.995, Math.max(0.005, H.Phi(inv(x.p) * x.s / m))); // the forecast as it would have been with spread multiplier m
+    const brier = f => pairs.reduce((a, x) => a + (f(x) - x.y) ** 2, 0) / (n || 1);
+    const bins = [[0, 0.2], [0.2, 0.4], [0.4, 0.6], [0.6, 0.8], [0.8, 1.01]].map(r => { const B = pairs.filter(x => x.p >= r[0] && x.p < r[1]); return { r, n: B.length, p: B.reduce((a, x) => a + x.p, 0) / (B.length || 1), won: B.reduce((a, x) => a + x.y, 0) / (B.length || 1) }; });
+    const out = { mul: 1, n, weeks, brier: n ? brier(x => x.p) : null, bins };
+    if (n < 25) return out;
+    let best = { mul: 1, ll: Infinity }; for (let m = 0.4; m <= 2.51; m += 0.05) { let ll = 0; pairs.forEach(x => { const q = at(x, m); ll -= x.y ? Math.log(q) : Math.log(1 - q); }); if (ll < best.ll) best = { mul: +m.toFixed(2), ll }; }
+    // shrink toward no change while there are few results (a week of one league is about 50 categories)
+    const k = Math.min(1, n / 200); out.mul = +(1 + (best.mul - 1) * k).toFixed(2); out.fit = best.mul; out.brierFit = brier(x => at(x, out.mul)); return out;
   }
   const ordinal = n => n ? n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : n % 10] || 'th') : '–';
   // ---- trade finder ----
@@ -333,5 +347,5 @@
     if (streams.length) h += `<div class="label" style="margin-top:10px">Four-game free agents next week</div>` + streams.map(id => `<div class="pr"><b>${nm(id)}</b><span>${M.P[id].next.g} games</span></div>`).join('');
     return h + '</div>';
   }
-  root.CTX = { fillRows, profiles, schedOf, curWeek, weekModel, model, freshness, tradeCard, dealView, addCard, listCard, liveCard, nextCard };
+  root.CTX = { calibrate, forecastPairs, fillRows, profiles, schedOf, curWeek, weekModel, model, freshness, tradeCard, dealView, addCard, listCard, liveCard, nextCard };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -351,8 +351,15 @@
     const bPicks = BD && BD.picks ? BD.picks : null;
     for (let step = 0; step < (bPicks ? Math.min(adds, bPicks.length) : adds) && firstOpen >= 0; step++) {
       if (bPicks) { // the pickup is decided by the shared measure; the planner only picks the day (best for this week) and plans the lineup
-        const bp = bPicks[step]; const f = fas.find(x => key(x.name) === key(bp.add) && !roster.some(r => r.pl === x)); const k = roster.find(r => r.to === ctx.nd - 1 && !r.added && key(r.pl.name) === key(bp.drop));
-        if (!f || !k) continue; let days = []; f.games.forEach((g, d) => { if (g && d >= firstOpen && !g.zero && dayOK(f, d)) days.push(d); }); if (!days.length) { const d0 = model.days.findIndex((x, d) => d >= firstOpen && dayOK(f, d)); if (d0 < 0) continue; days = [d0]; }
+        const bp = bPicks[step]; const f = fas.find(x => key(x.name) === key(bp.add) && !roster.some(r => r.pl === x)); const k = bp.drop ? roster.find(r => r.to === ctx.nd - 1 && !r.added && key(r.pl.name) === key(bp.drop)) : null;
+        if (!f || (bp.drop && !k)) continue;
+        // an empty roster spot: a plain add, no drop
+        if (!k) { let days = []; f.games.forEach((g, d) => { if (g && d >= firstOpen && !g.zero && dayOK(f, d)) days.push(d); }); if (!days.length) { const d0 = model.days.findIndex((x, d) => d >= firstOpen && dayOK(f, d)); if (d0 < 0) continue; days = [d0]; }
+          let top = null; days.forEach(d => { const R = roster.concat([{ pl: f, from: d, to: ctx.nd - 1, added: true }]); const o = optimise(ctx, R, oppList, 2); if (!top || o.Wnp > top.o.Wnp) top = { o, R, d }; }); if (!top) continue;
+          const catWeek = ctx.cats.map(c => ({ c: LBL[c], from: best.cp[c].p, to: top.o.cp[c].p }));
+          moves.push({ dropOpts: [], alts: [], board: true, open: true, add: f.name, addTeam: f.team, addPos: f.pos, drop: null, day: top.d, date: model.days[top.d].date, label: model.days[top.d].label, from: best.W, to: top.o.W, week: top.o.W - best.W, futWk: bp.season || 0, later: 0, score: bp.season || 0, cats: [], catWeek,
+            catLater: (() => { const a = fwCats(f); return ctx.cats.map(c => ({ c: LBL[c], d: a[c] })); })(), verdict: 'long', picked: !!bp.picked, forced: !!bp.picked, games: gamesFrom(f, top.d), dropGames: 0, hAdd: horizon(f), hDrop: null, next: null, why: null });
+          roster = top.R; best = top.o; continue; } let days = []; f.games.forEach((g, d) => { if (g && d >= firstOpen && !g.zero && dayOK(f, d)) days.push(d); }); if (!days.length) { const d0 = model.days.findIndex((x, d) => d >= firstOpen && dayOK(f, d)); if (d0 < 0) continue; days = [d0]; }
         let top = null; days.forEach(d => { if (k.from > d) return; const R = roster.filter(r => r !== k).concat([{ pl: k.pl, from: k.from, to: d - 1, dropped: true }, { pl: f, from: d, to: ctx.nd - 1, added: true }]);
           const o = optimise(ctx, R, oppList, 2); if (!top || o.Wnp > top.o.Wnp) top = { o, R, d }; }); if (!top) continue;
         const catWeek = ctx.cats.map(c => ({ c: LBL[c], from: best.cp[c].p, to: top.o.cp[c].p }));

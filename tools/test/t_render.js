@@ -28,8 +28,9 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
   console.log(`  Players #1: ${add}, drop ${drop}`);
   // Week brief
   const brief = frag(P.week && P.week.html); const rl = brief && [...brief.querySelectorAll('.brief .brow')].map(tx).find(t => /Roster:/.test(t));
-  const hl = tx(pl.querySelector('.hl')); const clears = /is the best pickup/.test(hl), none = /No free agent clears your bar/.test(hl);
-  if (rl && /Best pickup|Add /.test(rl)) ok(clears && has(rl, add) && has(rl, drop), 'Week brief names the same pickup and drop, and Players says it clears the bar', rl + ' | Players: ' + hl);
+  const hl = tx(pl.querySelector('.hl')); const clears = /is the best pickup|^Add /.test(hl), none = /No free agent clears your bar/.test(hl); const open = /empty roster spot/.test(hl);
+  if (open) ok(!drop && (!rl || !/, drop /.test(rl)), 'an empty roster spot: Players and the Week brief name no drop', rl + ' | Players: ' + hl);
+  if (rl && /Best pickup|\badd /i.test(rl)) ok(clears && has(rl, add) && has(rl, drop), 'Week brief names the same pickup and drop, and Players says it clears the bar', rl + ' | Players: ' + hl);
   else ok(!clears, 'Week brief names no pickup, and Players agrees nothing clears the bar (' + (rl || 'no roster line') + ')', 'Players: ' + hl);
   if (none) console.log('  (below your bar: ' + hl + ')');
   // Team step 1 (shown only when a pickup is due now)
@@ -43,7 +44,9 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
   // labels on your players: the drop reads "A free agent does more"; sells are in Best moves
   const lab = {}; [P['strategy:roster'], P.team, P.players].filter(Boolean).forEach(p => { const d = frag(p.html); d.querySelectorAll('*').forEach(el => { const t = tx(el); if (!LABELS.includes(t)) return;
     let row = el.parentElement; while (row && row !== d && !row.querySelector('b')) row = row.parentElement; const who = row && row.querySelector('b') ? tx(row.querySelector('b')) : null; if (who && !lab[who]) lab[who] = t; }); });
-  ok(lab[drop] === 'A free agent does more', `the drop (${drop}) reads "A free agent does more"`, 'reads: ' + (lab[drop] || 'no label found'));
+  // (the label means a top-10 free agent clears your pickup bar in his place: only then, and only when there is a drop)
+  if (drop && clears) ok(lab[drop] === 'A free agent does more', `the drop (${drop}) reads "A free agent does more"`, 'reads: ' + (lab[drop] || 'no label found'));
+  else console.log(`  - drop label not checked: ${drop ? 'no free agent clears your bar' : 'an empty roster spot, no drop'}`);
   const sells = Object.entries(lab).filter(([, t]) => SELL.includes(t)).map(([n]) => n); const missing = sells.filter(n => !has(moves.text, n));
   ok(!missing.length, `every sell is in Best moves (${sells.length})`, missing.join(', '));
   if (finder) { const fa = faNames.filter(n => has(finder.text, n)); ok(!fa.length, 'Finder shows rostered players only', 'free agents in Finder: ' + fa.join(', ')); }

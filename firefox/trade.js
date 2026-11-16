@@ -30,7 +30,7 @@
     // a team's result after its roster changes (other teams unchanged)
     S.after = (changes) => { const out = {}; S.V.forEach(v => { const list = S.base[v].map(t => changes[t.tid] ? { tid: t.tid, ids: changes[t.tid], vec: H.teamWeek(ctx, changes[t.tid], v) } : t);
       out[v] = {}; Object.keys(changes).forEach(tid => { const r = S.winOf(v, tid, list); out[v][tid] = { d: (r.W - S.w0[v][tid].W) * ncat(ctx), cp: r.cp }; }); }); return out; };
-    S.size = me.ids.length; S.board = (M && M.board) || null; // the panel's one measure, when it's there
+    S.board = (M && M.board) || null; S.size = me.ids.length + ((S.board && S.board.open) || 0); // an empty roster spot takes a player with no cut // the panel's one measure, when it's there
     // weeks of regular season left (season.js passes Yahoo's; else from the days BBM projects, less 3 playoff weeks). The trade
     // bar is tradeBarOf in season.js (Settings → Advice): the one bar for sells and trades.
     S.weeks = (M && M.weeksLeft) || Math.max(1, Math.round((ctx.days.ros || 140) / 7) - 3);
@@ -44,7 +44,7 @@
     const bv = id => { const b = S.board && S.board.mine.find(x => x.id === id); return b ? b.val : fitVal(ctx, id); };
     while (out.length > S.size) { const c = out.filter(id => !keep.includes(id)).sort((a, b) => bv(a) - bv(b))[0]; if (!c) break; out = out.filter(x => x !== c); cut.push(c); }
     const pool = (S.L.fas || []).filter(id => !out.includes(id)).sort((a, b) => fitVal(ctx, b) - fitVal(ctx, a));
-    while (out.length < S.size && pool.length) { const f = pool.shift(); out.push(f); fill.push(f); } return { ids: out, cut, fill }; }
+    while (out.length < S.me.ids.length && pool.length) { const f = pool.shift(); out.push(f); fill.push(f); } return { ids: out, cut, fill }; }
   // their roster after a trade: they cut their lowest-valued player (never one they just got), or pick up the best free agent
   function settleThem(S, team, ids, keep) { const ctx = S.ctx; let out = ids.slice(); const cut = [], fill = [];
     while (out.length > team.ids.length) { const c = out.filter(id => !keep.includes(id)).sort((a, b) => leagueVal(ctx, a) - leagueVal(ctx, b))[0]; if (!c) break; out = out.filter(x => x !== c); cut.push(c); }

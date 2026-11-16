@@ -15,8 +15,14 @@ stats), with punted categories held at a usual loss. It is `H2H.board` in `h2h.j
 
 - **Player value to you** = what the number loses without him (`board.mine[].val`).
 - **Pickup** = what the number gains when he replaces one of your players. His drop is the one that leaves
-  you best off (`board.list`: top 20 of all BBM free agents).
+  you best off (`board.list`: top 30 of all BBM free agents; the Players page filters it by guard, forward or centre, keeping
+  overall ranks. Yahoo's player-list pages get no card: Players shows only the best free agents across the league).
 - **Trade** = the gain after the swap (`board.of(ids)`, also used by `trade.js`).
+- **Empty roster spot** (7.39.0): `openSpots` in `season.js` (Yahoo's starting spots + bench, less players not on the injured
+  list). When one is open, every pickup is a plain add (`board.list[].drop` is null) on every page: Players, Week, Team, Best
+  moves, Yahoo's add page, and the trade companion's roster size. The planner adds without a drop.
+- **Same pickup everywhere:** the planner gets the board's pick even when Matchup Monster's free-agent list lacks him (filled in
+  from Basketball Monster's projections), and Yahoo's add page never offers a drop the board keeps.
 - **Never droppable:** players in injured-list spots, players the user chose to keep, players added in the
   last 2 weeks, and anyone in the top half of all rostered players (another team would claim them).
 - **Sell** = a one-for-one trade at the player's BBM value (lv from −0.1 to +0.03) clears the trade bar
@@ -70,6 +76,16 @@ pages contradict each other before 7.32.0.
 
   An out player left in a starting spot doesn't make a day yellow by himself. Set benches him anyway.
 - **Test:** `node tools/test/t_lineup.js <export>` covers all of the above, including a simulated Set turning every day green.
+
+## Build page (agreed with the owner, 7.39.0: don't re-decide these)
+
+- Strategy → Build starts with your build: the category chips are buttons that punt or unpunt straight away (`setPunt`, with
+  Undo), and the bands are set again from today's numbers for the new punt. "Find my best moves" comes after the build.
+- **Best available punt** (`bestBuilds`): every build of no punt, any one category, or two of your five weakest. For each,
+  Basketball Monster's Analysis Monster team values summed over the kept categories; your rank against the league on that sum.
+  Best = highest rank, then fewer punts, then widest margin. It is not the one measure on purpose: on the roster as it stands,
+  punting can only lower expected categories won. Shown at the top ("Use this build") and as the top three under Try a different
+  build, next to your own preview.
 
 ## Trade companion (7.38.0)
 

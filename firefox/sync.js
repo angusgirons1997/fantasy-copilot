@@ -255,10 +255,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const out = [];
     for (const tm of teams) {
       try { const d = html(await req(`${YH}/nba/${lid}/${tm.tid}`, null, 'Yahoo roster ' + tm.tid));
-        const names = [...d.querySelectorAll('a.name, .ysf-player-name a')].map(a => (a.getAttribute('title') || a.textContent || '').trim()).filter(n => n && n.length > 3);
+        // player links only: Yahoo's note icons sit in the same cell ("Player Note", "New Player Note", "No new player Notes")
+        const isNote = n => /\bplayer notes?\b/i.test(n); const links = [...d.querySelectorAll('a.name, .ysf-player-name a')].filter(a => !isNote((a.getAttribute('title') || a.textContent || '').trim()) && !/note/i.test(a.className || ''));
+        const names = links.map(a => (a.getAttribute('title') || a.textContent || '').trim()).filter(n => n && n.length > 3);
         // each player's Yahoo id (for opening a suggested trade on Yahoo with the players already ticked)
-        const yids = {}; d.querySelectorAll('a.name, .ysf-player-name a').forEach(a => { const n = (a.getAttribute('title') || a.textContent || '').trim(); const m = (a.getAttribute('data-ys-playerid') || '').match(/\d+/) || (a.getAttribute('href') || '').match(/players\/(\d+)/); if (n && m) yids[n] = m[1] || m[0]; });
-        out.push({ tid: tm.tid, name: tm.name, players: [...new Set(names)].slice(0, 20), ranks: parseRanks(d), yids }); } catch (e) { out.push({ tid: tm.tid, name: tm.name, players: [], err: e.message }); }
+        const yids = {}; links.forEach(a => { const n = (a.getAttribute('title') || a.textContent || '').trim(); const m = (a.getAttribute('data-ys-playerid') || '').match(/\d+/) || (a.getAttribute('href') || '').match(/players\/(\d+)/); if (n && m) yids[n] = m[1] || m[0]; });
+        out.push({ tid: tm.tid, name: tm.name, players: [...new Set(names)].slice(0, 30), ranks: parseRanks(d), yids }); } catch (e) { out.push({ tid: tm.tid, name: tm.name, players: [], err: e.message }); }
       await new Promise(z => setTimeout(z, 250));
     }
     trace('Yahoo league rosters', out.filter(t => t.players.length >= 10).length >= teams.length - 1, out.map(t => t.tid + ':' + t.players.length).join(' '));

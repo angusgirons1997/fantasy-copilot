@@ -112,6 +112,9 @@
       const swap = (add, drop) => of(me.ids.filter(x => x !== drop).concat([add]));
       // every free agent against your least valuable player first, then the best 40 against every droppable player
       const fas = (o.fas || L.fas || []).filter(id => ctx.P[id] && ctx.P[id].ros && (ctx.P[id].ros.g || 0) > 0);
+      // an empty roster spot (o.open > 0): a pickup is a plain add, no drop. Its gain is what the number gains with him added.
+      if (o.open > 0) { const list = fas.map(id => { const r = of(me.ids.concat([id])); return { id, gain: r.g, drop: null, cats: r.cats, alt: null }; }).sort((a, b) => b.gain - a.gain).slice(0, o.n || 20);
+        return { base: base.e, cp: base.cp, mine, order, list, swap, of, open: o.open, weeks: (ctx.days.ros || 140) / 7 }; }
       const d0 = order[0]; if (!d0) return { base: base.e, cp: base.cp, mine, order, list: [], swap, of, weeks: (ctx.days.ros || 140) / 7 };
       const pre = fas.map(id => ({ id, g: swap(id, d0.id).g })).sort((a, b) => b.g - a.g).slice(0, Math.max(o.depth || 40, o.n || 20));
       const tryDrops = order.slice(0, o.drops || 10);

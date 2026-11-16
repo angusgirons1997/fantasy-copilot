@@ -57,6 +57,10 @@
         {
           "version": "7.38.0",
           "update_link": "https://github.com/angusgirons1997/fantasy-copilot/releases/download/v7.38.0/fantasy-copilot-7.38.0.xpi"
+        },
+        {
+          "version": "7.39.0",
+          "update_link": "https://github.com/angusgirons1997/fantasy-copilot/releases/download/v7.39.0/fantasy-copilot-7.39.0.xpi"
         }
       ]
     }

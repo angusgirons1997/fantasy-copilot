@@ -211,6 +211,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const tag = s => String(s || '').trim().split(/\s/)[0].toUpperCase();
   const sameName = (a, b) => K(a) === K(b);
   const rowIn = (rows, n) => (rows || []).find(r => sameName(r.name, n)) || (() => { const c = (rows || []).filter(r => lastOf(r.name) === lastOf(n)); return c.length === 1 ? c[0] : null; })();
+  // the injury tag shown on a player: Yahoo's whenever Yahoo lists him (no tag there = healthy, even if Basketball Monster's
+  // status is older or different); Basketball Monster's only for a player Yahoo's roster doesn't show
+  const injFor = (y, M, n) => { const r = y && y.rows && rowIn(y.rows, n); if (r) { const t = tag(r.inj); return HARD_OUT.test(t) || DOUBTFUL.test(t) || t === 'P' ? t : ''; }
+    const id = M && M.find(n); const v = id && M.P[id] && M.P[id].inj; return v && /^(Q|D|GTD|O|OUT|DTD|P)\b/i.test(v) && !/^Off/i.test(v) ? v : ''; };
   const isStartSlot = s => !!s && s !== 'BN' && !/^IL/.test(s);
   // the most starters (in priority order) that fit the starting spots: each player only in a spot Yahoo lets him play. A player
   // locked in a spot (his game has started) keeps it. Returns { chosen, slotOf } with every chosen player matched to a spot.
@@ -535,7 +539,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (due.length) rows.push(['', '<b>2 · Lineup:</b> set it after the pickup (it\'s re-planned once Yahoo shows the change)']);
     else if (d && d.open && (d.start.length + d.bench.length)) { const c = dayCheck(d, y ? actualFor(y.lid, t) : null); rows.push(c.known ? (c.changes ? ['warn', `<b>2 · Lineup:</b> <b>${c.changes} change${c.changes > 1 ? 's' : ''}</b> to make today`] : ['good', '<b>2 · Lineup:</b> set correctly for today']) : ['', '<b>2 · Lineup:</b> checking today\'s lineup on Yahoo…']); }
     else rows.push(['good', '<b>2 · Lineup:</b> nobody plays today']);
-    if (M && d && !due.length) d.start.forEach(x => { const id = M.find(x.name); const inj = id && M.P[id] && M.P[id].inj; if (inj && /^(Q|D|GTD|O|OUT|DTD)/i.test(inj) && !/^Off/i.test(inj)) rows.push(['bad', `<b>${esc(x.name)}</b> is listed <b>${esc(injWord(inj))}</b> and starts today: check before tip-off`]); });
+    if (M && d && !due.length) d.start.forEach(x => { const inj = injFor(y, M, x.name); if (inj && /^(Q|D|GTD|O|OUT|DTD)/i.test(inj)) rows.push(['bad', `<b>${esc(x.name)}</b> is listed <b>${esc(injWord(inj))}</b> and starts today: check before tip-off`]); });
     (ST.alerts || []).filter(a => a.league === lg && Date.now() - a.ts < 12 * 3600e3).forEach(a => rows.push(['bad', esc(a.msg)]));
     if (y) y.rows.filter(r => /^IL/.test(r.slot) && !/^(O|INJ|OUT|IL|NA|SUSP)/i.test(r.inj || '')).forEach(r => rows.push(['warn', `<b>${esc(r.name)}</b> is back from injury but still on IL: he'll need a roster spot`]));
     const A = p.adds; rows.push(['', `${Math.max(0, A.limit - A.used)} of ${A.limit} adds left this week`]);
@@ -1249,8 +1253,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return h + `<div class="sub" style="margin-top:8px">Roster and statuses from your Yahoo team page ${esc(ago(y.ts))}.</div></div>`; }
   function lineupCard(p, lg) { const MI = modelFor(lg); const y = yrFor(lg);
     // injury tag on a player's row: Yahoo's first (it's what decides who starts), else Basketball Monster's
-    const injOf = n => { const r = y && rowIn(y.rows, n); const ty = tag(r && r.inj); if (ty && (HARD_OUT.test(ty) || DOUBTFUL.test(ty) || ty === 'P')) return ty;
-      if (!MI) return ''; const id = MI.find(n); const v = id && MI.P[id] && MI.P[id].inj; return v && /^(Q|D|GTD|O|OUT|DTD|P)\b/i.test(v) && !/^Off/i.test(v) ? v : ''; };
+    const injOf = n => injFor(y, MI, n);
     const lid = y && y.lid; const t = usToday(); const days = p.nowDays || p.days;
     // the "Set lineups" run in progress (or just finished): each day's marker follows it live
     const W8 = ST.yWeek && ST.yWeek.lid === lid && Date.now() - ST.yWeek.id < 6 * 3600e3 ? ST.yWeek : null; const busy = W8 && !W8.done && Date.now() - W8.id < 15 * 60e3;

@@ -85,6 +85,19 @@
     return { tid, give, get, mine: my, theirs: th, cats, theirCats, cut: mine.cut, fill: mine.fill, theirCut: theirs.cut, theirFill: theirs.fill, accept: Object.assign(view, { kind, verdict: kind === 'both' ? 'accept' : kind === 'fair' ? 'sweetener' : 'unlikely' }) };
   }
 
-  root.TRADE = { setup, evalDeal };
+  // your side only, on the one measure: categories over the rest of the season after the swap. Cheap (no league re-run), so the
+  // trade companion can price every player on both rosters as an addition to the deal as it stands.
+  function mySide(S, give, get) { const mine = settleMe(S, S.me.ids.filter(id => !give.includes(id)).concat(get), get);
+    if (S.board) { const B = S.board.of(mine.ids); return { season: B.g * S.board.weeks, cats: B.cats, cut: mine.cut, fill: mine.fill }; }
+    const r = S.after({ [S.me.tid]: mine.ids }); return { season: S.comb(r.ros[S.me.tid].d, r.po ? r.po[S.me.tid].d : null) * S.weeks, cats: null, cut: mine.cut, fill: mine.fill }; }
+  // what each player adds to the deal as ticked: in the deal, the deal with him against the deal without him; not in it, the deal
+  // with him added against the deal as it is. side: 'get' (their players) or 'give' (yours).
+  function marginal(S, give, get, ids, side) { const memo = {}; const at = (gv, gt) => { const k = gv.slice().sort() + '|' + gt.slice().sort(); return memo[k] || (memo[k] = mySide(S, gv, gt)); };
+    const cur = at(give, get); return [...new Set(ids)].map(id => { const inDeal = (side === 'get' ? get : give).includes(id);
+      const without = side === 'get' ? at(give, get.filter(x => x !== id)) : at(give.filter(x => x !== id), get), withHim = side === 'get' ? at(give, get.concat(inDeal ? [] : [id])) : at(give.concat(inDeal ? [] : [id]), get);
+      const cats = withHim.cats && without.cats ? withHim.cats.map((c, i) => ({ c: c.c, d: c.d - without.cats[i].d })) : null;
+      return { id, inDeal, v: withHim.season - without.season, cats, with: withHim.season, without: without.season, withoutFill: without.fill, total: cur.season }; }); }
+
+  root.TRADE = { setup, evalDeal, mySide, marginal };
   if (typeof module !== 'undefined') module.exports = root.TRADE;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -71,6 +71,13 @@ pages contradict each other before 7.32.0.
   An out player left in a starting spot doesn't make a day yellow by himself. Set benches him anyway.
 - **Test:** `node tools/test/t_lineup.js <export>` covers all of the above, including a simulated Set turning every day green.
 
+## Trade companion (7.38.0)
+
+On Yahoo's propose-trade page, `companion` in `context.js` prices every player on their roster and on yours as an addition to the
+deal as ticked (`TRADE.marginal`: the deal with him against the deal without him, on the one measure via `TRADE.mySide`). Ticking
+on Yahoo re-prices everything. The full verdict (`dealView`) follows once both sides have a player. The panel only reads Yahoo's
+page: it never ticks boxes itself. "How it works" sits at the foot of the Strategy card, not in the sub-tab row.
+
 ## Security
 
 - Never type passwords. The BBM password is only in the add-on's local storage (obfuscated) and is only

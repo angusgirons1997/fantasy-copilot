@@ -981,7 +981,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const vol = (st, c) => c === 'fg%' && st && st.fga ? ` <i>${(+st.fga).toFixed(1)} att</i>` : c === 'ft%' && st && st.fta ? ` <i>${(+st.fta).toFixed(1)} att</i>` : '';
     return `<table class="stt2"><thead><tr><th></th>${cols.map(c => `<th>${c[0]}${c[1].g ? `<i>${c[1].g} g</i>` : ''}</th>`).join('')}</tr></thead><tbody>${cats.map(c => `<tr><td>${esc(window.STRAT.Name(c))}</td>${cols.map(x => `<td>${v(x[1].st, c)}${vol(x[1].st, c)}</td>`).join('')}</tr>`).join('')}${cols[0] && cols[0][1].m ? `<tr><td>Minutes</td>${cols.map(x => `<td>${x[1].m ? (+x[1].m).toFixed(1) : '–'}</td>`).join('')}</tr>` : ''}</tbody></table>`; }
   function strategyCard(lg, M, opt) { const V = strategyState(lg, M); if (!V) return '';
-    const sub = [['build', 'Build'], ['moves', 'Best moves'], ['roster', 'Roster'], ['block', 'Trade block'], ['finder', 'Finder'], ['how', 'How it works']]; if (!sub.some(x => x[0] === window.STAB)) window.STAB = 'build';
+    const sub = [['build', 'Build'], ['moves', 'Best moves'], ['roster', 'Roster'], ['block', 'Trade block'], ['finder', 'Finder']]; if (window.STAB !== 'how' && !sub.some(x => x[0] === window.STAB)) window.STAB = 'build';
     let h = `<div class="seg trtabs stabs">${sub.map(([k, t]) => `<button data-stab="${k}" class="${window.STAB === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     if (!V.snap) return `<div class="card strat">${h}<div class="strnone">Waiting for Basketball Monster's Analysis Monster, which comes with the next sync.<span class="skel" style="width:70%"></span><span class="skel" style="width:45%"></span></div></div>`;
     const N = c => esc(NN(c)); const nOpp = Math.max(1, V.rows.length - 1); const beat = w => w == null ? null : Math.round(w * nOpp);
@@ -1049,6 +1049,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       h += `<div class="sub" style="margin-bottom:8px">Players on other teams, by what each would add to your team over the rest of the season in place of ${V.rd && V.rd.d0 ? esc(M.P[V.rd.d0].n) + ', your least valuable player' : 'your least valuable player'}. Free agents are on the Players page.</div>`;
       h += TIER.map(([a, b, name], ti) => { const T0 = L0.filter(x => x.brank >= a && x.brank <= b); return T0.length ? `<details class="more"${ti < 2 ? ' open' : ''}><summary>${name}: ${T0.length}</summary>${T0.slice(0, 12).map(x => playerRow(x, { owner: true })).join('')}</details>` : ''; }).join('') || '<div class="strnone">Nobody yet.</div>';
     } else if (window.STAB === 'how') h += howItWorks(lg, V);
+    // the rules behind the reads: kept out of the sub-tab row, at the foot of the card
+    h += `<div class="stfoot">${window.STAB === 'how' ? '<button class="lnk" data-stab="build">Back to Build</button>' : '<button class="lnk" data-stab="how">How it works</button>'}</div>`;
     return `<div class="card strat">${h}</div>`; }
   // ---- Best moves, on the one measure (current roster only): 1. sells: a one-for-one trade at the player's Basketball Monster
   // value that adds at least your trade bar; the targets are those trades and the profile is what they have in common. A player

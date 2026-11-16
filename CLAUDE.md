@@ -87,6 +87,19 @@ pages contradict each other before 7.32.0.
   punting can only lower expected categories won. Shown at the top ("Use this build") and as the top three under Try a different
   build, next to your own preview.
 
+## League tab standings (7.40.0, agreed with the owner)
+
+`standProj` / `standingsCard` in `season.js`. Three tables, in this order:
+1. **Current standings:** Yahoo's rank, W-L-T and pct (a tie counts as half a win), with the playoff line.
+2. **Remaining categories to win:** Basketball Monster's Analysis Monster rest-of-season win rate × categories a week × weeks left,
+   with the per-opponent "you W-L-T". The maths is in the header.
+3. **Projected final standings:** Yahoo W + expected wins; L + the rest of the categories left; ties unchanged, none projected; pct
+   as Yahoo works it; playoff line at Yahoo's playoff team count; your gap to the line in categories.
+
+Categories a week come from Yahoo's settings (`ysetp.cats`). Weeks left = (first playoff week − 1) − the weeks already in Yahoo's
+standings, counted as (W + L + T) ÷ categories, so a finished week is never counted twice. No model of our own and no adjustments:
+the rate is Analysis Monster's as given. Checked by hand against the 16 Nov Mad dogs numbers.
+
 ## Trade companion (7.38.0)
 
 On Yahoo's propose-trade page, `companion` in `context.js` prices every player on their roster and on yours as an addition to the

@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Fantasy co-pilot",
-  "version": "7.39.1",
+  "version": "7.40.0",
   "description": "Draft: reads Yahoo draft picks live. Season: plans each H2H week from Basketball Monster, syncs in the background and sets your Yahoo lineups.",
   "permissions": [
     "storage",

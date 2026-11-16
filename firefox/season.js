@@ -930,14 +930,54 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // Monster). dShare: { yahooTid: change in that team's share of categories won } — how a trade moves the table
   const nth = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
   // standings: Yahoo's actual table and Basketball Monster's Analysis Monster projection, each exactly as its source gives it
-  function standingsCard(lg, open) { const y = yrFor(lg); if (!y) return ''; const bs = ST['bbmstand:' + y.lid]; const ys = (ST['ystand:' + y.lid] || {}).teams || []; const sp = ST['ysetp:' + y.lid] || {}; const poN = sp.poTeams || null;
+  // The three tables, all from numbers as their sources give them (no model of our own):
+  //   1. Yahoo's standings now (W-L-T, Yahoo's pct: a tie counts as half a win)
+  //   2. remaining categories to win: Basketball Monster's rest-of-season win rate × categories a week × weeks left
+  //   3. projected final standings: Yahoo's record now + table 2 (the rest of the categories left count as losses, ties stay)
+  // Weeks left = regular-season weeks (Yahoo's playoffs start week − 1) less the weeks already in Yahoo's standings, counted
+  // from the standings themselves (W + L + T ÷ categories a week), so a week Yahoo has already counted is never counted twice.
+  const yPct = (w, l, t) => { const n = w + l + t; return n ? (w + t / 2) / n : 0; };
+  const pct3 = x => x.toFixed(3).replace(/^0/, '');
+  const tmKey = s => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]/g, '');
+  function standProj(y) { const sp = ST['ysetp:' + y.lid] || {}; const ys = (ST['ystand:' + y.lid] || {}).teams || []; const bs = ST['bbmstand:' + y.lid];
+    const out = { poN: sp.poTeams || null, ys, bs, why: '' };
+    const cats = (String(sp.cats || '').match(/\([^)]+\)/g) || []).length || String(sp.cats || '').split(',').filter(s => s.trim()).length;
+    const lastReg = sp.poWeeks && sp.poWeeks.length ? Math.min(...sp.poWeeks) - 1 : null;
+    if (!ys.length) { out.why = "Yahoo's standings arrive with the next sync."; return out; }
+    if (!bs || !bs.teams || !bs.teams.length || !bs.teams.some(t => t.winPct != null)) { out.why = "Basketball Monster's projection arrives with the next sync."; return out; }
+    if (!cats || !lastReg) { out.why = "Yahoo's league settings (categories and playoff weeks) arrive with the next sync."; return out; }
+    const played = ys.map(t => t.w + t.l + t.t); const done = Math.max(...played) / cats;
+    if (!Number.isInteger(done)) { out.why = `Yahoo's standings show ${Math.max(...played)} categories played, which isn't a whole number of ${cats}-category weeks, so the projection is left out.`; return out; }
+    const weeks = Math.max(0, lastReg - done), per = cats * weeks;
+    const rate = t => t.winPct == null ? null : t.winPct > 1 ? t.winPct / 100 : t.winPct;
+    const byKey = {}; ys.forEach(t => { byKey[tmKey(t.name)] = t; });
+    const unmatched = []; const rows = bs.teams.map(b => { const yt = b.me ? ys.find(t => String(t.tid) === String(y.tid)) : byKey[tmKey(b.name)]; const r = rate(b);
+      if (!yt || r == null) { unmatched.push(b.name); return null; }
+      const exp = r * per; const W = yt.w + exp, L = yt.l + (per - exp), T = yt.t;
+      return { tid: String(yt.tid), name: yt.name, me: String(yt.tid) === String(y.tid), rate: r, exp, vsMe: b.vsMe, now: yt, W, L, T, pct: yPct(W, L, T) }; }).filter(Boolean);
+    return Object.assign(out, { cats, lastReg, done, weeks, per, rows, unmatched, missing: ys.filter(t => !rows.some(r => r.tid === String(t.tid))).map(t => t.name) }); }
+  function standingsCard(lg, open) { const y = yrFor(lg); if (!y) return ''; const S = standProj(y); const { ys, bs, poN } = S; const isMe = t => String(t.tid) === String(y.tid);
     let h = `<div class="card stn"><div class="h"><span>Standings</span></div>`;
-    if (ys.length) h += `<div class="label lbl2">Yahoo, now</div><div class="tbl">${ys.map(t => `<div class="tr${String(t.tid) === String(y.tid) ? ' me' : ''}${poN && t.rank === poN ? ' cut' : ''}"><span>${t.rank}</span><span class="nm">${String(t.tid) === String(y.tid) ? 'You' : esc(t.name)}</span><span>${t.w}-${t.l}-${t.t}</span></div>`).join('')}</div>${poN ? `<div class="sub">Top ${poN} make the playoffs.</div>` : ''}`;
-    else h += `<div class="sub">Yahoo's standings arrive with the next sync.</div>`;
-    if (bs && bs.teams && bs.teams.length) { const T = bs.teams.slice().sort((a, b) => (b.winPct || 0) - (a.winPct || 0));
-      h += `<div class="label lbl2" style="margin-top:12px">Basketball Monster projection, rest of season <span class="muted">· Analysis Monster · ${esc(ago(bs.ts))}</span></div><div class="tbl">${T.map((t, i) => `<div class="tr${t.me ? ' me' : ''}"><span>${i + 1}</span><span class="nm">${t.me ? 'You' : esc(t.name)}</span><span title="Share of categories Basketball Monster projects them to win from here">${Math.round((t.winPct || 0) * 100)}%</span><span class="muted" title="Categories Basketball Monster projects you to win, lose and tie against them">${t.vsMe ? `you ${t.vsMe.w}-${t.vsMe.l}-${t.vsMe.t}` : ''}</span></div>`).join('')}</div>
-        <div class="sub">Basketball Monster's own projection: the share of categories each team wins from here, counting only the games each team can start. It doesn't include results so far; Yahoo's table above does.</div>`; }
-    else h += `<div class="sub" style="margin-top:8px">Basketball Monster's projection arrives with the next sync.</div>`;
+    // 1. Yahoo now
+    if (ys.length) h += `<div class="label lbl2">Current standings <span class="muted">· Yahoo</span></div><div class="tbl">${ys.map(t => `<div class="tr${isMe(t) ? ' me' : ''}${poN && t.rank === poN ? ' cut' : ''}"><span>${t.rank}</span><span class="nm">${isMe(t) ? 'You' : esc(t.name)}</span><span>${t.w}-${t.l}-${t.t}</span><span class="muted" title="Yahoo's win percentage: a tie counts as half a win">${pct3(t.pct != null ? t.pct : yPct(t.w, t.l, t.t))}</span></div>`).join('')}</div>${poN ? `<div class="sub">Top ${poN} make the playoffs.</div>` : ''}`;
+    if (!S.rows) return h + `<div class="sub" style="margin-top:8px">${esc(S.why)}</div></div>`;
+    const age = `<span class="muted">· projection · Analysis Monster · ${esc(ago(bs.ts))}</span>`;
+    // 2. remaining categories to win
+    const R2 = S.rows.slice().sort((a, b) => b.exp - a.exp);
+    h += `<div class="label lbl2" style="margin-top:12px">Remaining categories to win ${age}</div>
+      <div class="sub">${S.weeks} regular-season week${S.weeks === 1 ? '' : 's'} left × ${S.cats} categories = ${S.per} categories per team. Expected wins = Basketball Monster's win rate × ${S.per}.</div>
+      <div class="tbl c5">${R2.map((t, i) => `<div class="tr${t.me ? ' me' : ''}"><span>${i + 1}</span><span class="nm">${t.me ? 'You' : esc(t.name)}</span><span title="Share of categories Basketball Monster projects them to win from here">${Math.round(t.rate * 100)}%</span><span title="Expected categories won in the ${S.weeks} weeks left">${Math.round(t.exp)}</span><span class="muted" title="Categories Basketball Monster projects you to win, lose and tie against them">${t.vsMe ? `you ${t.vsMe.w}-${t.vsMe.l}-${t.vsMe.t}` : ''}</span></div>`).join('')}</div>
+      <div class="sub">Basketball Monster's own rate: the share of categories each team wins from here, counting only the games each team can start. It ignores results so far.</div>`;
+    // 3. projected final standings
+    const R3 = S.rows.slice().sort((a, b) => b.pct - a.pct || b.W - a.W);
+    h += `<div class="label lbl2" style="margin-top:12px">Projected final standings ${age}</div>
+      <div class="tbl">${R3.map((t, i) => `<div class="tr${t.me ? ' me' : ''}${poN && i + 1 === poN ? ' cut' : ''}"><span>${i + 1}</span><span class="nm">${t.me ? 'You' : esc(t.name)}</span><span title="Yahoo now ${t.now.w}-${t.now.l}-${t.now.t}, plus ${Math.round(t.exp)} expected wins and ${Math.round(S.per - t.exp)} losses">${Math.round(t.W)}-${Math.round(t.L)}-${t.T}</span><span class="muted" title="Win percentage worked out as Yahoo does: a tie counts as half a win">${pct3(t.pct)}</span></div>`).join('')}</div>`;
+    const mi = R3.findIndex(t => t.me);
+    if (poN && mi >= 0 && R3.length > poN) { const sc = t => t.W + t.T / 2; const me = R3[mi];
+      const g = mi >= poN ? sc(R3[poN - 1]) - sc(me) : sc(me) - sc(R3[poN]); const gr = Math.round(g); const other = mi >= poN ? R3[poN - 1] : R3[poN];
+      h += `<div class="sub"><b class="${mi >= poN ? 'minus' : 'plus'}">${gr === 0 ? `Level with ${esc(other.name)}` : mi >= poN ? `${gr} categor${gr === 1 ? 'y' : 'ies'} behind the playoff line` : `${gr} categor${gr === 1 ? 'y' : 'ies'} above the playoff line`}</b> (${mi >= poN ? `${nth(poN)}, ${esc(other.name)}` : `${nth(poN + 1)}, ${esc(other.name)}`}). Top ${poN} make the playoffs.</div>`; }
+    h += `<div class="sub">Yahoo's record now plus the expected wins above; the rest of the ${S.per} categories left count as losses. Ties so far stay as they are, and none are projected. It adds results so far to Basketball Monster's rate.</div>`;
+    if (S.missing.length) h += `<div class="sub minus">Not matched to Basketball Monster, so left out of the projection: ${esc(S.missing.join(', '))}.</div>`;
     return h + '</div>'; }
   // (no automatic deal search any more: trades are judged by you, with the trade block and the deal check on Yahoo's trade page)
   // ---- Strategy page: plain, colour-coded reads of your build and players, with the stats behind each one a tap away ----

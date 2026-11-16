@@ -40,7 +40,10 @@ async function render(store, opt) { opt = opt || {};
   for (const t of tabs) { const b = $(`#bnav [data-tab="${t}"]`); if (b) b.click(); await settle(400); keep(t);
     // a page's own sub-tabs (Strategy: build, best moves, roster, trade block, finder, how it works)
     const subs = [...w.document.querySelectorAll('#out [data-stab]')].map(x => x.dataset.stab);
-    for (const s of subs) { const sb = $(`#out [data-stab="${s}"]`); if (sb) sb.click(); await settle(400); keep(t + ':' + s); } }
+    for (const s of subs) { const sb = $(`#out [data-stab="${s}"]`); if (sb) sb.click(); await settle(400); keep(t + ':' + s); }
+    // the League page's standings tabs (Current, Still to win, Projected final), clicked like a user would
+    const stn = [...w.document.querySelectorAll('#out [data-stntab]')].map(x => x.dataset.stntab);
+    for (const s of stn) { const sb = $(`#out [data-stntab="${s}"]`); if (sb) sb.click(); await settle(400); keep(t + ':stn-' + s); } }
   w.close(); return { tabs, pages, errors, writes };
 }
 module.exports = { render, variant };

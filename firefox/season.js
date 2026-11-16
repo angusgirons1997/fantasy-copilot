@@ -671,6 +671,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const rx = $('resetX'); if (rx) rx.onclick = () => { s.exclude = []; s.protect = []; s.forceDrop = {}; s.pickAdds = {}; saveS(lg); soon(); };
     // the free-agent list: plan another player than the top one (with his drop), or go back to the top one
     o.querySelectorAll('[data-fapos]').forEach(b => b.onclick = () => { s.faPos = b.dataset.fapos; saveS(lg); render(); });
+    o.querySelectorAll('[data-stntab]').forEach(b => b.onclick = () => { s.stnTab = b.dataset.stntab; saveS(lg); render(); });
     o.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { s.pickAdds = { 0: b.dataset.plan }; s.forceDrop = b.dataset.pdrop ? { [K(b.dataset.plan)]: K(b.dataset.pdrop) } : {}; saveS(lg); toast('Planning ' + b.dataset.plan, 'ok'); soon(30); });
     o.querySelectorAll('[data-unplan]').forEach(b => b.onclick = () => { s.pickAdds = {}; s.forceDrop = {}; saveS(lg); toast('Back to the top pickup', 'ok'); soon(30); });
     wireSettings(lg);
@@ -956,29 +957,34 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const exp = r * per; const W = yt.w + exp, L = yt.l + (per - exp), T = yt.t;
       return { tid: String(yt.tid), name: yt.name, me: String(yt.tid) === String(y.tid), rate: r, exp, vsMe: b.vsMe, now: yt, W, L, T, pct: yPct(W, L, T) }; }).filter(Boolean);
     return Object.assign(out, { cats, lastReg, done, weeks, per, rows, unmatched, missing: ys.filter(t => !rows.some(r => r.tid === String(t.tid))).map(t => t.name) }); }
-  function standingsCard(lg, open) { const y = yrFor(lg); if (!y) return ''; const S = standProj(y); const { ys, bs, poN } = S; const isMe = t => String(t.tid) === String(y.tid);
+  // one table at a time, chosen with the tabs at the top of the card (remembered per league)
+  const STN_TABS = [['now', 'Current'], ['left', 'Still to win'], ['final', 'Projected final']];
+  function standingsCard(lg, open) { const y = yrFor(lg); if (!y) return ''; const J = standProj(y); const { ys, bs, poN } = J; const isMe = t => String(t.tid) === String(y.tid);
+    const tab = STN_TABS.some(([k]) => k === S(lg).stnTab) ? S(lg).stnTab : 'now';
     let h = `<div class="card stn"><div class="h"><span>Standings</span></div>`;
+    h += `<div class="seg small sortbar stntab">${STN_TABS.map(([k, t]) => `<button data-stntab="${k}" class="${tab === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     // 1. Yahoo now
-    if (ys.length) h += `<div class="label lbl2">Current standings <span class="muted">· Yahoo</span></div><div class="tbl">${ys.map(t => `<div class="tr${isMe(t) ? ' me' : ''}${poN && t.rank === poN ? ' cut' : ''}"><span>${t.rank}</span><span class="nm">${isMe(t) ? 'You' : esc(t.name)}</span><span>${t.w}-${t.l}-${t.t}</span><span class="muted" title="Yahoo's win percentage: a tie counts as half a win">${pct3(t.pct != null ? t.pct : yPct(t.w, t.l, t.t))}</span></div>`).join('')}</div>${poN ? `<div class="sub">Top ${poN} make the playoffs.</div>` : ''}`;
-    if (!S.rows) return h + `<div class="sub" style="margin-top:8px">${esc(S.why)}</div></div>`;
+    if (tab === 'now') { if (!ys.length) return h + `<div class="sub" style="margin-top:8px">Yahoo's standings arrive with the next sync.</div></div>`;
+      return h + `<div class="label lbl2">Current standings <span class="muted">· Yahoo</span></div><div class="tbl">${ys.map(t => `<div class="tr${isMe(t) ? ' me' : ''}${poN && t.rank === poN ? ' cut' : ''}"><span>${t.rank}</span><span class="nm">${isMe(t) ? 'You' : esc(t.name)}</span><span>${t.w}-${t.l}-${t.t}</span><span class="muted" title="Yahoo's win percentage: a tie counts as half a win">${pct3(t.pct != null ? t.pct : yPct(t.w, t.l, t.t))}</span></div>`).join('')}</div>${poN ? `<div class="sub">Top ${poN} make the playoffs.</div>` : ''}</div>`; }
+    if (!J.rows) return h + `<div class="sub" style="margin-top:8px">${esc(J.why)}</div></div>`;
     const age = `<span class="muted">· projection · Analysis Monster · ${esc(ago(bs.ts))}</span>`;
+    const miss = J.missing.length ? `<div class="sub minus">Not matched to Basketball Monster, so left out of the projection: ${esc(J.missing.join(', '))}.</div>` : '';
     // 2. remaining categories to win
-    const R2 = S.rows.slice().sort((a, b) => b.exp - a.exp);
-    h += `<div class="label lbl2" style="margin-top:12px">Remaining categories to win ${age}</div>
-      <div class="sub">${S.weeks} regular-season week${S.weeks === 1 ? '' : 's'} left × ${S.cats} categories = ${S.per} categories per team. Expected wins = Basketball Monster's win rate × ${S.per}.</div>
-      <div class="tbl c5">${R2.map((t, i) => `<div class="tr${t.me ? ' me' : ''}"><span>${i + 1}</span><span class="nm">${t.me ? 'You' : esc(t.name)}</span><span title="Share of categories Basketball Monster projects them to win from here">${Math.round(t.rate * 100)}%</span><span title="Expected categories won in the ${S.weeks} weeks left">${Math.round(t.exp)}</span><span class="muted" title="Categories Basketball Monster projects you to win, lose and tie against them">${t.vsMe ? `you ${t.vsMe.w}-${t.vsMe.l}-${t.vsMe.t}` : ''}</span></div>`).join('')}</div>
-      <div class="sub">Basketball Monster's own rate: the share of categories each team wins from here, counting only the games each team can start. It ignores results so far.</div>`;
+    if (tab === 'left') { const R2 = J.rows.slice().sort((a, b) => b.exp - a.exp);
+      return h + `<div class="label lbl2">Remaining categories to win ${age}</div>
+      <div class="sub">${J.weeks} regular-season week${J.weeks === 1 ? '' : 's'} left × ${J.cats} categories = ${J.per} categories per team. Expected wins = Basketball Monster's win rate × ${J.per}.</div>
+      <div class="tbl c5">${R2.map((t, i) => `<div class="tr${t.me ? ' me' : ''}"><span>${i + 1}</span><span class="nm">${t.me ? 'You' : esc(t.name)}</span><span title="Share of categories Basketball Monster projects them to win from here">${Math.round(t.rate * 100)}%</span><span title="Expected categories won in the ${J.weeks} weeks left">${Math.round(t.exp)}</span><span class="muted" title="Categories Basketball Monster projects you to win, lose and tie against them">${t.vsMe ? `you ${t.vsMe.w}-${t.vsMe.l}-${t.vsMe.t}` : ''}</span></div>`).join('')}</div>
+      <div class="sub">Basketball Monster's own rate: the share of categories each team wins from here, counting only the games each team can start. It ignores results so far.</div>${miss}</div>`; }
     // 3. projected final standings
-    const R3 = S.rows.slice().sort((a, b) => b.pct - a.pct || b.W - a.W);
-    h += `<div class="label lbl2" style="margin-top:12px">Projected final standings ${age}</div>
-      <div class="tbl">${R3.map((t, i) => `<div class="tr${t.me ? ' me' : ''}${poN && i + 1 === poN ? ' cut' : ''}"><span>${i + 1}</span><span class="nm">${t.me ? 'You' : esc(t.name)}</span><span title="Yahoo now ${t.now.w}-${t.now.l}-${t.now.t}, plus ${Math.round(t.exp)} expected wins and ${Math.round(S.per - t.exp)} losses">${Math.round(t.W)}-${Math.round(t.L)}-${t.T}</span><span class="muted" title="Win percentage worked out as Yahoo does: a tie counts as half a win">${pct3(t.pct)}</span></div>`).join('')}</div>`;
+    const R3 = J.rows.slice().sort((a, b) => b.pct - a.pct || b.W - a.W);
+    h += `<div class="label lbl2">Projected final standings ${age}</div>
+      <div class="tbl">${R3.map((t, i) => `<div class="tr${t.me ? ' me' : ''}${poN && i + 1 === poN ? ' cut' : ''}"><span>${i + 1}</span><span class="nm">${t.me ? 'You' : esc(t.name)}</span><span title="Yahoo now ${t.now.w}-${t.now.l}-${t.now.t}, plus ${Math.round(t.exp)} expected wins and ${Math.round(J.per - t.exp)} losses">${Math.round(t.W)}-${Math.round(t.L)}-${t.T}</span><span class="muted" title="Win percentage worked out as Yahoo does: a tie counts as half a win">${pct3(t.pct)}</span></div>`).join('')}</div>`;
     const mi = R3.findIndex(t => t.me);
     if (poN && mi >= 0 && R3.length > poN) { const sc = t => t.W + t.T / 2; const me = R3[mi];
       const g = mi >= poN ? sc(R3[poN - 1]) - sc(me) : sc(me) - sc(R3[poN]); const gr = Math.round(g); const other = mi >= poN ? R3[poN - 1] : R3[poN];
       h += `<div class="sub"><b class="${mi >= poN ? 'minus' : 'plus'}">${gr === 0 ? `Level with ${esc(other.name)}` : mi >= poN ? `${gr} categor${gr === 1 ? 'y' : 'ies'} behind the playoff line` : `${gr} categor${gr === 1 ? 'y' : 'ies'} above the playoff line`}</b> (${mi >= poN ? `${nth(poN)}, ${esc(other.name)}` : `${nth(poN + 1)}, ${esc(other.name)}`}). Top ${poN} make the playoffs.</div>`; }
-    h += `<div class="sub">Yahoo's record now plus the expected wins above; the rest of the ${S.per} categories left count as losses. Ties so far stay as they are, and none are projected. It adds results so far to Basketball Monster's rate.</div>`;
-    if (S.missing.length) h += `<div class="sub minus">Not matched to Basketball Monster, so left out of the projection: ${esc(S.missing.join(', '))}.</div>`;
-    return h + '</div>'; }
+    h += `<div class="sub">Yahoo's record now plus the expected wins from Still to win (${J.weeks} weeks × ${J.cats} categories = ${J.per}); the rest of the ${J.per} count as losses. Ties so far stay as they are, and none are projected. It adds results so far to Basketball Monster's rate.</div>`;
+    return h + miss + '</div>'; }
   // (no automatic deal search any more: trades are judged by you, with the trade block and the deal check on Yahoo's trade page)
   // ---- Strategy page: plain, colour-coded reads of your build and players, with the stats behind each one a tap away ----
   // The logic (also in "How this works" on the page):

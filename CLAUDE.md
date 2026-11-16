@@ -89,7 +89,8 @@ pages contradict each other before 7.32.0.
 
 ## League tab standings (7.40.0, agreed with the owner)
 
-`standProj` / `standingsCard` in `season.js`. Three tables, in this order:
+`standProj` / `standingsCard` in `season.js`. One table at a time, chosen with tabs at the top of the card (Current, Still to
+win, Projected final; `S(lg).stnTab`, 7.40.1). The three tables:
 1. **Current standings:** Yahoo's rank, W-L-T and pct (a tie counts as half a win), with the playoff line.
 2. **Remaining categories to win:** Basketball Monster's Analysis Monster rest-of-season win rate × categories a week × weeks left,
    with the per-opponent "you W-L-T". The maths is in the header.

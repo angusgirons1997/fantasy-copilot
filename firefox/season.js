@@ -505,7 +505,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const healthNow = {};
   // a newer signed version than the one running: Firefox installs it by itself; until it has, one tap here installs it
   const vnum = v => String(v || '0').split('.').map(Number).reduce((a, x) => a * 1000 + (x || 0), 0);
-  const updHtml = () => { const u = ST.updAvail; const cur = browser.runtime.getManifest().version; return u && u.version && vnum(u.version) > vnum(cur) && u.link ? `<a class="updbar" href="${esc(u.link)}" target="_blank" rel="noopener"><b>Version ${esc(u.version)} is ready</b><span>Tap to install now · otherwise Firefox installs it by itself</span></a>` : ''; };
+  const updHtml = () => { const u = ST.updAvail; const cur = browser.runtime.getManifest().version; return u && u.version && vnum(u.version) > vnum(cur) && u.link ? `<button class="updbar" id="updNow"><b>Version ${esc(u.version)} is ready</b><span>Tap to install now · otherwise Firefox installs it by itself</span></button>` : ''; };
   const ICON = { sync: '<svg class="spin ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/></svg>' };
 
   // ---- Basketball Monster sign-in, saved so the co-pilot can sign back in by itself ----
@@ -518,6 +518,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <label class="sub" style="display:flex;gap:8px;align-items:flex-start;margin-top:8px"><input type="checkbox" id="bbmKeep" ${ST.bbmAuthKeep ? 'checked' : ''}> Also keep them in the browser's safety copy, so they survive Firefox clearing its data (that copy travels with your Firefox account if you use Sync).</label>
       <div class="row" style="margin-top:8px;gap:8px"><button class="btn small" id="bbmSave">Save and test</button>${a.user ? '<button class="lnk" id="bbmForget">Forget</button>' : ''}</div><div class="msg" id="bbmMsg">Status: ${state}</div></div></details>`; }
   function wireBbm() {
+    // Firefox blocks installs from a tab an add-on opens, so ask Firefox itself to fetch and apply the update
+    const un = $('updNow'); if (un) un.onclick = async () => { const t = un.querySelector('span'); un.disabled = true; t.textContent = 'Asking Firefox for the update…'; let s = null;
+      try { s = await browser.runtime.sendMessage({ target: 'bg', cmd: 'update' }); } catch (e) {}
+      t.textContent = s === 'update_available' ? 'Installing: the panel reloads by itself' : 'Firefox hasn\'t picked it up yet: open about:addons, click the gear, then Check for Updates'; };
     const wo = $('wipedOk'); if (wo) wo.onclick = () => { ST.wipedSeen = true; browser.storage.local.set({ wipedSeen: true }); render(); };
     const sv = $('bbmSave'); if (sv) sv.onclick = async () => { const u = $('bbmUser').value.trim(), pw = $('bbmPass').value; const a = ST.bbmAuth || {}; if (!u || (!pw && !a.pass)) { $('bbmMsg').textContent = 'Enter your email and password.'; return; }
       const na = { user: u, pass: pw ? hide(pw) : a.pass, fails: 0, failTs: null, lastErr: null, lastOk: a.lastOk || null }; await browser.storage.local.set({ bbmAuth: na }); ST.bbmAuth = na; $('bbmMsg').textContent = 'Testing…'; sv.disabled = true;

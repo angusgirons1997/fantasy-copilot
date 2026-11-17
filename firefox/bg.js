@@ -39,6 +39,7 @@
     if (!m) return;
     if (m.cmd === 'syncNow') return run(true).then(() => ({ ok: true }));
     if (m.cmd === 'syncDue') return run(false, { lightMin: 15, by: 'panel' }).then(() => ({ ok: true }));
+    if (m.cmd === 'update') return browser.runtime.requestUpdateCheck().then(r => r && r.status, () => null);
     if (m.cmd === 'bbmLogin') return window.SYNC.bbmLogin().then(r => r);
   });
 })();

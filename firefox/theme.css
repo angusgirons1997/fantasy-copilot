@@ -259,7 +259,7 @@ details>summary{transition:color var(--d2)}details>summary:hover{color:var(--lin
 .toast.show{opacity:1;transform:translate(-50%,0) scale(1);transition:opacity var(--d2) var(--spring),transform var(--d3) var(--spring)}
 .toast i{width:8px;height:8px;border-radius:50%;background:var(--mute);flex:none}.toast.ok i{background:#4ADE80}
 /* a new version is ready */
-.updbar{display:flex;flex-direction:column;gap:2px;text-decoration:none;background:var(--accent-soft);color:var(--navy);border-radius:var(--r-sm);padding:12px 12px;margin:0 0 12px;font-size:12px}
+.updbar{border:0;width:100%;text-align:left;font-family:inherit;cursor:pointer;display:flex;flex-direction:column;gap:2px;text-decoration:none;background:var(--accent-soft);color:var(--navy);border-radius:var(--r-sm);padding:12px 12px;margin:0 0 12px;font-size:12px}
 .updbar b{font:600 13px var(--disp);color:var(--link)}
 @media (prefers-color-scheme:dark){.updbar{color:var(--ink2)}}
 /* the settings sheet slides up */

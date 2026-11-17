@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Fantasy co-pilot",
-  "version": "7.40.1",
+  "version": "7.41.0",
   "description": "Draft: reads Yahoo draft picks live. Season: plans each H2H week from Basketball Monster, syncs in the background and sets your Yahoo lineups.",
   "permissions": [
     "storage",
@@ -53,6 +53,7 @@
         "*://basketball.fantasysports.yahoo.com/nba/*"
       ],
       "js": [
+        "names.js",
         "yroster.js",
         "ypage.js"
       ],
@@ -87,6 +88,7 @@
   "background": {
     "scripts": [
       "keep.js",
+      "names.js",
       "nbasched.js",
       "mm.js",
       "yroster.js",

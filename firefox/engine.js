@@ -8,22 +8,16 @@
   const Phi = x => 0.5 * (1 + erf(x / Math.SQRT2));
   const phi = x => Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI);
   function PhiInv(p) { p = Math.min(0.999, Math.max(0.001, p)); let lo = -6, hi = 6; for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (Phi(m) < p) lo = m; else hi = m; } return (lo + hi) / 2; }
-  const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[.'’`]/g, '').replace(/\b(jr|sr|ii|iii|iv)\b/gi, '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const ALIAS = { 'nicolas claxton': 'nic claxton', 'herb jones': 'herbert jones', 'kelly oubre': 'kelly oubre', 'robert williams': 'robert williams', 'alexandre sarr': 'alex sarr', 'derrick jones': 'derrick jones', 'cameron johnson': 'cam johnson' };
-  const key = s => { const n = norm(s); return ALIAS[n] || n; };
-  const TEAMC = { NOR: 'NOP', NO: 'NOP', PHO: 'PHX', GS: 'GSW', SA: 'SAS', NY: 'NYK', UTAH: 'UTA', WSH: 'WAS', BRK: 'BKN', CHO: 'CHA' };
-  const tc = t => { t = String(t || '').toUpperCase(); return TEAMC[t] || t; };
-  const last = n => { const w = norm(n).split(' '); return w[w.length - 1] || ''; };
-  // match Yahoo roster entries to BBM rows: saved id link, exact name, last name + team, initial + last name
+  const NM = root.NAMES || require('./names.js'); const key = NM.key, tc = NM.team; // one name rule for every page (names.js)
+  const last = n => key(n).split(' ').pop(); // surname only: kept for the cautious "is he really gone?" check below
+  // match Yahoo roster entries to BBM rows: saved id link, else the one rule in names.js
   function matchPlayers(yrows, bbm, idmap) {
     const pairs = [], unmatched = [], used = new Set();
     yrows.forEach(y => {
       const nm = typeof y === 'string' ? y : y.name, team = typeof y === 'string' ? '' : y.team, pid = typeof y === 'string' ? null : y.pid;
       let hit = null;
       if (pid && idmap && idmap[pid]) hit = bbm.find(b => b.bbm === idmap[pid] && !used.has(b));
-      if (!hit) hit = bbm.find(b => !used.has(b) && key(b.name) === key(nm));
-      if (!hit && team) { const c = bbm.filter(b => !used.has(b) && last(b.name) === last(nm) && tc(b.team) === tc(team)); if (c.length === 1) hit = c[0]; }
-      if (!hit) { const c = bbm.filter(b => !used.has(b) && last(b.name) === last(nm) && norm(b.name)[0] === norm(nm)[0]); if (c.length === 1) hit = c[0]; }
+      if (!hit) hit = NM.pick(bbm.filter(b => !used.has(b)), nm, team);
       if (hit) { used.add(hit); pairs.push({ y: nm, pid, b: hit }); } else unmatched.push(nm);
     });
     return { pairs, unmatched };

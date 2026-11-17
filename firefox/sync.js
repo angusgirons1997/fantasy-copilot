@@ -18,8 +18,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   let beat = 0;
   const trace = (step, ok, info) => { if (TR) TR.push({ t: Date.now(), step, ok, info: info == null ? '' : String(info).slice(0, 300) });
     if (lockBy && Date.now() - beat > 20e3) { beat = Date.now(); try { put({ syncLock: { ts: beat, by: lockBy, step } }); } catch (e) {} } };
-  const nk = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[.'’`]/g, '').replace(/\b(jr|sr|ii|iii|iv)\b/gi, '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const lastI = s => { const w = nk(s).split(' '); return (w[0] || '')[0] + ' ' + (w[w.length - 1] || ''); };
+  const NM = globalThis.NAMES || require('./names.js'); const nk = NM.key; // one name rule for every page (names.js)
   // a sign-in problem (as opposed to a site or network problem): the sync stops asking and the panel shows one button to fix it
   const authErr = (site, msg) => { const e = new Error(msg); e.auth = site; return e; };
   const sleep = ms => new Promise(z => setTimeout(z, ms));
@@ -156,7 +155,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       trace(tag + ' read', false, ((m && m.error) || 'parse failed') + ' · team 1 ' + val(d, 'Team1DD') + ', team 2 ' + val(d, 'Team2DD') + ' (wanted ' + t.myTid + ' v ' + t.oppTid + ') · ' + info.gameTicks + ' game ticks · ' + pageText(d));
       throw new Error(/Final/.test((m && m.error) || '') ? 'Basketball Monster showed no results for this matchup (team ' + val(d, 'Team1DD') + ' v ' + val(d, 'Team2DD') + ', ' + t.start + ' to ' + t.end + ')' : (m && m.error) || 'Could not read Matchup Monster'); }
     // BBM can lag behind Yahoo pickups: if your Yahoo roster has players BBM doesn't, ask BBM to refresh rosters and read again
-    if (t.yNames && t.yNames.length) { const bb = new Set(m.players.filter(p => p.side === 0 && p.type !== 'fa').map(p => lastI(p.name))); const miss = t.yNames.filter(n => !bb.has(lastI(n)));
+    if (t.yNames && t.yNames.length) { const bb = m.players.filter(p => p.side === 0 && p.type !== 'fa'); const miss = t.yNames.filter(n => !bb.some(p => NM.same(p.name, n)));
       if (miss.length) { trace(tag + ' roster check', false, 'BBM missing ' + miss.join(', ') + ': refreshing rosters');
         try { d = await post(d, {}, ['pageTitleRowRefresh', ''], tag + ' refresh rosters'); if (!t.noImport) d = await post(d, {}, ['ImportButton', 'Import Provider Selections'], tag + ' import Yahoo lineups'); d = await post(d, {}, null, tag + ' process');
           const m2 = root.MMPARSE(d); if (m2 && !m2.error) m = m2; } catch (e) { trace(tag + ' refresh rosters', false, e.message); } }
@@ -255,8 +254,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const out = [];
     for (const tm of teams) {
       try { const d = html(await req(`${YH}/nba/${lid}/${tm.tid}`, null, 'Yahoo roster ' + tm.tid));
-        // player links only: Yahoo's note icons sit in the same cell ("Player Note", "New Player Note", "No new player Notes")
-        const isNote = n => /\bplayer notes?\b/i.test(n); const links = [...d.querySelectorAll('a.name, .ysf-player-name a')].filter(a => !isNote((a.getAttribute('title') || a.textContent || '').trim()) && !/note/i.test(a.className || ''));
+        // player links only: Yahoo's note icons sit in the same cell ("Player Note", "New Player Note", "No new player Notes").
+        // Skipped by their text, not their class: since Nov 2026 the name link itself has the class "playernote"
+        const isNote = n => /\bplayer notes?\b/i.test(n); const links = [...d.querySelectorAll('a.name, .ysf-player-name a')].filter(a => !isNote((a.getAttribute('title') || a.textContent || '').trim()));
         const names = links.map(a => (a.getAttribute('title') || a.textContent || '').trim()).filter(n => n && n.length > 3);
         // each player's Yahoo id (for opening a suggested trade on Yahoo with the players already ticked)
         const yids = {}; links.forEach(a => { const n = (a.getAttribute('title') || a.textContent || '').trim(); const m = (a.getAttribute('data-ys-playerid') || '').match(/\d+/) || (a.getAttribute('href') || '').match(/players\/(\d+)/); if (n && m) yids[n] = m[1] || m[0]; });
@@ -544,7 +544,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         else st.nextErr = 'next opponent not found on Yahoo';
       }
       if (mode === 'full') {
-        if (old('lgscan:' + y.lid)) { log('league rosters'); let teams = null;
+        if (old('lgscan:' + y.lid) || !(all['lgscan:' + y.lid].teams || []).some(t => t.players && t.players.length)) { log('league rosters'); let teams = null;
           { const tl = m.teams && m.teams.length ? m.teams : ((all['ystand:' + y.lid] || {}).teams || []).map(t => ({ tid: String(t.tid), name: t.name })); if (tl.length) teams = await yLeague(y.lid, tl); }
           if (teams) await put({ ['lgscan:' + y.lid]: { ts: Date.now(), league: y.league, teams, myTid: y.tid } }); }
         // last week's result for the track record (once, after the week ends)
@@ -628,8 +628,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     news = news || { items: [] };
     Object.keys(all).filter(k => k.startsWith('plan:') && all[k] && all[k].days).forEach(k => { const pl = all[k]; const d = pl.days.find(x => x.date === today); if (!d || !d.open) return;
       const fresh = news.items.filter(n => Date.now() - n.ts < 6 * 3600e3 && ALERT_RE.test(n.status || ''));
-      d.start.forEach(name => { const n = fresh.find(x => nk(x.name) === nk(name) || lastI(x.name) === lastI(name)) || (yflags[nk(name)] && Object.assign({ name }, yflags[nk(name)])); if (!n) return; const key = today + '|' + nk(name) + '|' + (/OUT|SUSP/.test(n.status) ? 'out' : n.status); if (sent[key]) return;
-        const swap = (d.bench || []).filter(b => !fresh.some(x => nk(x.name) === nk(b)))[0];
+      d.start.forEach(name => { const n = NM.pick(fresh, name) || (yflags[nk(name)] && Object.assign({ name }, yflags[nk(name)])); if (!n) return; const key = today + '|' + nk(name) + '|' + (/OUT|SUSP/.test(n.status) ? 'out' : n.status); if (sent[key]) return;
+        const swap = (d.bench || []).filter(b => !fresh.some(x => NM.same(x.name, b)))[0];
         const msg = name + ' is ' + n.status.toLowerCase() + (n.detail ? ' (' + n.detail + ')' : '') + '. ' + (swap ? 'Start ' + swap + ' instead.' : 'Nobody on your bench plays today: consider a pickup.');
         sent[key] = Date.now(); out.push({ key, league: pl.league, title: pl.league + ': lineup change', msg, ts: Date.now() }); }); });
     if (out.length) { const recent = (all.alerts || []).filter(a => Date.now() - a.ts < 36 * 3600e3).concat(out).slice(-20); await put({ alerted: sent, alerts: recent }); out.forEach(a => { try { root.NOTIFY && root.NOTIFY(a.key, a.title, a.msg); } catch (e) {} }); }
@@ -707,5 +707,5 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       return { mode, res }; }
     finally { lockBy = null; await put({ syncLock: null }); }
   }
-  root.SYNC = { parseTM, parseAM, parseRanks, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
+  root.SYNC = { usToday, parseTM, parseAM, parseRanks, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
 })(typeof window !== 'undefined' ? window : globalThis);

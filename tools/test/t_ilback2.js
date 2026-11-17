@@ -4,7 +4,8 @@ const a=src.indexOf('  // Yahoo refuses every lineup change'), b=src.indexOf('  
 const K=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z ]/g,'').trim(); const lastOf=n=>{const w=K(n).split(' ');return w[w.length-1];};
 const esc=s=>String(s); const ago=()=>'just now'; const usToday=()=>'2026-11-09'; const fmtD=d=>({'2026-11-09':'Mon, 9 Nov','2026-11-11':'Wed, 11 Nov'})[d]||d; let Y; const ST={'ysetp:64669':{slots:Array(10).fill('X'),bench:4},'ysetp:99377':{slots:Array(10).fill('X'),bench:4}};
 const RULES={'64669':{spots:14},'99377':{spots:14}};
-const f=new Function('K','lastOf','esc','ago','yrFor','usToday','fmtD','ST','RULES', src.slice(a,b)+'; return [ilBackCard, ilBlocked];')(K,lastOf,esc,ago,()=>Y,usToday,fmtD,ST,RULES);
+const NAMES=require(require('path').join(__dirname,'..','..','firefox','names.js'));
+const f=new Function('K','lastOf','esc','ago','yrFor','usToday','fmtD','ST','RULES','NAMES', src.slice(a,b)+'; return [ilBackCard, ilBlocked];')(K,lastOf,esc,ago,()=>Y,usToday,fmtD,ST,RULES,NAMES);
 const [card,blocked]=f; const strip=h=>h.replace(/<[^>]+>/g,'').replace(/\s+/g,' ');
 let bad=0; const ok=(c,m,h)=>{console.log(c?'✓':'✗',m+(h?'\n    '+strip(h).slice(0,600):''));if(!c)bad++;};
 const row=(name,slot,inj)=>({name,slot,inj:inj||''});

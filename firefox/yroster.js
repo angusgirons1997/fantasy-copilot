@@ -35,14 +35,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // the visible alert Yahoo shows after a lineup post (e.g. why a move was refused)
   function yahooMsg(doc) { const el = [...doc.querySelectorAll('.Alert-critical, .Alert-warning, .Alert-error, .errors, .ysf-error, .Alert')].find(e => !e.classList.contains('Hidden') && txt(e.querySelector('.Message') || e).length > 3);
     return el ? txt(el.querySelector('.Message') || el).slice(0, 160) : ''; }
-  const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[.'’`]/g, '').replace(/\b(jr|sr|ii|iii|iv)\b/gi, '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const ALIAS = { 'nicolas claxton': 'nic claxton', 'herb jones': 'herbert jones', 'alexandre sarr': 'alex sarr', 'cameron johnson': 'cam johnson' };
-  const K = s => { const n = norm(s); return ALIAS[n] || n; };
-  // planned starters -> Yahoo slots for one day's roster. Names are matched the way the panel matches them (exact, else a
-  // surname that only one player on the roster has), so a "Nic"/"Nicolas" difference never leaves a starter on the bench.
+  const NM = globalThis.NAMES || require('./names.js');
+  // planned starters -> Yahoo slots for one day's roster. Names are matched by the panel's one rule (names.js), so a
+  // "Nic"/"Nicolas" difference never leaves a starter on the bench, and two players with one surname are never mixed up.
   function assign(rows, start, bench, il, empty) {
-    const last = n => { const w = K(n).split(' '); return w[w.length - 1]; };
-    const rowFor = n => rows.find(r => K(r.name) === K(n)) || (() => { const c = rows.filter(r => last(r.name) === last(n)); return c.length === 1 ? c[0] : null; })();
+    const rowFor = n => NM.pick(rows, n);
     const pidsOf = list => [...new Set((list || []).map(rowFor).filter(Boolean).map(r => r.pid))];
     const startP = pidsOf(start), benchP = pidsOf(bench).filter(x => !startP.includes(x)), ilP = new Set(pidsOf(il));
     const isAct = x => x && x !== 'BN' && !/^IL/.test(x);
@@ -128,20 +125,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   browser.storage.local.get('yCmd').then(o => { const c = o.yCmd; if (c && !c.done && c.cmd === 'week' && c.tid && Date.now() - (c.rs || c.ts) < 90e3 && location.hostname === 'basketball.fantasysports.yahoo.com') claimWeek(c); }).catch(() => {});
   browser.storage.onChanged.addListener((ch, area) => {
     if (area !== 'local' || !ch.yCmd || !ch.yCmd.newValue) return; const c = ch.yCmd.newValue; if (c.done) return;
-    if (c.cmd === 'week' && c.tid && location.hostname === 'basketball.fantasysports.yahoo.com') { claimWeek(c); return; }
-    const form = document.querySelector('form[action*="/editroster"]'); const r = parse(document);
-    if (!form || !r || r.lid !== c.lid || (c.cmd !== 'week' && r.date !== c.date)) { browser.storage.local.set({ yCmd: Object.assign({}, c, { done: true, err: 'Open your team page for ' + c.date + ' first.' }) }); return; }
-    if (c.cmd === 'week') { browser.storage.local.set({ yCmd: Object.assign({}, c, { done: true }) }); setWeek(Object.assign({}, c, { tid: r.tid })); return; }
-    if (c.cmd === 'highlight') {
-      document.querySelectorAll('.mdf-hl').forEach(e => { e.classList.remove('mdf-hl'); e.style.outline = ''; });
-      Object.entries(c.marks || {}).forEach(([pid, col]) => { const s = form.querySelector('select[name="' + pid + '"]'); const tr = s && s.closest('tr'); if (tr) { tr.classList.add('mdf-hl'); tr.style.outline = '2px solid ' + col; tr.style.outlineOffset = '-2px'; } });
-      browser.storage.local.set({ yCmd: Object.assign({}, c, { done: true }) }); return;
-    }
-    if (c.cmd === 'lineup') {
-      let n = 0;
-      Object.entries(c.assign).forEach(([pid, slot]) => { const s = form.querySelector('select[name="' + pid + '"]'); if (s && s.value !== slot && [...s.options].some(o => o.value === slot)) { s.value = slot; s.dispatchEvent(new Event('change', { bubbles: true })); n++; } });
-      browser.storage.local.set({ yCmd: Object.assign({}, c, { done: true, changed: n }) });
-      if (n && c.submit) setTimeout(() => form.submit(), 200);
-    }
+    // the panel only ever sends "week" (Set lineups); every Yahoo tab offers, one is elected
+    if (c.cmd === 'week' && c.tid && location.hostname === 'basketball.fantasysports.yahoo.com') claimWeek(c);
   });
 })();

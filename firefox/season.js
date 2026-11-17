@@ -1,10 +1,10 @@
 // Season co-pilot panel: plans the week from Matchup Monster and carries the daily lineup to Yahoo.
 if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
 (function () {
-  const E = window.SEASON; const K = E.key; const $ = id => document.getElementById(id);
+  const E = window.SEASON; const K = E.key; const NAMES = window.NAMES; const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const pct = x => x == null ? '–' : Math.round(x * 100) + '%';
-  const usToday = () => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } };
+  const usToday = window.SYNC.usToday; // today in New York (NBA days), one copy in sync.js
   const sur = n => { const w = String(n).split(' ').filter(x => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(x)); return w[w.length - 1] || n; };
   const ago = ts => { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : Math.round(m / 60) + ' h ago'; };
   // plain words: NBA teams, lineup spots and how much a move helps (the panel shows no abbreviations)
@@ -209,8 +209,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // with a game can fill). The status is Yahoo's tag on your team page, read from the newest of your roster and that day's page.
   const HARD_OUT = /^(O|OUT|INJ|SUSP|NA|OFS)$/i, DOUBTFUL = /^(GTD|DTD|Q|D)$/i;
   const tag = s => String(s || '').trim().split(/\s/)[0].toUpperCase();
-  const sameName = (a, b) => K(a) === K(b);
-  const rowIn = (rows, n) => (rows || []).find(r => sameName(r.name, n)) || (() => { const c = (rows || []).filter(r => lastOf(r.name) === lastOf(n)); return c.length === 1 ? c[0] : null; })();
+  const sameName = (a, b) => NAMES.same(a, b);
+  const rowIn = (rows, n) => NAMES.pick(rows, n); // the one name rule (names.js)
   // the injury tag shown on a player: Yahoo's whenever Yahoo lists him (no tag there = healthy, even if Basketball Monster's
   // status is older or different); Basketball Monster's only for a player Yahoo's roster doesn't show
   const injFor = (y, M, n) => { const r = y && y.rows && rowIn(y.rows, n); if (r) { const t = tag(r.inj); return HARD_OUT.test(t) || DOUBTFUL.test(t) || t === 'P' ? t : ''; }
@@ -295,7 +295,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     // Yahoo is the truth for who's on your roster: anyone there that Matchup Monster doesn't list at all is filled in from BBM's
     // projections and the NBA schedule (otherwise he'd look like he has no games)
     let filled = []; if (y && y.rows && y.rows.length >= 8 && !m.synthetic && Date.now() - y.ts < 6 * 3600e3 && window.CTX && window.CTX.fillRows) { try { const meS = s.swap ? 1 : 0;
-      const mineAll = model.players.filter(pl => pl.side === meS); const has = r => mineAll.some(pl => K(pl.name) === K(r.name) || (lastOf(pl.name) === lastOf(r.name) && String(pl.team || '').toUpperCase() === String(r.team || '').toUpperCase()));
+      const mineAll = model.players.filter(pl => pl.side === meS); const has = r => mineAll.some(pl => NAMES.same(pl.name, r.name, pl.team, r.team));
       const miss = y.rows.filter(r => !has(r)); const MI = miss.length && miss.length <= 4 ? modelFor(m.league) : null;
       if (MI) { filled = window.CTX.fillRows(MI, ST, model, miss, meS, usToday()); model = Object.assign({}, model, { players: model.players.concat(filled) }); } } catch (e) { console.error(e); } }
     // players another team already has are taken out before planning
@@ -807,23 +807,24 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // ---- lineup management: plan vs what Yahoo actually has set, day by day ----
   let selDay = null, luAll = false, wbNote = ''; const luBusy = {}, luFail = {};
   const LU = lid => ST['ylu:' + lid] || {};
-  const lastOf = n => { const w = K(n).split(' '); return w[w.length - 1]; };
   function actualFor(lid, date) { const e = LU(lid)[date]; return e && e.rows ? e : null; }
   // fetch each open day's real Yahoo lineup (API when connected, else your Yahoo team page for that date)
   // what's kept of a Yahoo team page for one date: who's where, and whether Yahoo shows him playing that day
   const luRow = x => ({ name: x.name, slot: x.slot, pid: x.pid, locked: !!x.locked, hasGame: !!x.hasGame, game: x.game || '', inj: x.inj || '', elig: x.elig || [], team: x.team || '' });
   async function refreshLineups(lg, dates, force) {
-    const y = yrFor(lg); if (!y) return; const lid = y.lid; const cur = Object.assign({}, LU(lid)); let changed = false;
+    const y = yrFor(lg); if (!y) return; const lid = y.lid; const cur = Object.assign({}, LU(lid)); const got = [];
     // a day read before your latest roster read, with different players on it (a pickup or drop since): read it again now
     const sig = rows => (rows || []).map(r => K(r.name)).sort().join('|'); const ySig = sig(y.rows);
     for (const d of dates) { const e = cur[d]; const near = d === usToday() || d === selDay; const moved = e && y.ts > e.ts && sig(e.rows) !== ySig;
       if (!force && e && !moved && Date.now() - e.ts < (near ? 5 : 30) * 60e3) continue; if (luBusy[lid + d] || (!force && luFail[lid + d] > Date.now())) continue; luBusy[lid + d] = true;
       try { let rows = null, emp = [];
         { const r = await fetch(`https://basketball.fantasysports.yahoo.com/nba/${lid}/${y.tid}/team?date=${d}`, { credentials: 'include', cache: 'no-store' }); const doc = new DOMParser().parseFromString(await r.text(), 'text/html'); const yr = window.YPARSE && window.YPARSE(doc); if (yr && yr.date === d) { rows = yr.rows.map(luRow); emp = yr.empty || []; } }
-        if (rows && rows.length) { cur[d] = { ts: Date.now(), rows, empty: emp }; changed = true; } }
+        if (rows && rows.length) { cur[d] = { ts: Date.now(), rows, empty: emp }; got.push(d); } }
       catch (e) { luFail[lid + d] = Date.now() + 5 * 60e3; console.warn('lineup check', d, e.message); } // a failed read waits 5 minutes
       luBusy[lid + d] = false; }
-    if (changed) { ST['ylu:' + lid] = cur; await browser.storage.local.set({ ['ylu:' + lid]: cur }); }
+    // only the days read here go into the latest saved copy: Set lineups may have saved other days during these reads
+    if (got.length) { const latest = Object.assign({}, LU(lid)); got.forEach(d => { latest[d] = cur[d]; });
+      ST['ylu:' + lid] = latest; await browser.storage.local.set({ ['ylu:' + lid]: latest }); }
   }
   // your roster as Yahoo has it right now, read from your team page (after a pickup or drop on Yahoo the panel doesn't wait for the
   // next sync or for you to open your team page): written the same way the team page itself writes it, so everything follows
@@ -836,7 +837,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // compare one day: who must move in, who must sit
   function dayCheck(d, act, onRosterKeys) {
     const isStart = r => r.slot !== 'BN' && !/^IL/.test(r.slot);
-    const act0 = act ? act.rows : null; const find = n => act0 && (act0.find(r => K(r.name) === K(n)) || act0.find(r => lastOf(r.name) === lastOf(n)));
+    const act0 = act ? act.rows : null; const find = n => act0 && NAMES.pick(act0, n);
     // a locked player (his game has started) can't be moved any more, so he's never counted as a change
     const start = d.start.map(x => { const r = find(x.name); return Object.assign({}, x, { onY: !!r, now: r ? r.slot : null, locked: !!(r && r.locked), moveIn: !!(r && !isStart(r) && !r.locked) }); });
     const play = d.bench.filter(x => !x.zero);
@@ -844,7 +845,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     // someone out still sitting in a starting spot on Yahoo costs nothing by himself (he won't play): "Set lineups" benches him
     // anyway, but he only makes the day need changes when a planned starter needs his spot (that starter shows as "move in")
     const out = d.bench.filter(x => x.zero);
-    const noGame = act0 ? act0.filter(r => !d.start.concat(d.bench).some(x => K(x.name) === K(r.name) || lastOf(x.name) === lastOf(r.name)) && !/^IL/.test(r.slot)).map(r => r.name) : [];
+    const noGame = act0 ? act0.filter(r => !d.start.concat(d.bench).some(x => NAMES.same(x.name, r.name)) && !/^IL/.test(r.slot)).map(r => r.name) : [];
     const changes = start.filter(x => x.moveIn).length + sit.filter(x => x.moveOut).length;
     return { start, sit, out, noGame, changes, known: !!act0 };
   }
@@ -939,7 +940,6 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // from the standings themselves (W + L + T ÷ categories a week), so a week Yahoo has already counted is never counted twice.
   const yPct = (w, l, t) => { const n = w + l + t; return n ? (w + t / 2) / n : 0; };
   const pct3 = x => x.toFixed(3).replace(/^0/, '');
-  const tmKey = s => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]/g, '');
   function standProj(y) { const sp = ST['ysetp:' + y.lid] || {}; const ys = (ST['ystand:' + y.lid] || {}).teams || []; const bs = ST['bbmstand:' + y.lid];
     const out = { poN: sp.poTeams || null, ys, bs, why: '' };
     const cats = (String(sp.cats || '').match(/\([^)]+\)/g) || []).length || String(sp.cats || '').split(',').filter(s => s.trim()).length;
@@ -951,12 +951,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (!Number.isInteger(done)) { out.why = `Yahoo's standings show ${Math.max(...played)} categories played, which isn't a whole number of ${cats}-category weeks, so the projection is left out.`; return out; }
     const weeks = Math.max(0, lastReg - done), per = cats * weeks;
     const rate = t => t.winPct == null ? null : t.winPct > 1 ? t.winPct / 100 : t.winPct;
-    const byKey = {}; ys.forEach(t => { byKey[tmKey(t.name)] = t; });
-    const unmatched = []; const rows = bs.teams.map(b => { const yt = b.me ? ys.find(t => String(t.tid) === String(y.tid)) : byKey[tmKey(b.name)]; const r = rate(b);
-      if (!yt || r == null) { unmatched.push(b.name); return null; }
+    // each Yahoo team's Basketball Monster team: the same matcher as the rest of the League tab (copes with a renamed team)
+    const am = amMatch(y.lid, y.tid); const rows = ys.map(yt => { const b = am[String(yt.tid)]; const r = b && rate(b); if (r == null) return null;
       const exp = r * per; const W = yt.w + exp, L = yt.l + (per - exp), T = yt.t;
       return { tid: String(yt.tid), name: yt.name, me: String(yt.tid) === String(y.tid), rate: r, exp, vsMe: b.vsMe, now: yt, W, L, T, pct: yPct(W, L, T) }; }).filter(Boolean);
-    return Object.assign(out, { cats, lastReg, done, weeks, per, rows, unmatched, missing: ys.filter(t => !rows.some(r => r.tid === String(t.tid))).map(t => t.name) }); }
+    return Object.assign(out, { cats, lastReg, done, weeks, per, rows, missing: ys.filter(t => !rows.some(r => r.tid === String(t.tid))).map(t => t.name) }); }
   // one table at a time, chosen with the tabs at the top of the card (remembered per league)
   const STN_TABS = [['now', 'Current'], ['left', 'Still to win'], ['final', 'Projected final']];
   function standingsCard(lg, open) { const y = yrFor(lg); if (!y) return ''; const J = standProj(y); const { ys, bs, poN } = J; const isMe = t => String(t.tid) === String(y.tid);
@@ -1244,7 +1243,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   function ilBackCard(p, lg) { const y = yrFor(lg); if (!y || !y.rows || Date.now() - y.ts > 36 * 3600e3) return '';
     const st = r => String(r.inj || '').trim().toUpperCase();
     const okIn = (slot, r) => /^(INJ|O|OUT|IL|NA|SUSP)$/.test(st(r)) || (/\+/.test(slot) && /^(GTD|DTD|D|Q)$/.test(st(r)));
-    const same = (a, b) => K(a) === K(b) || lastOf(a) === lastOf(b);
+    const same = (a, b) => NAMES.same(a, b);
     // 1. must move: healthy but still in an IL spot (Yahoo's own "over the max roster size" warning is the final word; when the
     //    statuses don't single anyone out, the IL player with the mildest status is the one Yahoo now counts as active)
     let back = y.rows.filter(r => /^IL/.test(r.slot) && !okIn(r.slot, r));
@@ -1323,13 +1322,13 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     // every player on your Yahoo roster for a day, in one of five groups. Yahoo's own page for that date says who has a game;
     // anyone Yahoo shows playing that the plan doesn't know about is listed on his own, never hidden under "no game"
     const groups = (d, c) => { const act = lid ? actualFor(lid, d.date) : null; const yRows = (act && act.rows) || (y && y.rows) || [];
-      const yInfo = !!(act && act.rows.some(r => r.hasGame)); const fy = n => yRows.find(r => K(r.name) === K(n)) || yRows.find(r => lastOf(r.name) === lastOf(n));
-      const inPlan = n => d.start.concat(d.bench).some(x => K(x.name) === K(n) || lastOf(x.name) === lastOf(n));
+      const yInfo = !!(act && act.rows.some(r => r.hasGame)); const fy = n => NAMES.pick(yRows, n);
+      const inPlan = n => d.start.concat(d.bench).some(x => NAMES.same(x.name, n));
       const extra = yInfo ? yRows.filter(r => !/^IL/.test(r.slot) && r.hasGame && !inPlan(r.name) && !/^(O|OUT|INJ|SUSP)$/i.test(r.inj || '')) : [];
       const il = yRows.filter(r => /^IL/.test(r.slot) && !inPlan(r.name)).map(r => r.name);
       const noGame = c.noGame.filter(n => !extra.some(r => r.name === n) && !il.includes(n));
       const yNo = n => { if (!yInfo) return false; const r = fy(n); return !!(r && !r.hasGame); };
-      const known = n => (p.mineNames || []).some(x => K(x) === K(n) || lastOf(x) === lastOf(n)); extra.forEach(r => { r._known = known(r.name); });
+      const known = n => (p.mineNames || []).some(x => NAMES.same(x, n)); extra.forEach(r => { r._known = known(r.name); });
       return { start: c.start, sit: c.sit, extra, out: c.out, noGame, il, yNo, playing: c.start.length + c.sit.length + extra.length }; };
     const d = days.find(x => x.date === selDay) || days[0]; const c = chk[d.date]; const act = lid ? actualFor(lid, d.date) : null; const G = groups(d, c);
     const games = G.playing; const crowded = games > slots;
@@ -1410,7 +1409,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     try { await refreshLineups(lg, W.days || [], true); } catch (e) {} DV++; render();
     const pl = ST['plan:' + lg], y = yrFor(lg); if (!pl || !y || W.retry) return; const isS = r => r.slot !== 'BN' && !/^IL/.test(r.slot);
     const left = (W.days || []).filter(date => { const pd = pl.days.find(x => x.date === date), a = actualFor(y.lid, date); if (!pd || !a) return false;
-      const f = n => a.rows.find(r => K(r.name) === K(n)) || a.rows.find(r => lastOf(r.name) === lastOf(n)); return pd.start.some(n => { const r = f(n); return r && !r.locked && r.hasGame && !isS(r); }); });
+      const f = n => NAMES.pick(a.rows, n); return pd.start.some(n => { const r = f(n); return r && !r.locked && r.hasGame && !isS(r); }); });
     if (left.length) sendWeek(y, pl, left, true); }
   // ---------- sync ----------
   let syncing = false; const planFrom = {}, planNow = {};

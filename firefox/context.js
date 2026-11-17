@@ -2,9 +2,7 @@
 (function (root) {
   const H = root.H2H;
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const nk = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[.'’`]/g, '').replace(/\b(jr|sr|ii|iii|iv)\b/gi, '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const TEAMC = { NOR: 'NOP', NO: 'NOP', PHO: 'PHX', GS: 'GSW', SA: 'SAS', NY: 'NYK', UTAH: 'UTA', WSH: 'WAS', BRK: 'BKN', CHO: 'CHA' };
-  const tc = t => { t = String(t || '').toUpperCase(); return TEAMC[t] || t; };
+  const NM = root.NAMES || require('./names.js'); const nk = NM.key, tc = NM.team; // one name rule for every page (names.js)
   const sur = n => { const w = String(n).split(' ').filter(x => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(x)); return w[w.length - 1] || n; };
   // values are shown in the league's own currency: extra categories won a week (categories leagues) or win-chance points
   let UNIT = null; const WWC = () => UNIT ? 'categories won a week' : 'weekly win chance';
@@ -32,12 +30,9 @@
       const ros = tot ? { g: tot.g, m: tot.m || (rv ? rv.m : null), lv: rv ? rv.lv : 0, st: tot.st, cv: rv ? rv.cv : null } : (V.ros && V.ros[id]);
       const p = { id, n: b.n || r.n, t: tc(b.t || r.t), pos: b.pos || r.pos, inj: b.inj || r.inj, notes: (b.notes || []).concat(r.notes || []), rank: r.rank || b.rank, rest: V.rest && V.rest[id], next: V.next && V.next[id], ros, po: V.po && V.po[id], form: V.form && V.form[id], season: V.season && V.season[id] };
       if (!p.n) return; P[id] = p; (byName[nk(p.n)] = byName[nk(p.n)] || []).push(id); });
-    // name match, then known nicknames, then surname + team (Cameron/Cam Johnson, Nicolas/Nic Claxton…)
-    const ALIAS = { 'cameron johnson': 'cam johnson', 'nicolas claxton': 'nic claxton', 'herbert jones': 'herb jones', 'alexandre sarr': 'alex sarr', 'kenyon martin': 'kj martin', 'moe wagner': 'moritz wagner' };
-    const last = n => { const w = nk(n).split(' '); return w[w.length - 1]; };
-    const find = (n, t) => { let c = byName[nk(n)] || byName[ALIAS[nk(n)] || ''] || Object.entries(ALIAS).filter(([a, b]) => b === nk(n)).map(([a]) => byName[a]).find(Boolean) || [];
-      if (!c.length && t) c = Object.keys(P).filter(id => P[id].t === tc(t) && last(P[id].n) === last(n));
-      if (c.length <= 1) return c[0] || null; return c.find(id => P[id].t === tc(t)) || c[0]; };
+    // the name rule in names.js (Cameron/Cam Johnson, Moe/Moritz Wagner…); two players with one name: the one on his team
+    const find = (n, t) => { const c = byName[nk(n)] || [];
+      if (c.length > 1) return c.find(id => P[id].t === tc(t)) || c[0]; return c[0] || NM.pick(Object.keys(P), n, t, id => P[id].n, id => P[id].t); };
     const yidmap = Object.assign({}, ST.yidmap || {});
     const ofYid = (yid, info) => { if (yidmap[yid] && P[yidmap[yid]]) return yidmap[yid]; const id = info ? find(info.n, info.t) : null; if (id) yidmap[yid] = id; return id; };
     const y = o.yr; const lg = ST['lgscan:' + lid];

@@ -15,6 +15,12 @@ Browser-free checks (run from the repo root):
 
   It also covers the Yahoo-side assignment on its own.
 - `node tools/test/t_advice.js` checks the advice backtest (`tools/advice-backtest.js`) on a hand-built league with a known answer.
+- `node tools/test/t_names.js` checks the one player-name rule (`firefox/names.js`): nicknames, shared surnames, teams, and
+  Set lineups starting the right Wagner.
+- `node tools/test/t_stand.js <export>` checks the League tab's three standings tabs against a hand calculation (the 16 Nov
+  Mad dogs numbers, and an 11-category, 10-team, top-4 league).
+- `node tools/test/t_inj.js <export>` checks that a stale Basketball Monster injury status never shows on a player Yahoo lists
+  as healthy.
 - `node tools/test/t_tags.js` tests Basketball Monster analyst-tag parsing. It needs `npm i jsdom`.
 - `node tools/test/mkfake.js <store.json> [out.json]` adds synthetic finished weeks, forecasts and projection logs to a store
   export, for `node tools/backtest.js out.json`.

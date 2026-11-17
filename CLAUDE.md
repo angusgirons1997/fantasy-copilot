@@ -37,6 +37,11 @@ stats), with punted categories held at a usual loss. It is `H2H.board` in `h2h.j
 - The planner (`engine.js` `E.plan`) gets `opts.board`. It only picks the day and plans the lineup for the
   pickup the board chose.
 
+**Player names (7.41.0):** one rule in `firefox/names.js` (`NAMES.key`, `same`, `pick`) for every page, the sync and Set lineups.
+Same key (accents, dots, Jr/III dropped, known nicknames like Moe → Moritz), else same surname with one first name the start of
+the other (Nic/Nicolas, an initial) and never two different teams. Two players who fit equally → no match, never a guess. Never
+match on surname alone. Test: `node tools/test/t_names.js`.
+
 Any new feature that values a player must use the board. A second valuation path is a bug: it is what made
 pages contradict each other before 7.32.0.
 

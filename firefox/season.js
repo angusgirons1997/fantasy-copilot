@@ -499,6 +499,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (bAge > 12 * 3600e3 && bAge !== Infinity) iss.push(['bad', 'Basketball Monster ' + ago(bx.ts.rest).replace(' ago', ' old') + ', retrying']);
     else if (!bx || !bx.ts) iss.push(['warn', 'Basketball Monster projections not loaded yet']);
     if (planFrom[lg] === 'bbm-rest') iss.push(['info', "Matchup Monster unavailable: planned from Basketball Monster's projections"]);
+    // the sync's own self-check: a read that came back wrong (usually Yahoo or Basketball Monster changed a page) says so here
+    ((ST.selftest || {}).checks || []).filter(c => !c.ok && (c.name.startsWith(lg + ': ') || !c.name.includes(': '))).forEach(c => iss.push(['bad', c.name.replace(lg + ': ', '') + " didn't read properly (" + c.info + '): using the last good copy']));
     healthNow[lg] = { iss, good }; // shown in the one status line at the top (see syncBar); nothing here needs you to act
     syncBar(); return updHtml() + authHtml(); // sign-in prompts are the only status that sits in the page: they need you
   }

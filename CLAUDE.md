@@ -113,6 +113,15 @@ deal as ticked (`TRADE.marginal`: the deal with him against the deal without him
 on Yahoo re-prices everything. The full verdict (`dealView`) follows once both sides have a player. The panel only reads Yahoo's
 page: it never ticks boxes itself. "How it works" sits at the foot of the Strategy card, not in the sub-tab row.
 
+## Reliability (7.42.0)
+
+- **Reading Yahoo and Basketball Monster pages:** match what a thing is (a player link goes to `/players/<id>`), never what it
+  isn't (class names change). Yahoo markup is tested against `tools/test/fixtures` (`t_yahoo.js`).
+- **Last good copy:** a read that comes back implausible never overwrites a good one (league rosters: `okScan` in `sync.js`).
+- **Loud failures:** `selfTest` runs after every full sync. Failed checks show in the panel's status line, and a newly failing
+  check sends one Firefox notification.
+- **Release gate:** `node tools/test/all.js` runs in the release workflow before signing.
+
 ## Security
 
 - Never type passwords. The BBM password is only in the add-on's local storage (obfuscated) and is only

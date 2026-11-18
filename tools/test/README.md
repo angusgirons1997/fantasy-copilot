@@ -2,6 +2,11 @@
 
 Browser-free checks (run from the repo root):
 
+- `node tools/test/all.js` (or `npm test`) runs lint and every test below that needs no store export. The release workflow runs
+  it before signing: a failure stops the release.
+- `node tools/test/t_yahoo.js` reads saved Yahoo markup (`fixtures/`). When Yahoo changes a page, save a trimmed copy there
+  (no tokens or league links) and fix the reader until this passes.
+
 - `node tools/test/t_cal.js` checks that the forecast check recovers a known spread error on synthetic results.
 - `node tools/test/t_ilback2.js firefox/season.js` exercises the back-from-injury card.
 - `node tools/test/t_render.js <copilot-test-data.json>` renders every page and sub-page of the season panel offline (jsdom,

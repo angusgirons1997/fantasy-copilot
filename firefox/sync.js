@@ -246,21 +246,24 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   }
   // Yahoo's own ranking of each player on a team page (Current, else Pre-Season): what other managers see when judging a trade
   function parseRanks(d) { const out = {}; [...d.querySelectorAll('table')].filter(t => /Pre-Season/.test((t.querySelector('thead') || {}).textContent || '')).forEach(tb => {
-      const hd = [...[...tb.querySelectorAll('thead tr')].pop().querySelectorAll('th')].map(th => (th.textContent || '').replace(/\s+/g, ' ').trim()); const iC = hd.indexOf('Current'), iP = hd.indexOf('Pre-Season');
+      const hd = [...[...tb.querySelectorAll('thead tr')].pop().querySelectorAll('th')].flatMap(th => Array(+th.getAttribute('colspan') || 1).fill((th.textContent || '').replace(/\s+/g, ' ').trim())); const iC = hd.indexOf('Current'), iP = hd.indexOf('Pre-Season');
       tb.querySelectorAll('tbody tr').forEach(tr => { const a = tr.querySelector('a.name, .ysf-player-name a'); if (!a) return; const tds = tr.querySelectorAll('td'); const num = i => i >= 0 && tds[i] ? +((tds[i].textContent || '').replace(/[^\d]/g, '')) || null : null;
         const r = num(iC) || num(iP); if (r) out[(a.getAttribute('title') || a.textContent || '').trim()] = r; }); }); return out; }
   // every team's roster (names + Yahoo ids) for league-wide category strength
+  // one Yahoo team page → its players (names + Yahoo ids) and ranks. Player links are the ones to a player's own page
+  // (…/players/6512): note icons (…/players/6512/news), "Video Forecast" (#) and the rest sit in the same cell, and since
+  // Nov 2026 the name link and the note icons share the class "playernote", so classes can't tell them apart. Test: t_yahoo.js
+  function teamPage(d) {
+    const links = [...d.querySelectorAll('a.name, .ysf-player-name a')].filter(a => /\/players\/\d+\/?$/.test(a.getAttribute('href') || ''));
+    const nm = a => (a.getAttribute('title') || a.textContent || '').trim(); const names = links.map(nm).filter(n => n && n.length > 3);
+    // each player's Yahoo id (for opening a suggested trade on Yahoo with the players already ticked)
+    const yids = {}; links.forEach(a => { const m = (a.getAttribute('href') || '').match(/players\/(\d+)/); if (nm(a)) yids[nm(a)] = m[1]; });
+    return { players: [...new Set(names)].slice(0, 30), ranks: parseRanks(d), yids }; }
   async function yLeague(lid, teams) {
     const out = [];
     for (const tm of teams) {
       try { const d = html(await req(`${YH}/nba/${lid}/${tm.tid}`, null, 'Yahoo roster ' + tm.tid));
-        // player links only: Yahoo's note icons sit in the same cell ("Player Note", "New Player Note", "No new player Notes").
-        // Skipped by their text, not their class: since Nov 2026 the name link itself has the class "playernote"
-        const isNote = n => /\bplayer notes?\b/i.test(n); const links = [...d.querySelectorAll('a.name, .ysf-player-name a')].filter(a => !isNote((a.getAttribute('title') || a.textContent || '').trim()));
-        const names = links.map(a => (a.getAttribute('title') || a.textContent || '').trim()).filter(n => n && n.length > 3);
-        // each player's Yahoo id (for opening a suggested trade on Yahoo with the players already ticked)
-        const yids = {}; links.forEach(a => { const n = (a.getAttribute('title') || a.textContent || '').trim(); const m = (a.getAttribute('data-ys-playerid') || '').match(/\d+/) || (a.getAttribute('href') || '').match(/players\/(\d+)/); if (n && m) yids[n] = m[1] || m[0]; });
-        out.push({ tid: tm.tid, name: tm.name, players: [...new Set(names)].slice(0, 30), ranks: parseRanks(d), yids }); } catch (e) { out.push({ tid: tm.tid, name: tm.name, players: [], err: e.message }); }
+        out.push(Object.assign({ tid: tm.tid, name: tm.name }, teamPage(d))); } catch (e) { out.push({ tid: tm.tid, name: tm.name, players: [], err: e.message }); }
       await new Promise(z => setTimeout(z, 250));
     }
     trace('Yahoo league rosters', out.filter(t => t.players.length >= 10).length >= teams.length - 1, out.map(t => t.tid + ':' + t.players.length).join(' '));
@@ -546,7 +549,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       if (mode === 'full') {
         if (old('lgscan:' + y.lid) || !(all['lgscan:' + y.lid].teams || []).some(t => t.players && t.players.length)) { log('league rosters'); let teams = null;
           { const tl = m.teams && m.teams.length ? m.teams : ((all['ystand:' + y.lid] || {}).teams || []).map(t => ({ tid: String(t.tid), name: t.name })); if (tl.length) teams = await yLeague(y.lid, tl); }
-          if (teams) await put({ ['lgscan:' + y.lid]: { ts: Date.now(), league: y.league, teams, myTid: y.tid } }); }
+          // a scan where most teams came back short (Yahoo changed the page) never replaces the last good one
+          const okScan = teams && teams.filter(t => t.players.length >= 10).length >= Math.max(4, teams.length - 1);
+          if (okScan || (teams && !all['lgscan:' + y.lid])) await put({ ['lgscan:' + y.lid]: { ts: Date.now(), league: y.league, teams, myTid: y.tid } });
+          else if (teams) await put({ ['lgscan:' + y.lid]: Object.assign({}, all['lgscan:' + y.lid], { bad: teams.map(t => t.players.length).join(' ') }) }); }
         // last week's result for the track record (once, after the week ends)
         const prev = (y.weeks || []).find(w => w.end === addDay(start, -1)); const pStart = prev ? prev.start : addDay(start, -7), pEnd = prev ? prev.end : addDay(start, -1), tk = 'track:' + m.league + ':' + pStart;
         if (all[tk] && !all[tk].actual) { try { log('last week result'); const lw = await bbmWeek({ league: y.league, myTid: y.tid, oppTid: all[tk].oppTid, start: pStart, end: pEnd, noImport: true }, 'Last week');
@@ -647,7 +653,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       const t0 = usToday(); const m = Object.keys(all).filter(k => k.startsWith('mmw:' + l.league + ':') && all[k] && all[k].start <= t0 && all[k].end >= t0).map(k => all[k]).sort((a, b) => b.ts - a.ts)[0] || all['mm:' + l.league];
       const ros = m && m.players ? m.players.filter(p => p.type !== 'fa').length : 0, fas = m && m.players ? m.players.filter(p => p.type === 'fa').length : 0;
       ck(l.league + ': Matchup Monster', ros >= 16 && fas >= 10 && m.cats && m.cats.length >= 8, m && m.players ? ros + ' rostered, ' + fas + ' free agents' : 'missing');
-      const lg = all['lgscan:' + l.lid]; ck(l.league + ': league rosters', lg && lg.teams && lg.teams.filter(t => t.players.length >= 10).length >= Math.max(4, lg.teams.length - 1), lg && lg.teams ? lg.teams.length + ' teams' : 'missing'); });
+      const lg = all['lgscan:' + l.lid]; ck(l.league + ': league rosters', lg && lg.teams && !lg.bad && lg.teams.filter(t => t.players.length >= 10).length >= Math.max(4, lg.teams.length - 1), lg && lg.teams ? (lg.bad ? 'players per team: ' + lg.bad : lg.teams.length + ' teams') : 'missing'); });
     ls.forEach(l => { const tx = all['tx:' + l.lid]; ck(l.league + ': Yahoo transactions', tx && tx.src === 'page', tx ? (tx.rows || []).length + ' moves' : 'missing'); });
     ck('NBA schedule', (all.nbasched && Object.keys(all.nbasched.by || {}).length >= 30) || (root.NBA_SCHED && Object.keys(root.NBA_SCHED.by).length >= 30), all.nbasched ? Object.keys(all.nbasched.by || {}).length + ' teams' : (all.nbaErr ? all.nbaErr.err : 'missing'));
     const n = all.bbmnews; ck('BBM news', n && n.items && n.items.length > 0, n && n.items ? n.items.length + ' items' : 'missing');
@@ -702,10 +708,13 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     lockBy = opt.by || 'panel'; await put({ syncLock: { ts: Date.now(), by: lockBy } });
     try { const res = await syncAll(ls, mode, onStep);
       if (mode === 'full' || !all.bbmnews || Date.now() - all.bbmnews.ts > 30 * 60e3) { TR = []; try { await put({ bbmnews: await bbmNews(all.bbmnews) }); } catch (e) { trace('BBM player news', false, e.message); } await put({ bbmnewsTrace: TR }); TR = null; }
-      if (mode === 'full') { const o = {}; res.forEach(r => { if (r.ok) o['fullsync:' + r.lid] = Date.now(); }); await put(o); try { await put({ selftest: selfTest(await ST().get(null), ls) }); } catch (e) {} }
+      if (mode === 'full') { const o = {}; res.forEach(r => { if (r.ok) o['fullsync:' + r.lid] = Date.now(); }); await put(o); try { const a0 = await ST().get(null); const t = selfTest(a0, ls); await put({ selftest: t });
+          // a read that has just started failing (usually Yahoo or Basketball Monster changed a page): say so once, straight away
+          const was = new Set(((a0.selftest || {}).checks || []).filter(c => !c.ok).map(c => c.name)); const now = t.checks.filter(c => !c.ok && !was.has(c.name));
+          if (now.length && root.NOTIFY) root.NOTIFY('selftest', 'Co-pilot: a page didn\'t read properly', now.map(c => c.name).join(', ') + '. Using the last good copy; details in the panel.'); } catch (e) {} }
       try { const a2 = await ST().get(null); const H2 = a2.health || {}; const due = ls.map(l => { const s0 = a2['sync:' + l.lid]; if (!s0) return Date.now(); if (s0.ok) return s0.ts + every; const n = Math.max(1, (H2.fails || {})[l.lid] || 1); return s0.ts + Math.min(60, 5 * Math.pow(2, n - 1)) * 60e3; }); await put({ nextDue: Math.min(...due) }); } catch (e) {}
       return { mode, res }; }
     finally { lockBy = null; await put({ syncLock: null }); }
   }
-  root.SYNC = { usToday, parseTM, parseAM, parseRanks, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
+  root.SYNC = { usToday, parseTM, parseAM, parseRanks, teamPage, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
 })(typeof window !== 'undefined' ? window : globalThis);

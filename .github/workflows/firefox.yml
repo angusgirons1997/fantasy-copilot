@@ -17,6 +17,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Run every check (a failure stops the release here)
+        run: |
+          npm i --no-save --no-package-lock eslint@8.57.1 jsdom@31.0.1
+          node tools/test/all.js
       - name: Read the version
         id: v
         run: echo "version=$(node -p "require('./firefox/manifest.json').version")" >> "$GITHUB_OUTPUT"

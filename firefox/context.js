@@ -203,7 +203,8 @@
     // the deal so far
     const cur = root.TRADE.mySide(S, give, get); const both = give.length && get.length;
     h += `<div class="tcs"><div class="tcs-sides"><div><span class="lab plus">Get</span>${get.length ? get.map(nm).join(', ') : '<span class="muted">tick their players</span>'}</div><div><span class="lab minus">Give</span>${give.length ? give.map(nm).join(', ') : '<span class="muted">tick yours</span>'}</div>${cur.cut.length ? `<div class="sub">You'd drop ${cur.cut.map(nm).join(', ')} to make room</div>` : ''}${cur.fill.length ? `<div class="sub">Frees a spot for ${cur.fill.map(nm).join(', ')}</div>` : ''}</div>
-      <div class="tcs-n ${give.length || get.length ? tone(cur.season) : 'muted'}"><b>${give.length || get.length ? cn(cur.season) : '0.0'}</b><span>for you, rest of season</span></div></div>`;
+      <div class="tcs-n ${give.length || get.length ? tone(cur.season) : 'muted'}"><b>${give.length || get.length ? cn(cur.season) : '0.0'}</b><span>for you, rest of season</span></div>${(() => { const th = (give.length || get.length) && root.TRADE.theirSide ? root.TRADE.theirSide(S, them, give, get) : null;
+        return th == null ? '' : `<div class="tcs-n ${tone(th)}"><b>${cn(th)}</b><span>for them</span></div>`; })()}</div>`;
     // one row per player: tick state, name, the number; tap for what it does to your categories
     const LB = c => esc(root.STRAT ? root.STRAT.name(c) : H.LBL[c]);
     const row = (x, mine) => { const p = M.P[x.id] || {}; const fills = mine && N ? N.helpOf(x.id).cats : [];

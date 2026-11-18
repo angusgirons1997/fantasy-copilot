@@ -30,7 +30,7 @@
     // a team's result after its roster changes (other teams unchanged)
     S.after = (changes) => { const out = {}; S.V.forEach(v => { const list = S.base[v].map(t => changes[t.tid] ? { tid: t.tid, ids: changes[t.tid], vec: H.teamWeek(ctx, changes[t.tid], v) } : t);
       out[v] = {}; Object.keys(changes).forEach(tid => { const r = S.winOf(v, tid, list); out[v][tid] = { d: (r.W - S.w0[v][tid].W) * ncat(ctx), cp: r.cp }; }); }); return out; };
-    S.board = (M && M.board) || null; S.size = me.ids.length + ((S.board && S.board.open) || 0); // an empty roster spot takes a player with no cut // the panel's one measure, when it's there
+    S.board = (M && M.board) || null; const TB = {}; S.them = tid => tid in TB ? TB[tid] : (TB[tid] = S.board ? H.side(ctx, L, tid) : null); S.size = me.ids.length + ((S.board && S.board.open) || 0); // an empty roster spot takes a player with no cut // the panel's one measure, when it's there
     // weeks of regular season left (season.js passes Yahoo's; else from the days BBM projects, less 3 playoff weeks). The trade
     // bar is tradeBarOf in season.js (Settings → Advice): the one bar for sells and trades.
     S.weeks = (M && M.weeksLeft) || Math.max(1, Math.round((ctx.days.ros || 140) / 7) - 3);
@@ -75,7 +75,8 @@
     let my = { ros: r.ros[S.me.tid].d, po: r.po ? r.po[S.me.tid].d : null }; my.all = S.comb(my.ros, my.po); my.season = my.all * S.weeks;
     // your side on the one measure every page uses: expected categories a week against the league, over the rest of the season
     const B = S.board && S.board.of(mine.ids); if (B) my = { ros: B.g, po: null, all: B.g, season: B.g * S.board.weeks, board: true };
-    const th = { ros: r.ros[tid].d, po: r.po ? r.po[tid].d : null }; th.all = S.comb(th.ros, th.po); th.season = th.all * S.weeks;
+    let th = { ros: r.ros[tid].d, po: r.po ? r.po[tid].d : null }; th.all = S.comb(th.ros, th.po); th.season = th.all * S.weeks;
+    const TB = S.them(tid); if (TB) { const g = TB.of(theirs.ids).g; th = { ros: g, po: null, all: g, season: g * TB.weeks, board: true }; } // their side on the one measure
     const cats = B ? S.ctx.cats.map(c => ({ c, label: H.LBL[c], from: S.board.cp[c], to: B.cp[c], d: B.cp[c] - S.board.cp[c] })) : S.ctx.cats.map(c => ({ c, label: H.LBL[c], from: S.w0.ros[S.me.tid].cp[c], to: r.ros[S.me.tid].cp[c], d: r.ros[S.me.tid].cp[c] - S.w0.ros[S.me.tid].cp[c] }));
     const theirCats = S.ctx.cats.map(c => ({ c, label: H.LBL[c], d: r.ros[tid].cp[c] - S.w0.ros[tid].cp[c] }));
     const view = theirView(S, team, get, give, theirs.ids);
@@ -87,6 +88,9 @@
 
   // your side only, on the one measure: categories over the rest of the season after the swap. Cheap (no league re-run), so the
   // trade companion can price every player on both rosters as an addition to the deal as it stands.
+  // their side of the deal as ticked, on the one measure (null without the board)
+  function theirSide(S, tid, give, get) { const team = S.L.teams.find(t => t.tid === tid), TB = S.them(tid); if (!team || !TB) return null;
+    return TB.of(settleThem(S, team, team.ids.filter(id => !get.includes(id)).concat(give), give).ids).g * TB.weeks; }
   function mySide(S, give, get) { const mine = settleMe(S, S.me.ids.filter(id => !give.includes(id)).concat(get), get);
     if (S.board) { const B = S.board.of(mine.ids); return { season: B.g * S.board.weeks, cats: B.cats, cut: mine.cut, fill: mine.fill }; }
     const r = S.after({ [S.me.tid]: mine.ids }); return { season: S.comb(r.ros[S.me.tid].d, r.po ? r.po[S.me.tid].d : null) * S.weeks, cats: null, cut: mine.cut, fill: mine.fill }; }
@@ -98,6 +102,6 @@
       const cats = withHim.cats && without.cats ? withHim.cats.map((c, i) => ({ c: c.c, d: c.d - without.cats[i].d })) : null;
       return { id, inDeal, v: withHim.season - without.season, cats, with: withHim.season, without: without.season, withoutFill: without.fill, total: cur.season }; }); }
 
-  root.TRADE = { setup, evalDeal, mySide, marginal };
+  root.TRADE = { setup, evalDeal, mySide, theirSide, marginal };
   if (typeof module !== 'undefined') module.exports = root.TRADE;
 })(typeof window !== 'undefined' ? window : globalThis);

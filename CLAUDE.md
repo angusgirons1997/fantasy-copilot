@@ -113,6 +113,10 @@ deal as ticked (`TRADE.marginal`: the deal with him against the deal without him
 on Yahoo re-prices everything. The full verdict (`dealView`) follows once both sides have a player. The panel only reads Yahoo's
 page: it never ticks boxes itself. "How it works" sits at the foot of the Strategy card, not in the sub-tab row.
 
+**For them (7.44.0):** every trade number has the other team's side next to it, on the same measure from their side
+(`H2H.side`: their board, no punt; `TRADE.theirSide`, `forThemRow` in `season.js`). It is an overlay: it never reorders lists.
+The full verdict's "Their side" and its accept/sweetener/unlikely label use it too.
+
 ## Reliability (7.42.0)
 
 - **Reading Yahoo and Basketball Monster pages:** match what a thing is (a player link goes to `/players/<id>`), never what it

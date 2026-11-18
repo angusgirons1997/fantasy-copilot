@@ -486,6 +486,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         by[x.id] = { val: x.val, cats: x.cats, fa, trades, sell, il, kind: fa && fa.g >= pbar ? 'costs' : sell.length ? 'sell' : x.val > low ? 'fits' : 'small' }; });
       const d0 = B.order[0]; const league = {}; others.forEach(j => { const r = d0 ? B.swap(j, d0.id) : null; if (r) league[j] = { g: r.g, cats: r.cats, kind: r.g >= pbar ? 'fits' : r.g < 0 ? 'nohelp' : 'small' }; });
       return { by, league, bar, pbar, weeks: B.weeks, B, d0: d0 ? d0.id : null }; }); }
+  // "for them" on a one-for-one (their player t.id for your x): the same measure from their side (H2H.side), so a deal that helps
+  // both teams shows it. Shown next to every trade number; it never reorders anything.
+  function forThemRow(lg, t, x) { const M = modelFor(lg); const tm = M && t.own && M.L.teams.find(q => q.tid === String(t.own)); if (!tm || !window.H2H.side) return [];
+    const B = memo('them|' + lg + '|' + tm.tid, () => window.H2H.side(M.ctx, M.L, tm.tid)); if (!B) return [];
+    const v = B.of(tm.ids.filter(i => i !== t.id).concat([x])).g * B.weeks; const r = Math.round(v * 10) / 10;
+    return [['For them', `${(r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(1)} categories over the rest of the season${r >= 0.5 ? ': helps both teams' : r <= -0.5 ? ': they lose out, so expect a no' : ''}`]]; }
   // ---- health: is every source fresh enough to trust the advice? ----
   // ---- health: quiet when things are fine; one clear button when only you can fix it (a sign-in) ----
   const SIGNIN = { bbm: 'https://basketballmonster.com/Login.aspx', yahoo: 'https://login.yahoo.com/?done=' + encodeURIComponent('https://basketball.fantasysports.yahoo.com/nba') };
@@ -1156,7 +1162,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         h += `<div class="blkc"><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b><span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span><button class="lnk blk on" data-block="${esc(r.id)}">Take off the block</button></div>
           <div class="sub">Worth ${rd ? cn(r.read.val * rd.weeks) : '–'} categories to you over the rest of the season. Below: players at his Basketball Monster value (or a little less) who'd add to your team in a one-for-one, best first.${rd ? ` A clear move is ${cn(rd.bar * rd.weeks)} or more.` : ''}</div>
           ${T.length ? `<div class="sub">Teams fighting for what he's good at: ${T.map(t => `${owner(t.tid)} <span class="muted">(${andL(t.cats.map(N))})</span>`).join(', ')}.</div>` : ''}
-          ${tr.length ? tr.slice(0, 8).map(t => lv[t.id] ? playerRow(lv[t.id], { owner: true, extra: [['This trade', `${cn(t.g * rd.weeks)} categories over the rest of the season`]] }) : '').join('') : '<div class="strnone">No player at his value adds to your team in a one-for-one.</div>'}</div>`; });
+          ${tr.length ? tr.slice(0, 8).map(t => lv[t.id] ? playerRow(lv[t.id], { owner: true, extra: [['This trade', `${cn(t.g * rd.weeks)} categories over the rest of the season`]].concat(forThemRow(lg, t, r.id)) }) : '').join('') : '<div class="strnone">No player at his value adds to your team in a one-for-one.</div>'}</div>`; });
     } else if (window.STAB === 'finder') {
       const f0 = S(lg).find || {}; const kind = f0.kind === 'all' ? 'all' : 'fits'; const TIER = [[1, 30, 'Stars'], [31, 75, 'Starters'], [76, 130, 'Rotation players'], [131, 9999, 'Depth']];
       const L0 = V.league.filter(x => x.read && (kind === 'all' || x.kind === 'fits')).sort((a, b) => b.read.g - a.read.g);
@@ -1188,8 +1194,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         <div class="mvl"><span>Worth to you</span>${cn(r.read.val * w)} <i>over the rest of the season</i></div>
         <div class="mvl"><span>Ask for</span>${up.length ? `<b>more ${esc(andL(up.map(NN)))}</b>` : 'the players below'}${dn.length ? ` <i>giving up some ${esc(andL(dn.map(NN)))}</i>` : ''}</div>
         <div class="mvl"><span>Market</span>${lo ? `Basketball Monster rank ${lo}–${hi}, his value or a little less: ` : ''}<b>${T.length}</b> player${T.length === 1 ? '' : 's'} clear the bar</div>
-        ${T.slice(0, 4).map(t => LV[t.id] ? playerRow(LV[t.id], { owner: true, extra: [['This trade', `${cn(t.g * w)} categories over the rest of the season`]] }) : '').join('')}
-        ${T.length > 4 ? `<details class="more"><summary>${T.length - 4} more</summary>${T.slice(4, 15).map(t => LV[t.id] ? playerRow(LV[t.id], { owner: true, extra: [['This trade', `${cn(t.g * w)} categories over the rest of the season`]] }) : '').join('')}</details>` : ''}
+        ${T.slice(0, 4).map(t => LV[t.id] ? playerRow(LV[t.id], { owner: true, extra: [['This trade', `${cn(t.g * w)} categories over the rest of the season`]].concat(forThemRow(lg, t, r.id)) }) : '').join('')}
+        ${T.length > 4 ? `<details class="more"><summary>${T.length - 4} more</summary>${T.slice(4, 15).map(t => LV[t.id] ? playerRow(LV[t.id], { owner: true, extra: [['This trade', `${cn(t.g * w)} categories over the rest of the season`]].concat(forThemRow(lg, t, r.id)) }) : '').join('')}</details>` : ''}
         <div class="mvf"><button class="lnk${(S(lg).block || []).includes(r.id) ? ' on' : ''}" data-block="${esc(r.id)}">${(S(lg).block || []).includes(r.id) ? 'On the trade block' : 'Put on the trade block'}</button></div></div>`; });
     // 2 · the waiver wire: the Players page's list
     const B = rd.B; const bd = (planNow[lg] || {}).bd;

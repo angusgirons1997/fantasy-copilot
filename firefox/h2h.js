@@ -135,6 +135,8 @@
         let d = 0; ctx.cats.forEach(c => d += b.cp[c] - a.cp[c]); out[v === 'rest' ? 'week' : 'next'] = d; });
       return out; } finally { ctx.valuing = was; }
   }
-  root.H2H = { live, nextWeek, teamWeek, matchup, pickup, worth, LBL, weekWin, Phi, board, timing };
+  // another team's board, for trades ("for them"): the same measure from their side, with no punt (theirs isn't known)
+  function side(ctx, L, tid) { const p0 = ctx.punt; ctx.punt = null; try { return board(ctx, Object.assign({}, L, { me: String(tid) }), { fas: [] }); } finally { ctx.punt = p0; } }
+  root.H2H = { live, nextWeek, teamWeek, matchup, pickup, worth, LBL, weekWin, Phi, board, timing, side };
   if (typeof module !== 'undefined') module.exports = root.H2H;
 })(typeof window !== 'undefined' ? window : globalThis);

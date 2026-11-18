@@ -14,14 +14,16 @@
     await browser.storage.local.set({ yapi: na }); return na; }
   // one-time: Yahoo's sign-in page in a pop-up, then the code it hands back is swapped for tokens (kept, and renewed by themselves)
   async function connect() { const a = await load(); if (!a.id || !a.secret) throw new Error('Save your Client ID and Client Secret first');
-    const url = AUTH + 'request_auth?' + new URLSearchParams({ client_id: a.id, redirect_uri: redirect(), response_type: 'code', language: 'en-us', scope: 'fspt-w' });
-    // fspt-w asks for Fantasy Sports read/write: without it Yahoo answers every fantasy call "This application is not authorized"
-    const back = await browser.identity.launchWebAuthFlow({ url, interactive: true }); const code = new URL(back).searchParams.get('code');
-    if (!code) throw new Error("Yahoo didn't hand back a sign-in code"); return tokenCall(a, { grant_type: 'authorization_code', code }); }
+    const url = AUTH + 'request_auth?' + new URLSearchParams({ client_id: a.id, redirect_uri: redirect(), response_type: 'code', language: 'en-us' });
+    // a fantasy call answered 403 "This application is not authorized" means Yahoo hasn't approved the app for the Fantasy API
+    // yet (an approval Yahoo added in 2026; the permission tick alone doesn't do it), not a sign-in problem
+    const back = new URL(await browser.identity.launchWebAuthFlow({ url, interactive: true })); const code = back.searchParams.get('code');
+    if (!code) throw new Error("Yahoo didn't hand back a sign-in code" + (back.searchParams.get('error') ? ': ' + (back.searchParams.get('error_description') || back.searchParams.get('error')) : '')); return tokenCall(a, { grant_type: 'authorization_code', code }); }
   async function get(path) { let a = await load(); if (!a.refresh) throw new Error('Not connected to Yahoo yet');
     if (!a.access || Date.now() > a.exp) a = await tokenCall(a, { grant_type: 'refresh_token', refresh_token: a.refresh });
     const r = await fetch(API + path + (path.includes('?') ? '&' : '?') + 'format=json', { headers: { Authorization: 'Bearer ' + a.access } });
-    if (!r.ok) { const t = (await r.text().catch(() => '')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200); throw new Error('Yahoo API answered ' + r.status + (t ? ': ' + t : '')); }
+    if (!r.ok) { const t = (await r.text().catch(() => '')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200); if (/not authorized/i.test(t)) throw new Error("Yahoo hasn't approved your Yahoo app for the Fantasy API yet. Request access on Yahoo's developer site; until then the co-pilot reads Yahoo's pages as before.");
+      throw new Error('Yahoo API answered ' + r.status + (t ? ': ' + t : '')); }
     return r.json(); }
   // Yahoo's JSON nests each player as arrays of one-key objects: flattened to { id, name, team, pos, slot, status }
   function players(j) { const out = [];

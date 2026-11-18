@@ -14,7 +14,8 @@
     await browser.storage.local.set({ yapi: na }); return na; }
   // one-time: Yahoo's sign-in page in a pop-up, then the code it hands back is swapped for tokens (kept, and renewed by themselves)
   async function connect() { const a = await load(); if (!a.id || !a.secret) throw new Error('Save your Client ID and Client Secret first');
-    const url = AUTH + 'request_auth?' + new URLSearchParams({ client_id: a.id, redirect_uri: redirect(), response_type: 'code', language: 'en-us' });
+    const url = AUTH + 'request_auth?' + new URLSearchParams({ client_id: a.id, redirect_uri: redirect(), response_type: 'code', language: 'en-us', scope: 'fspt-w' });
+    // fspt-w asks for Fantasy Sports read/write: without it Yahoo answers every fantasy call "This application is not authorized"
     const back = await browser.identity.launchWebAuthFlow({ url, interactive: true }); const code = new URL(back).searchParams.get('code');
     if (!code) throw new Error("Yahoo didn't hand back a sign-in code"); return tokenCall(a, { grant_type: 'authorization_code', code }); }
   async function get(path) { let a = await load(); if (!a.refresh) throw new Error('Not connected to Yahoo yet');

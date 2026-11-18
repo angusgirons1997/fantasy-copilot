@@ -21,6 +21,10 @@ jobs:
         run: |
           npm i --no-save --no-package-lock eslint@8.57.1 jsdom@31.0.1
           node tools/test/all.js
+      # signing stays on Node 20: web-ext 8.3.0 on Node 24 uploads a file Mozilla rejects ("unsupported file type")
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - name: Read the version
         id: v
         run: echo "version=$(node -p "require('./firefox/manifest.json').version")" >> "$GITHUB_OUTPUT"

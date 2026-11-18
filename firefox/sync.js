@@ -716,5 +716,5 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       return { mode, res }; }
     finally { lockBy = null; await put({ syncLock: null }); }
   }
-  root.SYNC = { usToday, parseTM, parseAM, parseRanks, teamPage, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
+  root.SYNC = { usToday, unhide, parseTM, parseAM, parseRanks, teamPage, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
 })(typeof window !== 'undefined' ? window : globalThis);

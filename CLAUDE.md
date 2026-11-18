@@ -180,6 +180,9 @@ page: it never ticks boxes itself. "How it works" sits at the foot of the Strate
   - the board's pick with its predicted gain, and the top 10
   - Basketball Monster's top free agent and Yahoo's most added, each with its best drop
   - your roster
+- **The scorecard everything answers to (7.43.0):** the scoring lives in `firefox/advice.js` (`ADVICE.score`), shared by the panel
+  (League tab, "Does the advice win?" under Forecast check) and the offline tool. A feature or model change should show it moves
+  this number.
 - **Scoring the advice offline:** `node tools/advice-backtest.js copilot-forecast-data.json [--weeks 4]` scores each weekly
   decision on the following weeks' actual player totals (`pjact`) and actual league totals (`lgweek`), in the board's unit,
   against holding and both alternatives. It reports:

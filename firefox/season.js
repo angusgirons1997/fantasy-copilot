@@ -376,7 +376,14 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (ps.weeks) { const C = Object.keys(ps.bbm).filter(c => ps.bbm[c] != null); const f = (src, c) => ps[src][c] == null ? '–' : /%/.test(c) ? (ps[src][c] * 100).toFixed(1) : ps[src][c].toFixed(2);
       h += `<div style="margin-top:8px"><b>Projection scorecard</b><div class="sub">${ps.weeks} week${ps.weeks === 1 ? '' : 's'}: typical miss per game (lower is better), Basketball Monster / Yahoo / the average of both.</div><div class="sub">${C.map(c => `${NM(c)} ${f('bbm', c)} / ${f('yh', c)} / <b>${f('blend', c)}</b>`).join(' · ')}</div><div class="sub">The average is ${ps.blendWins >= Math.ceil(ps.cats * 2 / 3) ? 'clearly' : 'not clearly'} better in ${ps.blendWins} of ${ps.cats} categories.${ps.weeks < 4 ? ' The decision waits for four weeks: switch only if the average is clearly better in two thirds of categories.' : ''}</div></div>`; }
     else h += `<div style="margin-top:8px"><b>Projection scorecard</b><div class="sub">Builds from next week: Basketball Monster's and Yahoo's projections are saved before each Monday and scored against what players did.</div></div>`;
-    return h; }
+    return h + adviceCheck(lg); }
+  // the scorecard the whole tool answers to: did following the board's pickups win more categories than not? (advice.js)
+  function adviceCheck(lg) { const y = yrFor(lg); const r = y && window.ADVICE ? window.ADVICE.score(ST, { weeks: 4 })[y.lid] : null;
+    const f = x => x == null || !isFinite(x) ? '–' : (x > 0 ? '+' : '') + x.toFixed(2); const pc = x => Math.round(x * 100) + '%'; const cl = x => x > 0 ? 'plus' : x < 0 ? 'minus' : '';
+    const h = '<div style="margin-top:8px"><b>Does the advice win?</b>';
+    if (!r || !r.scored) return h + `<div class="sub">Builds from the end of next week: each week's top pickup is checked against what the players actually did over the following 4 weeks${r && r.decisions ? ` (${r.decisions} week${r.decisions === 1 ? '' : 's'} of advice logged so far)` : ''}.</div></div>`;
+    const vs = [['bbm', "Basketball Monster's top free agent"], ['hot', "Yahoo's most added"]].filter(([k]) => r[k]).map(([k, n]) => `<div class="sub">Against ${n}: <span class="${cl(r[k].boardMinus)}">${f(r[k].boardMinus)}</span> a week, better in ${pc(r[k].boardBetter)} of ${r[k].n} weeks.</div>`).join('');
+    return h + `<div class="sub">The co-pilot's pickup: predicted ${f(r.pick.pred)}, actually <span class="${cl(r.pick.real)}">${f(r.pick.real)}</span> categories won a week against your league; better than holding in ${pc(r.pick.positive)} of ${r.scored} weeks.</div>${vs}${r.scored < 8 ? '<div class="sub">Too few weeks to judge yet: an early signal only.</div>' : ''}</div>`; }
   function forecastCheck(lg) { const y = yrFor(lg); if (!y || !window.CTX.calibrate) return ''; const c = window.CTX.calibrate(ST, y.lid); const pc = x => Math.round(x * 100);
     if (!c.n) return `<div style="margin-top:8px"><b>Forecast check</b><div class="sub">Builds from next week: every matchup in your league is forecast before it starts and checked against Yahoo's result.</div></div>` + fieldAndProjections(lg);
     const skill = c.brier != null ? Math.round((1 - c.brier / 0.25) * 100) : null;
@@ -519,7 +526,22 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <input id="bbmUser" placeholder="Basketball Monster email or username" value="${esc(a.user || '')}" autocomplete="off"><input id="bbmPass" type="password" placeholder="${a.pass ? 'Password saved (type to change)' : 'Password'}" autocomplete="new-password">
       <label class="sub" style="display:flex;gap:8px;align-items:flex-start;margin-top:8px"><input type="checkbox" id="bbmKeep" ${ST.bbmAuthKeep ? 'checked' : ''}> Also keep them in the browser's safety copy, so they survive Firefox clearing its data (that copy travels with your Firefox account if you use Sync).</label>
       <div class="row" style="margin-top:8px;gap:8px"><button class="btn small" id="bbmSave">Save and test</button>${a.user ? '<button class="lnk" id="bbmForget">Forget</button>' : ''}</div><div class="msg" id="bbmMsg">Status: ${state}</div></div></details>`; }
-  function wireBbm() {
+  // Yahoo's API (trial): your own Yahoo app's codes, a one-time sign-in on Yahoo's page, then a roster read checked against the page
+  function yapiHtml() { const a = ST.yapi || {}; const state = a.lastErr ? `<span class="minus">${esc(a.lastErr)}</span>` : a.refresh ? `<span class="plus">connected</span> · last checked ${ago(a.lastOk)}` : a.id ? 'codes saved, not connected yet' : 'not set up';
+    return `<details data-k="yapi" style="margin-top:8px"><summary>Yahoo connection (trial): ${a.refresh ? 'connected' : '<span class="sub">not connected</span>'}</summary><div class="yc">
+      <div class="sub">Your Yahoo developer app's codes. They stay in this browser's add-on storage and are only ever sent to Yahoo. You sign in on Yahoo's own page: the co-pilot never sees your Yahoo password.</div>
+      <input id="yapiId" placeholder="Client ID" value="${esc(a.id || '')}" autocomplete="off"><input id="yapiSecret" type="password" placeholder="${a.secret ? 'Client Secret saved (type to change)' : 'Client Secret'}" autocomplete="new-password">
+      <div class="row" style="margin-top:8px;gap:8px"><button class="btn small" id="yapiGo">Save and connect</button>${a.refresh ? '<button class="lnk" id="yapiTest">Test: read my roster</button><button class="lnk" id="yapiForget">Forget</button>' : ''}</div><div class="msg" id="yapiMsg">Status: ${state}</div></div></details>`; }
+  function wireYapi() { const msg = h => { const m = $('yapiMsg'); if (m) m.innerHTML = h; };
+    const go = $('yapiGo'); if (go) go.onclick = async () => { const id = $('yapiId').value.trim(), sec = $('yapiSecret').value.trim(); const a = ST.yapi || {}; if (!id || (!sec && !a.secret)) { msg('Enter the Client ID and Client Secret.'); return; }
+      ST.yapi = Object.assign({}, id === a.id ? a : {}, { id, secret: sec ? hide(sec) : a.secret }); await browser.storage.local.set({ yapi: ST.yapi }); msg('Opening Yahoo\'s sign-in…');
+      try { ST.yapi = await window.YAPI.connect(); msg('<span class="plus">Connected. Press "Test: read my roster".</span>'); render(); } catch (e) { ST = await browser.storage.local.get(null); msg('<span class="minus">' + esc(e.message) + '</span>'); } };
+    const ts = $('yapiTest'); if (ts) ts.onclick = async () => { const y = yrFor(league()); if (!y) { msg('Open a league first.'); return; } msg('Reading your roster from Yahoo\'s API…');
+      try { const api = await window.YAPI.roster(y.lid, y.tid); const page = (y.rows || []).map(r => r.name); const miss = page.filter(n => !api.some(p => NAMES.same(p.name, n))), extra = api.filter(p => !page.some(n => NAMES.same(p.name, n))).map(p => p.name);
+        msg(`Read <b>${api.length}</b> players for ${esc(y.league)}${miss.length || extra.length ? `. <span class="minus">Differs from the team page: ${esc(miss.concat(extra).join(', '))}</span>` : '. <span class="plus">Exactly matches the team page.</span>'}<div class="sub">${esc(api.map(p => `${p.name} (${p.slot || '?'}${p.status ? ', ' + p.status : ''})`).join(' · '))}</div>`); }
+      catch (e) { msg('<span class="minus">' + esc(e.message) + '</span>'); } };
+    const fg = $('yapiForget'); if (fg) fg.onclick = async () => { ST.yapi = null; await browser.storage.local.remove('yapi'); render(); }; }
+  function wireBbm() { wireYapi();
     // Firefox blocks installs from a tab an add-on opens, so ask Firefox itself to fetch and apply the update
     const un = $('updNow'); if (un) un.onclick = async () => { const t = un.querySelector('span'); un.disabled = true; t.textContent = 'Asking Firefox for the update…'; let s = null;
       try { s = await browser.runtime.sendMessage({ target: 'bg', cmd: 'update' }); } catch (e) {}
@@ -756,7 +778,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <div class="row"><label><input type="checkbox" id="showTags" ${showTags(lg) ? 'checked' : ''}> Show Basketball Monster's analyst tags (grey labels; they never change advice)</label></div></div>`;
     // 5. sign-ins and diagnostics
     h += `<div class="card sets" id="set-conn"><div class="h"><span>Sign-ins, track record and diagnostics</span></div>
-      <div class="row"><label><input type="checkbox" id="swap" ${s.swap ? 'checked' : ''}> I'm Team 2 on Matchup Monster</label></div>${bbmAuthHtml()}${trackHtml(lg)}${diagHtml(lg, p)}</div>`;
+      <div class="row"><label><input type="checkbox" id="swap" ${s.swap ? 'checked' : ''}> I'm Team 2 on Matchup Monster</label></div>${bbmAuthHtml()}${yapiHtml()}${trackHtml(lg)}${diagHtml(lg, p)}</div>`;
     return h; }
   function wireSettings(lg) { const s = S(lg); const set = (f) => { f(); saveS(lg); render(); };
     const ad = $('adds'); if (ad) ad.onchange = e => set(() => { const v = String(e.target.value).trim(); s.addLimit = v === '' ? null : Math.max(0, +v || 0); });

@@ -20,7 +20,8 @@
   async function get(path) { let a = await load(); if (!a.refresh) throw new Error('Not connected to Yahoo yet');
     if (!a.access || Date.now() > a.exp) a = await tokenCall(a, { grant_type: 'refresh_token', refresh_token: a.refresh });
     const r = await fetch(API + path + (path.includes('?') ? '&' : '?') + 'format=json', { headers: { Authorization: 'Bearer ' + a.access } });
-    if (!r.ok) throw new Error('Yahoo API answered ' + r.status); return r.json(); }
+    if (!r.ok) { const t = (await r.text().catch(() => '')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200); throw new Error('Yahoo API answered ' + r.status + (t ? ': ' + t : '')); }
+    return r.json(); }
   // Yahoo's JSON nests each player as arrays of one-key objects: flattened to { id, name, team, pos, slot, status }
   function players(j) { const out = [];
     (function walk(o) { if (!o || typeof o !== 'object') return;

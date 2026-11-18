@@ -530,6 +530,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   function yapiHtml() { const a = ST.yapi || {}; const state = a.lastErr ? `<span class="minus">${esc(a.lastErr)}</span>` : a.refresh ? `<span class="plus">connected</span> · last checked ${ago(a.lastOk)}` : a.id ? 'codes saved, not connected yet' : 'not set up';
     return `<details data-k="yapi" style="margin-top:8px"><summary>Yahoo connection (trial): ${a.refresh ? 'connected' : '<span class="sub">not connected</span>'}</summary><div class="yc">
       <div class="sub">Your Yahoo developer app's codes. They stay in this browser's add-on storage and are only ever sent to Yahoo. You sign in on Yahoo's own page: the co-pilot never sees your Yahoo password.</div>
+      <div class="sub">Your Yahoo app's Redirect URI must be exactly: <b>${esc(window.YAPI && browser.identity ? window.YAPI.redirect() : '')}</b></div>
       <input id="yapiId" placeholder="Client ID" value="${esc(a.id || '')}" autocomplete="off"><input id="yapiSecret" type="password" placeholder="${a.secret ? 'Client Secret saved (type to change)' : 'Client Secret'}" autocomplete="new-password">
       <div class="row" style="margin-top:8px;gap:8px"><button class="btn small" id="yapiGo">Save and connect</button>${a.refresh ? '<button class="lnk" id="yapiTest">Test: read my roster</button><button class="lnk" id="yapiForget">Forget</button>' : ''}</div><div class="msg" id="yapiMsg">Status: ${state}</div></div></details>`; }
   function wireYapi() { const msg = h => { const m = $('yapiMsg'); if (m) m.innerHTML = h; };

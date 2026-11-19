@@ -606,3 +606,13 @@ html{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 .blkc .l1{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}.blkc .l1 .fd{margin-right:0}
 details.pr>summary:hover,.cbd2 details.cb>summary:hover{background:var(--soft);border-radius:var(--r-xs)}
 @media (prefers-color-scheme:dark){.card,.sec{box-shadow:0 0 0 1px rgba(255,255,255,.05),var(--shadow)}.btn{box-shadow:none}}
+/* ---- iPhone (7.48.0): the phone page and home-screen app. viewport-fit=cover (season.html, home.html) turns on the env() safe-area
+   insets, so the bottom bar clears the home indicator and the rounded corners; side insets cover landscape. Firefox's sidebar has
+   no insets, so it is unchanged there. ---- */
+html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body.app .w{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+.bnav{--pl:max(8px,env(safe-area-inset-left));--pr:max(8px,env(safe-area-inset-right));padding-left:var(--pl);padding-right:var(--pr)}
+.bnav-ind{left:calc(var(--pl) - 2px);width:calc((100% - var(--pl) - var(--pr) + 4px) / var(--n))}
+.bnav button{min-height:48px;touch-action:manipulation}
+/* iOS zooms into any field under 16px when you tap it; only on iOS (the sidebar keeps its smaller fields) */
+@supports (-webkit-touch-callout:none){input,select,textarea{font-size:16px!important}}

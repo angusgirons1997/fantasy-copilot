@@ -34,7 +34,7 @@ function handle(q, r) {
     const v = (() => { try { return JSON.parse(fs.readFileSync(path.join(FF, 'manifest.json'), 'utf8')).version; } catch (x) { return ''; } })();
     // the shim goes in before the add-on's first script; the icon is for "Add to Home Screen"
     send(200, String(d).replace('<script', `<script>window.PHONE_V=${JSON.stringify(v)}</script><script src="phone-shim.js"></script><script`)
-      .replace('</head>', '<link rel="apple-touch-icon" href="icons/icon-128.png"></head>'), TYPE.html);
+      .replace('</head>', '<link rel="apple-touch-icon" href="icons/icon-128.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Co-pilot"></head>'), TYPE.html);
   });
 }
 

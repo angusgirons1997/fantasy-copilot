@@ -28,7 +28,10 @@
   window.NOTIFY = (id, title, message) => browser.notifications.create(id, { type: 'basic', iconUrl: 'icons/icon-128.png', title, message });
   const SIGNIN = { 'auth-bbm': 'https://basketballmonster.com/Login.aspx', 'auth-yahoo': 'https://login.yahoo.com/?done=' + encodeURIComponent('https://basketball.fantasysports.yahoo.com/nba') };
   browser.notifications.onClicked.addListener(id => { if (SIGNIN[id]) browser.tabs.create({ url: SIGNIN[id] }); });
-  browser.alarms.onAlarm.addListener(a => { if (a.name === 'copilot-sync') watch(); if (a.name === 'copilot-news') window.SYNC.newsCheck().catch(e => console.error('co-pilot news', e)); });
+  // phone page (tools/phone/server.js on this PC): a copy without sign-in data every 5 minutes; nothing listening, nothing happens
+  const toPhone = () => L.get(null).then(a => fetch('http://127.0.0.1:8770/store', { method: 'POST', body: JSON.stringify({ at: new Date().toISOString(),
+    store: Object.fromEntries(Object.entries(a).filter(([k]) => !/auth|pass|token|secret|cookie|cred/i.test(k))) }) })).catch(() => {});
+  browser.alarms.onAlarm.addListener(a => { if (a.name === 'copilot-sync') { watch(); toPhone(); } if (a.name === 'copilot-news') window.SYNC.newsCheck().catch(e => console.error('co-pilot news', e)); });
   browser.runtime.onStartup.addListener(() => setTimeout(() => run(false, { now: true }), 20e3));
   // if the add-on's storage was emptied, put back your leagues and settings from the safety copy and sync straight away
   if (window.KEEP) window.KEEP.restore().then(r => { if (r) setTimeout(() => run(false, { now: true }), 3000); else window.KEEP.backup(); });

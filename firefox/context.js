@@ -238,19 +238,19 @@
     if (!add) return h + `<div class="sub">${esc(an)} isn't in BBM's projections, so no verdict.</div>`;
     const mineNoIL = ((M.L.teams.find(t => t.tid === M.L.me) || {}).ids || []).filter(id => !(M.ilIds && M.ilIds.has(id))); // injured-list spots free no roster spot
     const choices = (yp.dropChoices && yp.dropChoices.length ? yp.dropChoices : []).map(y => M.ofYid(y, yp.players[y])).filter(id => id && !(M.ilIds && M.ilIds.has(id)));
-    // an empty roster spot (and Yahoo isn't asking for a drop): a plain add, judged the same way as the Players page
+    // an empty roster spot (and Yahoo isn't asking for a drop): a plain add, judged the same way as the Pickups page
     if (M.board && M.board.open && !choices.length) { const p = M.P[add]; const s = M.board.swap(add, null).g * M.board.weeks; const bar = M.pickBar || 0.75; const rk = M.board.list.findIndex(x => x.id === add);
       return h + `<div class="pname plus">+ ${esc(p.n)}</div><div class="when">${esc(tn(p.t))} · ${gw(g(M, add))}</div><div style="height:10px"></div><div class="vd ${s >= bar ? 'good' : ''}">${s >= bar ? 'Worth adding' : 'Not worth an add'}</div>
-        <div class="sub hls">No drop needed: you have an empty roster spot. ${(s >= 0 ? '+' : '−') + Math.abs(s).toFixed(1)} categories over the rest of the season.${rk >= 0 ? ` Number ${rk + 1} of your top ${M.board.list.length} free agents on the Players page.` : ''}</div>` + joshLine(M, add); }
-    // the same drop pool as the Players page: never a player the board keeps (injured list, your keeps, recent adds, top-half players)
+        <div class="sub hls">No drop needed: you have an empty roster spot. ${(s >= 0 ? '+' : '−') + Math.abs(s).toFixed(1)} categories over the rest of the season.${rk >= 0 ? ` Number ${rk + 1} of your top ${M.board.list.length} free agents on the Pickups page.` : ''}</div>` + joshLine(M, add); }
+    // the same drop pool as the Pickups page: never a player the board keeps (injured list, your keeps, recent adds, top-half players)
     const keep = (M.board && M.board.keep) || new Set(); const pool = choices.filter(id => !keep.has(id));
     const r = H.pickup(M.ctx, M.L, add, pool.length ? pool : M.board ? M.board.order.map(x => x.id).slice(0, 10) : mineNoIL); if (r.err) return h + `<div class="sub">${esc(r.err)}</div>`;
     const p = M.P[add]; const nm = id => esc(sur(M.P[id].n));
     h += `<div class="pname plus">+ ${esc(p.n)}</div><div class="when">${esc(tn(p.t))} · ${gw(g(M, add))}${M.hot(p.n) ? ` · <span class="plus">${esc(M.hot(p.n))}</span>` : ''}</div><div style="height:10px"></div>`;
     r.drops = seasonFirst(M, add, r.drops); const top = r.drops.slice(0, 2); const b0 = top[0];
-    if (b0 && b0.seas != null) { // the same bar and timing as the Players page
+    if (b0 && b0.seas != null) { // the same bar and timing as the Pickups page
       const bar = M.pickBar || 0.75; const v = b0.seas >= bar ? (b0.week < -0.15 ? ['warn', 'Worth adding: wait until Monday (it costs this week)'] : ['good', 'Worth adding']) : b0.week >= 0.15 ? ['warn', 'Helps this week only'] : ['', 'Not worth an add'];
-      const rk = M.board.list.findIndex(x => x.id === add); h += `<div class="vd ${v[0]}">${v[1]}</div>${rk >= 0 ? `<div class="sub hls">Number ${rk + 1} of your top ${M.board.list.length} free agents on the Players page.</div>` : ''}`; }
+      const rk = M.board.list.findIndex(x => x.id === add); h += `<div class="vd ${v[0]}">${v[1]}</div>${rk >= 0 ? `<div class="sub hls">Number ${rk + 1} of your top ${M.board.list.length} free agents on the Pickups page.</div>` : ''}`; }
     else if (b0) { const gR = SGW(b0)[0], gW = GW(b0.week)[0]; const v = b0.score < 0 ? ['bad', 'Not worth an add right now'] : gR === 'g' && gW !== 'r' ? ['good', 'Worth adding'] : gR === 'g' ? ['good', 'Worth it long term, costs a little this week'] : gW === 'g' ? ['warn', 'Helps this week only'] : ['', 'Barely changes your team: probably not worth an add'];
       h += `<div class="vd ${v[0]}">${v[1]}</div>`; }
     const sm = (lab, v, season) => `<div class="gn"><span>${lab}</span><span>${GC(v, season)}<span class="gnum ${v >= 0 ? 'plus' : 'minus'}">${season ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + ' categories this season' : pts(v) + ' ' + WWC()}</span></span></div>`;
@@ -263,7 +263,7 @@
     return h;
   }
   // ---- player lists: labels next to each available player + your top 3 ----
-  // ---- Yahoo's player list: one list of free agents lives on the Players page (every Basketball Monster free agent, ranked by
+  // ---- Yahoo's player list: one list of free agents lives on the Pickups page (every Basketball Monster free agent, ranked by
   // the one measure). Here: which of the players on this Yahoo page are in it, at what rank ----
   function listCard(M, yp) {
     const B = M.board; let html = `<div class="h"><span>Players on this page</span><span class="sub" id="ctxAge"></span></div>`;

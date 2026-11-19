@@ -26,10 +26,10 @@ function setup(boomers) { const S = JSON.parse(JSON.stringify(rep.store || rep))
     const hand = ys.map(t => { const b = bs.find(b => b.name === t.name); const e = b.winPct * per; const W = t.w + e, L = t.l + per - e; return { name: t.name, e, W, L, T: t.t, pct: (W + t.t / 2) / (W + L + t.t) }; }).sort((a, b) => b.pct - a.pct);
     const r = await render(S, { now: rep.at }); ok(!r.errors.length, 'no page errors ' + r.errors.join('; '));
     const cardOf = k => { const p = r.pages[k]; if (!p) return null; return JSDOM.fragment('<div>' + p.html + '</div>').firstChild.querySelector('.card.stn'); };
-    const first = cardOf('league'); ok(first && first.querySelectorAll('.tbl').length === 1 && /Current standings/.test(tx(first.querySelector('.label'))), 'League opens on Current standings, one table');
+    const first = cardOf('season'); ok(first && first.querySelectorAll('.tbl').length === 1 && /Current standings/.test(tx(first.querySelector('.label'))), 'League opens on Current standings, one table');
     const tabsTxt = first ? [...first.querySelectorAll('[data-stntab]')].map(tx) : []; ok(tabsTxt.join('|') === 'Current|Still to win|Projected final', 'tabs at the top: ' + tabsTxt.join(' / '));
     const tbls = []; let card = null;
-    for (const [k, title] of [['now', 'Current standings'], ['left', 'Remaining categories to win'], ['final', 'Projected final standings']]) { const c = cardOf('league:stn-' + k);
+    for (const [k, title] of [['now', 'Current standings'], ['left', 'Remaining categories to win'], ['final', 'Projected final standings']]) { const c = cardOf('season:stn-' + k);
       const one = c && c.querySelectorAll('.tbl').length === 1 && new RegExp('^' + title).test(tx(c.querySelector('.label'))) && tx(c.querySelector('[data-stntab].on')) === tabsTxt[tbls.length];
       ok(one, `tap ${tabsTxt[tbls.length]}: shows only ${title}`); tbls.push(c && c.querySelector('.tbl')); card = c;
       if (c) console.log('  ' + [...c.querySelectorAll('.label, .sub')].map(tx).join('\n  ')); }

@@ -15,7 +15,7 @@ stats), with punted categories held at a usual loss. It is `H2H.board` in `h2h.j
 
 - **Player value to you** = what the number loses without him (`board.mine[].val`).
 - **Pickup** = what the number gains when he replaces one of your players. His drop is the one that leaves
-  you best off (`board.list`: top 30 of all BBM free agents; the Players page filters it by guard, forward or centre, keeping
+  you best off (`board.list`: top 30 of all BBM free agents; the Pickups page filters it by guard, forward or centre, keeping
   overall ranks. Yahoo's player-list pages get no card: Players shows only the best free agents across the league).
 - **Trade** = the gain after the swap (`board.of(ids)`, also used by `trade.js`).
 - **Empty roster spot** (7.39.0): `openSpots` in `season.js` (Yahoo's starting spots + bench, less players not on the injured
@@ -84,7 +84,7 @@ pages contradict each other before 7.32.0.
 
 ## Build page (agreed with the owner, 7.39.0: don't re-decide these)
 
-- Strategy → Build starts with your build: the category chips are buttons that punt or unpunt straight away (`setPunt`, with
+- Season → Build starts with your build: the category chips are buttons that punt or unpunt straight away (`setPunt`, with
   Undo), and the bands are set again from today's numbers for the new punt. "Find my best moves" comes after the build.
 - **Best available punt** (`bestBuilds`): every build of no punt, any one category, or two of your five weakest. For each,
   Basketball Monster's Analysis Monster team values summed over the kept categories; your rank against the league on that sum.
@@ -111,11 +111,17 @@ the rate is Analysis Monster's as given. Checked by hand against the 16 Nov Mad 
 On Yahoo's propose-trade page, `companion` in `context.js` prices every player on their roster and on yours as an addition to the
 deal as ticked (`TRADE.marginal`: the deal with him against the deal without him, on the one measure via `TRADE.mySide`). Ticking
 on Yahoo re-prices everything. The full verdict (`dealView`) follows once both sides have a player. The panel only reads Yahoo's
-page: it never ticks boxes itself. "How it works" sits at the foot of the Strategy card, not in the sub-tab row.
+page: it never ticks boxes itself. "How it works" is a sub-page of Season (7.46.0).
 
 **For them (7.44.0):** every trade number has the other team's side next to it, on the same measure from their side
 (`H2H.side`: their board, no punt; `TRADE.theirSide`, `forThemRow` in `season.js`). It is an overlay: it never reorders lists.
 The full verdict's "Their side" and its accept/sweetener/unlikely label use it too.
+
+**Navigation (7.46.0, agreed with the owner):** one bottom tab per decision: Matchup (key `week`: Do next across roster, lineup and
+trades, then the full weekly estimate; never hide the estimate), Lineup (`team`), Pickups (`players`: free agents and waivers), Trades
+(`trades`: Best trades, Trade block, Finder, and the Yahoo trade-page card), Season (`season`: standings, League so far, then Build,
+Roster, How it works). Old stored `strategy`/`league` map to the new keys (`OLDTAB`). `strategyCard` takes `page`; `data-gostab="page:sub"`
+links across pages. Best trades has no waiver section (that is Pickups).
 
 **UI polish and NumberFlow (7.45.0):** no UI frameworks: the add-on stays plain JavaScript (React libraries would need a
 bundler and AMO source submission). The v13 block at the end of `theme.css` is the polish pass. `firefox/vendor/number-flow/`

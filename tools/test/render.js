@@ -36,7 +36,7 @@ async function render(store, opt) { opt = opt || {};
   const $ = s => w.document.querySelector(s); const text = el => (el ? el.textContent : '').replace(/\s+/g, ' ').trim();
   const tabs = [...w.document.querySelectorAll('#bnav [data-tab]')].map(b => b.dataset.tab); const pages = {};
   const keep = key => { const out = $('#out'); pages[key] = { html: out ? out.innerHTML : '', text: text(out), broken: /Something went wrong/.test(text(out)) };
-    if (opt.dump) { fs.mkdirSync(opt.dump, { recursive: true }); fs.writeFileSync(path.join(opt.dump, (opt.name || 'normal') + '-' + key.replace(':', '-') + '.html'), '<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="' + path.join(FF, 'theme.css').replace(/\\/g, '/') + '"><body class="app"><div class="w"><div id="out">' + (out ? out.innerHTML : '') + '</div></div></body>'); } };
+    if (opt.dump) { fs.mkdirSync(opt.dump, { recursive: true }); fs.writeFileSync(path.join(opt.dump, (opt.name || 'normal') + '-' + key.replace(':', '-') + '.html'), '<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="' + path.join(FF, 'theme.css').replace(/\\/g, '/') + '"><body class="app"><div class="w"><div id="out">' + (out ? out.innerHTML : '') + '</div></div><nav class="bnav">' + ($('#bnav') ? $('#bnav').innerHTML : '') + '</nav></body>'); } };
   for (const t of tabs) { const b = $(`#bnav [data-tab="${t}"]`); if (b) b.click(); await settle(400); keep(t);
     // a page's own sub-tabs (Strategy: build, best moves, roster, trade block, finder, how it works)
     const subs = [...w.document.querySelectorAll('#out [data-stab]')].map(x => x.dataset.stab);

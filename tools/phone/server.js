@@ -38,5 +38,16 @@ function handle(q, r) {
   });
 }
 
-if (require.main === module) http.createServer(handle).listen(PORT, '127.0.0.1', () => console.log('phone page on http://127.0.0.1:' + PORT));
+// Firefox has to stay open for the add-on to sync. If it isn't running on two checks in a row (2.5 minutes apart, so a Firefox
+// restart for an update isn't caught), open it minimised. To pause this, create an empty file named "no-firefox" in DIR.
+function keepFirefox() {
+  const { execFile, spawn } = require('child_process'); const FX = 'C:\\Program Files\\Mozilla Firefox\\firefox.exe'; let missed = 0;
+  setInterval(() => execFile('tasklist', ['/FI', 'IMAGENAME eq firefox.exe', '/NH'], (e, out) => {
+    if (e || fs.existsSync(path.join(DIR, 'no-firefox')) || !fs.existsSync(FX)) return;
+    missed = /firefox\.exe/i.test(out) ? 0 : missed + 1;
+    if (missed >= 2) { missed = 0; spawn('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath '${FX}' -WindowStyle Minimized`], { stdio: 'ignore', windowsHide: true }).unref(); } // not detached: that stops Start-Process opening anything
+  }), 150e3);
+}
+
+if (require.main === module) { http.createServer(handle).listen(PORT, '127.0.0.1', () => console.log('phone page on http://127.0.0.1:' + PORT)); if (process.platform === 'win32') keepFirefox(); }
 module.exports = { handle, PORT, STORE };

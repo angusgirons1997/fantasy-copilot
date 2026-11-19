@@ -117,6 +117,11 @@ page: it never ticks boxes itself. "How it works" sits at the foot of the Strate
 (`H2H.side`: their board, no punt; `TRADE.theirSide`, `forThemRow` in `season.js`). It is an overlay: it never reorders lists.
 The full verdict's "Their side" and its accept/sweetener/unlikely label use it too.
 
+**UI polish and NumberFlow (7.45.0):** no UI frameworks: the add-on stays plain JavaScript (React libraries would need a
+bundler and AMO source submission). The v13 block at the end of `theme.css` is the polish pass. `firefox/vendor/number-flow/`
+is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; keep library files `.js`, never `.mjs`. `roll()` in
+`season.js` rolls `.hero-pct` and `.tcs-n b` when a sync changes them, then restores the plain text; without the library they pulse as before.
+
 ## Reliability (7.42.0)
 
 - **Reading Yahoo and Basketball Monster pages:** match what a thing is (a player link goes to `/players/<id>`), never what it

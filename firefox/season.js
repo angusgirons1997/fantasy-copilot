@@ -810,6 +810,18 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // the big numbers count up when a page opens (not on every refresh), so a fresh page reads as live
   function countUp(o) { if (REDUCED) return; o.querySelectorAll('.hero-pct, .cgrid .tile span').forEach(e => { const t = e.firstChild; if (!t || t.nodeType !== 3) return; const m = t.textContent.match(/^(\d+(?:\.\d+)?)(%?)$/); if (!m) return;
     const end = +m[1], dp = (m[1].split('.')[1] || '').length, t0 = performance.now(), D = 420; const step = now => { const k = Math.min(1, (now - t0) / D), e2 = 1 - Math.pow(1 - k, 3); t.textContent = (end * e2).toFixed(dp) + m[2]; if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }); }
+  // the week's big number and the trade numbers roll digit by digit when a sync changes them (NumberFlow, vendor/number-flow),
+  // then go back to the plain text the page drew; false when the change isn't a plain number, and the caller pulses it instead
+  function roll(e, was) {
+    const t = e.firstChild, num = s => s && s.match(/^([+−]?)(\d+(?:\.\d+)?)(%?)/), a = num(was), b = t && t.nodeType === 3 && num(t.textContent);
+    if (!a || !b || a[3] !== b[3] || !window.customElements || !customElements.get('number-flow')) return false;
+    const val = m => (m[1] === '−' ? -1 : 1) * m[2] * (m[3] ? 0.01 : 1), dp = (b[2].split('.')[1] || '').length;
+    const nf = document.createElement('number-flow');
+    nf.format = { style: b[3] ? 'percent' : 'decimal', minimumFractionDigits: dp, maximumFractionDigits: dp, signDisplay: b[1] ? 'exceptZero' : 'auto' };
+    t.replaceWith(nf); nf.update(val(a)); requestAnimationFrame(() => nf.update(val(b)));
+    const back = () => { if (nf.isConnected) nf.replaceWith(t); }; nf.addEventListener('animationsfinish', back, { once: true }); setTimeout(back, 1500);
+    return true;
+  }
   // a small confirmation above the bottom bar after anything you change
   function toast(msg, kind, act) { let t = $('toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); document.body.appendChild(t); }
     t.className = 'toast ' + (kind || ''); t.innerHTML = `<i></i>${esc(msg)}${act ? ` <button class="lnk tact">${esc(act.label)}</button>` : ''}`; void t.offsetWidth; t.classList.add('show');
@@ -821,14 +833,14 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     // motion: cards ease in only when you arrive on a different page or league; numbers that changed give a small pulse
     const vk = league() + '|' + curTab() + '|' + (window.STAB || ''); const fresh = vk !== paint.vk; const daySwap = !fresh && paint.day !== selDay;
     const ti = TABS.findIndex(t => t[0] === curTab()), dir = paint.ti == null || ti === paint.ti ? 'u' : ti > paint.ti ? 'r' : 'l'; paint.vk = vk; paint.day = selDay; paint.ti = ti;
-    const NUM = '.hero-pct, .score b, .stat b, .tile span, .dchip b, table.pl td.v';
+    const NUM = '.hero-pct, .score b, .stat b, .tile span, .dchip b, table.pl td.v, .tcs-n b';
     const before = fresh ? null : [...o.querySelectorAll(NUM)].map(e => e.textContent);
     const sp0 = $('setPane'); const spY = sp0 ? sp0.scrollTop : 0;
     o.innerHTML = h;
     const sp1 = $('setPane'); if (sp1) sp1.scrollTop = spY; document.body.classList.toggle('setopen', setOpen && !!sp1);
     if (!REDUCED) {
       if (fresh) { o.classList.remove('enter', 'from-r', 'from-l', 'from-u'); void o.offsetWidth; o.classList.add('enter', 'from-' + dir); clearTimeout(paint.t); paint.t = setTimeout(() => o.classList.remove('enter', 'from-r', 'from-l', 'from-u'), 900); countUp(o); }
-      else if (before) { const now = [...o.querySelectorAll(NUM)]; if (now.length === before.length) now.forEach((e, i) => { if (e.textContent !== before[i]) { e.classList.add('bump'); setTimeout(() => e.classList.remove('bump'), 600); } }); }
+      else if (before) { const now = [...o.querySelectorAll(NUM)]; if (now.length === before.length) now.forEach((e, i) => { if (e.textContent !== before[i] && !(e.matches('.hero-pct, .tcs-n b') && roll(e, before[i]))) { e.classList.add('bump'); setTimeout(() => e.classList.remove('bump'), 600); } }); }
       if (daySwap) { const lu = o.querySelector('.lu'); if (lu) { lu.classList.add('dayswap'); setTimeout(() => lu.classList.remove('dayswap'), 400); } }
     }
     o.querySelectorAll('details[data-k]').forEach(d => { if (open[d.dataset.k] != null) d.open = open[d.dataset.k]; });

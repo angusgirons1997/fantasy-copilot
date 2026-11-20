@@ -1108,7 +1108,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return `<table class="stt2"><thead><tr><th></th>${cols.map(c => `<th>${c[0]}${c[1].g ? `<i>${c[1].g} g</i>` : ''}</th>`).join('')}</tr></thead><tbody>${cats.map(c => `<tr><td>${esc(window.STRAT.Name(c))}</td>${cols.map(x => `<td>${v(x[1].st, c)}${vol(x[1].st, c)}</td>`).join('')}</tr>`).join('')}${cols[0] && cols[0][1].m ? `<tr><td>Minutes</td>${cols.map(x => `<td>${x[1].m ? (+x[1].m).toFixed(1) : '–'}</td>`).join('')}</tr>` : ''}</tbody></table>`; }
   function strategyCard(lg, M, opt) { const V = strategyState(lg, M); if (!V) return '';
     // Trades holds the trade sub-pages; Season the occasional ones (7.46.0). Each page remembers its own sub-page.
-    const season = opt.page === 'season'; const sub = season ? [['build', 'Build'], ['roster', 'Roster'], ['how', 'How it works']] : [['moves', 'Best trades'], ['block', 'Trade block'], ['finder', 'Finder']];
+    const season = opt.page === 'season'; const sub = season ? [['build', 'Build'], ['how', 'How it works']] : [['moves', 'Best trades'], ['roster', 'Roster'], ['block', 'Trade block'], ['finder', 'Finder']];
     const SB = window.STABS = window.STABS || {}; if (sub.some(x => x[0] === window.STAB)) SB[opt.page] = window.STAB; else window.STAB = SB[opt.page] || sub[0][0];
     let h = `<div class="seg trtabs stabs">${sub.map(([k, t]) => `<button data-stab="${k}" class="${window.STAB === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     if (!V.snap) return `<div class="card strat">${h}<div class="strnone">Waiting for Basketball Monster's Analysis Monster, which comes with the next sync.<span class="skel" style="width:70%"></span><span class="skel" style="width:45%"></span></div></div>`;
@@ -1177,7 +1177,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         h += `<div class="grh2 k-${FIT[k][0]}"><div><b>${FIT[k][1]}</b><span class="cnt">${R.length}</span></div><span class="gd">${GDESC[k]}</span>${gcats(k) ? `<span class="gc">${gcats(k)}</span>` : ''}</div>` + R.map(r => playerRow(r, { block: block.includes(r.id) })).join(''); });
     } else if (window.STAB === 'block') {
       const block = (S(lg).block || []).filter(id => V.mine.some(r => r.id === id));
-      if (!block.length) h += `<div class="strnone">Nobody on the block yet. Open a player in Season → Roster, or a sell under Best trades, and tap "Put on the trade block".</div>`;
+      if (!block.length) h += `<div class="strnone">Nobody on the block yet. Open a player under Roster, or a sell under Best trades, and tap "Put on the trade block".</div>`;
       block.forEach(id => { const r = V.mine.find(x => x.id === id); if (!r) return; const T = teamNeedsAll(lg, M, r); const rd = V.rd; const tr = r.read ? r.read.trades.filter(t => t.g > 0) : []; const lv = V.league.reduce((m, x) => (m[x.id] = x, m), {});
         h += `<div class="blkc"><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b><span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span><button class="lnk blk on" data-block="${esc(r.id)}">Take off the block</button></div>
           <div class="sub">Worth ${rd ? cn(r.read.val * rd.weeks) : '–'} categories to you over the rest of the season. Below: players at his Basketball Monster value (or a little less) who'd add to your team in a one-for-one, best first.${rd ? ` A clear move is ${cn(rd.bar * rd.weeks)} or more.` : ''}</div>

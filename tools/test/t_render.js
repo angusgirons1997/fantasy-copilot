@@ -37,12 +37,12 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
   const team = frag(P.team && P.team.html); const s1 = team && [...team.querySelectorAll('.step')].find(s => /Step 1/.test(tx(s)));
   if (s1) ok(has(tx(s1), add) && has(tx(s1), drop), 'Team step 1 is the same pickup and drop', tx(s1)); else ok(!rl || !/Add .* now/.test(rl), 'no Team step 1, and the Week brief isn\'t asking for an add now', rl);
   // Strategy
-  const moves = P['trades:moves'], roster = P['season:roster'], finder = P['trades:finder'];
+  const moves = P['trades:moves'], roster = P['trades:roster'], finder = P['trades:finder'];
   if (!moves || /Waiting for Basketball Monster's Analysis Monster/.test(moves.text)) { console.log('  - Strategy checks skipped: no Analysis Monster in this store (use Download test data)'); continue; }
   ok(has(moves.text, add) && has(moves.text, drop), "Best moves includes the same pickup and drop", moves.text.slice(0, 300));
   { const mi = nk(moves.text).indexOf(nk(add)); const firstFa = faNames.filter(n => n !== add).map(n => nk(moves.text).indexOf(nk(n))).filter(i => i >= 0); ok(mi >= 0 && firstFa.every(i => i > mi), "it's the first free agent in Best moves"); }
   // labels on your players: the drop reads "A free agent does more"; sells are in Best moves
-  const lab = {}; [P['season:roster'], P.team, P.players].filter(Boolean).forEach(p => { const d = frag(p.html); d.querySelectorAll('*').forEach(el => { const t = tx(el); if (!LABELS.includes(t)) return;
+  const lab = {}; [P['trades:roster'], P.team, P.players].filter(Boolean).forEach(p => { const d = frag(p.html); d.querySelectorAll('*').forEach(el => { const t = tx(el); if (!LABELS.includes(t)) return;
     let row = el.parentElement; while (row && row !== d && !row.querySelector('b')) row = row.parentElement; const who = row && row.querySelector('b') ? tx(row.querySelector('b')) : null; if (who && !lab[who]) lab[who] = t; }); });
   // (the label means a top-10 free agent clears your pickup bar in his place: only then, and only when there is a drop)
   if (drop && clears) ok(lab[drop] === 'A free agent does more', `the drop (${drop}) reads "A free agent does more"`, 'reads: ' + (lab[drop] || 'no label found'));

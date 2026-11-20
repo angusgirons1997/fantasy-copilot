@@ -117,12 +117,12 @@ page: it never ticks boxes itself. "How it works" is a sub-page of Season (7.46.
 (`H2H.side`: their board, no punt; `TRADE.theirSide`, `forThemRow` in `season.js`). It is an overlay: it never reorders lists.
 The full verdict's "Their side" and its accept/sweetener/unlikely label use it too.
 
-**Phone page (7.47.0, owner has an iPhone):** `tools/phone/server.js` serves the add-on's own panel read-only on this PC (127.0.0.1:8770), using `tools/phone/shim.js` in place of Firefox's browser API. The background (bg.js `toPhone`) posts its storage there every 5 minutes, leaving out sign-in keys, and only posts from moz-extension origins are accepted. The copy is kept in %LOCALAPPDATA%antasy-copilotphone-store.json, outside the repo. The phone reaches it through Tailscale (`tailscale serve --bg 8770`), never a public address. It starts at login from Startupantasy-copilot-phone.vbs. It also reopens Firefox minimised if it isn't running on two checks 2.5 minutes apart; an empty "no-firefox" file in that folder pauses this. The PC must be awake with Firefox open. On the phone it is view-only, and Sync re-reads the PC's newest copy. Test: t_phone.
+**Phone page (7.47.0, owner has an iPhone):** `tools/phone/server.js` serves the add-on's own panel read-only on this PC (127.0.0.1:8770), using `tools/phone/shim.js` in place of Firefox's browser API. The background (bg.js `toPhone`) posts its storage there every 5 minutes, leaving out sign-in keys, and only posts from moz-extension origins are accepted. The copy is kept in %LOCALAPPDATA%\fantasy-copilot\phone-store.json, outside the repo. The phone reaches it through Tailscale (`tailscale serve --bg 8770`), never a public address. It starts at login from Startup\fantasy-copilot-phone.vbs. It also reopens Firefox minimised if it isn't running on two checks 2.5 minutes apart; an empty "no-firefox" file in that folder pauses this. The PC must be awake with Firefox open. On the phone it is view-only, and Sync re-reads the PC's newest copy. Test: t_phone.
 
 **Navigation (7.46.0, agreed with the owner):** one bottom tab per decision: Matchup (key `week`: Do next across roster, lineup and
 trades, then the full weekly estimate; never hide the estimate), Lineup (`team`), Pickups (`players`: free agents and waivers), Trades
-(`trades`: Best trades, Trade block, Finder, and the Yahoo trade-page card), Season (`season`: standings, League so far, then Build,
-Roster, How it works). Old stored `strategy`/`league` map to the new keys (`OLDTAB`). `strategyCard` takes `page`; `data-gostab="page:sub"`
+(`trades`: Best trades, Roster, Trade block, Finder, and the Yahoo trade-page card; Roster moved here from Season in 7.49.0 because the
+owner puts players on the block from it), Season (`season`: standings, League so far, then Build, How it works). Old stored `strategy`/`league` map to the new keys (`OLDTAB`). `strategyCard` takes `page`; `data-gostab="page:sub"`
 links across pages. Best trades has no waiver section (that is Pickups).
 
 **UI polish and NumberFlow (7.45.0):** no UI frameworks: the add-on stays plain JavaScript (React libraries would need a

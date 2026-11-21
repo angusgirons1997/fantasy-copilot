@@ -295,25 +295,30 @@
   const ordinal = n => n ? n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : n % 10] || 'th') : '–';
   // ---- trade finder ----
   // ---- live matchup ----
-  function liveCard(M, ST, lid, y) {
-    const lv = ST['ylive:' + lid]; if (!lv || !y || lv.week !== y.week || !lv.me || !lv.opp) return '';
+  // live (7.53.0): Yahoo's score and totals so far are the facts; the chances at the finish are Basketball Monster's Matchup Monster
+  // (V from bbmView in season.js: its Win Probability per category and projected totals, games already played included)
+  function liveCard(M, ST, lid, y, V) {
+    const lv = ST['ylive:' + lid]; if (!lv || !y || !V || lv.week !== y.week || !lv.me || !lv.opp) return '';
     const played = Object.values(lv.me.st || {}).some(v => v > 0) || Object.values(lv.opp.st || {}).some(v => v > 0); if (!played) return '';
     const me = M.L.teams.find(t => t.tid === M.L.me), op = M.L.teams.find(t => t.tid === String(y.oppTid)); if (!me || !op) return '';
-    const r = H.live(M.ctx, me.ids, op.ids, { me: lv.me.st, opp: lv.opp.st });
+    const r0 = H.live(M.ctx, me.ids, op.ids, { me: lv.me.st, opp: lv.opp.st }); const NOW = Object.fromEntries(r0.cats.map(c => [c.c, c]));
+    const r = { W: V.Wmaj, cats: V.cats.filter(c => NOW[c.c]).map(c => { const n = NOW[c.c], u = n.unit; const gap = n.nowMe == null || n.nowOpp == null ? 0 : c.c === 'to' ? n.nowOpp - n.nowMe : n.nowMe - n.nowOpp;
+      return { c: c.c, label: n.label, p: c.p, me: c.me, opp: c.opp, unit: u, nowMe: n.nowMe, nowOpp: n.nowOpp, gap, state: c.p >= 0.85 ? 'safe' : c.p >= 0.6 ? 'lean' : c.p >= 0.4 ? 'toss' : c.p >= 0.15 ? 'chase' : 'lost' }; }) };
     const now = r.cats.reduce((a, c) => { const d = c.nowMe == null || c.nowOpp == null ? 0 : c.c === 'to' ? c.nowOpp - c.nowMe : c.nowMe - c.nowOpp; if (d > 0) a[0]++; else if (d < 0) a[1]++; else a[2]++; return a; }, [0, 0, 0]);
     // Yahoo's own score when the matchup page gave one (the rest are ties), so the panel always matches Yahoo
     if (lv.me && lv.opp && typeof lv.me.score === 'number' && typeof lv.opp.score === 'number' && lv.me.score + lv.opp.score > 0) { now[0] = lv.me.score; now[1] = lv.opp.score; now[2] = Math.max(0, r.cats.length - now[0] - now[1]); }
-    const fmt = (c, v) => v == null ? '–' : c.unit === 'pct' ? v.toFixed(3).replace(/^0/, '') : Math.round(v);
+    const fmt = (c, v) => v == null ? '–' : c.unit === 'pct' ? (v > 1 ? v / 100 : v).toFixed(3).replace(/^0/, '') : Math.round(v);
     const grp = s => r.cats.filter(c => c.state === s);
     const need = c => c.unit === 'pct' ? (c.gap >= 0 ? 'ahead by ' : 'behind by ') + Math.abs(c.gap).toFixed(3).replace(/^0/, '') : (c.gap >= 0 ? 'up ' : 'down ') + Math.abs(Math.round(c.gap));
     const vk = r.W >= 0.6 ? 'g' : r.W >= 0.4 ? 'a' : 'r'; const vt = r.W >= 0.6 ? 'Favourite this week' : r.W >= 0.4 ? 'Close week' : 'Underdog this week';
-    const yg = lv.me.games && lv.opp.games ? [lv.me.games.remaining, lv.opp.games.remaining] : null; // Yahoo's own count when available
+    const yg = lv.me.games && lv.opp.games ? [lv.me.games.remaining, lv.opp.games.remaining] : null; // Yahoo's own count when available, else Matchup Monster's ticked games
+    const mml = side => V.bbm.players.filter(x => x.side === side && x.type === 'cur').reduce((a, x) => a + x.games.filter(g => g && g.on && !g.fin && !g.zero).length, 0);
     let h = `<div class="hero hv-${vk} live"><div class="hero-top"><div class="hero-pct">${Math.round(r.W * 100)}%</div><div class="hero-vs">to win, live against<br><b>${esc(lv.opp.name || y.oppName || 'opponent')}</b></div><div class="score"><b>${now[0]}–${now[1]}${now[2] ? '–' + now[2] : ''}</b><span>right now</span></div></div>
       <div class="hvk" style="margin:4px 0 0"><span class="fk ${vk}">${vt}</span></div>
       <div class="h" style="margin-top:12px"><span>Chance to win each category</span><span class="sub">at the finish</span></div>
       <div class="cgrid">${r.cats.slice().sort((a, b) => b.p - a.p).map(c => `<div class="tile ${c.p > 0.6 ? 'cs-a' : c.p >= 0.4 ? 'cs-c' : 'cs-b'}"><b>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</b><span>${Math.round(c.p * 100)}%</span><i>now ${fmt(c, c.nowMe)} v ${fmt(c, c.nowOpp)}</i></div>`).join('')}</div>
-      <div class="sub">Games left: <b>${yg ? yg[0] : r.gamesLeft.me}</b> for you, <b>${yg ? yg[1] : r.gamesLeft.opp}</b> for them${yg ? ' (Yahoo)' : ''}. ${(() => { const mins = Math.round((Date.now() - (lv.ts || 0)) / 60000); const when = mins < 2 ? 'just now' : mins < 90 ? mins + ' min ago' : Math.round(mins / 60) + ' h ago'; return mins > 45 ? `<span class="warnt">Yahoo's totals read ${when}: open your matchup on Yahoo to refresh them.</span>` : `Yahoo's totals read ${when}${lv.src === 'tab' ? ' from the open matchup page' : ''}.`; })()}</div>
-      <details class="hwhy" data-k="lwhy"><summary>Why</summary><div class="sub">Banked so far plus what Basketball Monster projects for the games left.</div><table class="stt2 inv"><thead><tr><th></th><th>You now</th><th>Them now</th><th>You at the end</th><th>Them at the end</th></tr></thead><tbody>${r.cats.slice().sort((a, b) => b.p - a.p).map(c => `<tr><td>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</td><td>${fmt(c, c.nowMe)}</td><td>${fmt(c, c.nowOpp)}</td><td>${fmt(c, c.me)}</td><td>${fmt(c, c.opp)}</td></tr>`).join('')}</tbody></table><div class="sub">${Math.round(r.W * 100)}% chance to win the week.</div></details></div>`;
+      <div class="sub">Games left: <b>${yg ? yg[0] : mml(0)}</b> for you, <b>${yg ? yg[1] : mml(1)}</b> for them${yg ? ' (Yahoo)' : ' (Matchup Monster)'}. ${(() => { const mins = Math.round((Date.now() - (lv.ts || 0)) / 60000); const when = mins < 2 ? 'just now' : mins < 90 ? mins + ' min ago' : Math.round(mins / 60) + ' h ago'; return mins > 45 ? `<span class="warnt">Yahoo's totals read ${when}: open your matchup on Yahoo to refresh them.</span>` : `Yahoo's totals read ${when}${lv.src === 'tab' ? ' from the open matchup page' : ''}.`; })()}</div>
+      <details class="hwhy" data-k="lwhy"><summary>Why</summary><div class="sub">Now: Yahoo's totals so far. At the end and the chances: Basketball Monster's Matchup Monster (${esc(ago(V.bbm.ts))}).</div><table class="stt2 inv"><thead><tr><th></th><th>You now</th><th>Them now</th><th>You at the end</th><th>Them at the end</th></tr></thead><tbody>${r.cats.slice().sort((a, b) => b.p - a.p).map(c => `<tr><td>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</td><td>${fmt(c, c.nowMe)}</td><td>${fmt(c, c.nowOpp)}</td><td>${fmt(c, c.me)}</td><td>${fmt(c, c.opp)}</td></tr>`).join('')}</tbody></table><div class="sub">${Math.round(r.W * 100)}% chance to win the week.</div></details></div>`;
     // plain instructions
     const lines = []; const chase = grp('toss').concat(grp('chase')).sort((a, b) => Math.abs(a.p - 0.5) - Math.abs(b.p - 0.5));
     if (chase.length) lines.push(['warn', 'Swing categories', chase.map(c => `<b>${esc(c.label)}</b> (${need(c)})`).join(', ') + '. Pick up or start players who help these.']);
@@ -364,14 +369,15 @@
     const oppName = M.teamName(wk.oppTid);
     return { league: cur.league, me: cur.me, opp: oppName, t1: { id: String(M.L.me), name: cur.me }, t2: { id: String(wk.oppTid), name: oppName }, start: wk.start, end, cats: cur.cats, totals: {}, bbmWin: {}, teams: [cur.me, oppName], days, players, ts: (M.bx.ts || {})[wk.view === 'rest' ? 'rest' : 'next'] || Date.now(), synthetic: true, from: wk.view === 'rest' ? 'bbm-rest' : 'bbm-next' };
   }
-  // ---- next week ----
-  function nextCard(M, y, ov) {
-    if (!y || !y.next || !y.next.oppTid || !M.ctx.has.next) return ''; const me = M.L.teams.find(t => t.tid === M.L.me), op = M.L.teams.find(t => t.tid === String(y.next.oppTid)); if (!me || !op) return '';
-    const r = H.nextWeek(M.ctx, me.ids, op.ids); if (ov && ov.W != null) r.W = ov.W; const nm = id => esc(M.P[id].n); // the panel's own forecast for next week, so the page shows one number
+  // ---- next week (7.53.0): Basketball Monster's Matchup Monster for next week (V from bbmView in season.js), as set on Yahoo ----
+  function nextCard(M, y, V) {
+    if (!y || !y.next || !y.next.oppTid) return '';
+    if (!V) return `<div class="card"><div class="h"><span>Next week vs ${esc(M.teamName(y.next.oppTid))}</span></div><div class="strnone">Basketball Monster's Matchup Monster hasn't been read for next week yet. It's read with the sync.</div></div>`;
+    const T = V.bbm.totals || {}; const r = { W: V.Wmaj, cats: V.cats, games: { me: (T[V.bbm.me] || {}).g ?? '–', opp: (T[V.bbm.opp] || {}).g ?? '–' } }; const nm = id => esc(M.P[id].n);
     const strong = r.cats.filter(c => c.p < 0.4).map(c => c.label), weak = r.cats.filter(c => c.p > 0.6).map(c => c.label);
-    const streams = M.L.fas.filter(id => M.P[id].next && M.P[id].next.g >= 4).sort((a, b) => (M.P[b].next.lv || 0) * M.P[b].next.g - (M.P[a].next.lv || 0) * M.P[a].next.g).slice(0, 3);
+    const streams = !M.ctx.has.next ? [] : M.L.fas.filter(id => M.P[id].next && M.P[id].next.g >= 4).sort((a, b) => (M.P[b].next.lv || 0) * M.P[b].next.g - (M.P[a].next.lv || 0) * M.P[a].next.g).slice(0, 3);
     let h = `<div class="card"><div class="h"><span>Next week vs ${esc(M.teamName(y.next.oppTid))}</span><span class="sub">${esc(y.next.start || '')} to ${esc(y.next.end || '')}</span></div>`;
-    h += `<div class="hl3"><i class="fd ${r.W >= 0.6 ? 'g' : r.W >= 0.4 ? 'a' : 'r'}"></i><span><b>${r.W >= 0.6 ? 'Favourite' : r.W >= 0.4 ? 'Close' : 'Underdog'}</b> (${Math.round(r.W * 100)}% to win) on Basketball Monster's projections · <b>${r.games.me}</b> games for you, <b>${r.games.opp}</b> for them</span></div>`;
+    h += `<div class="hl3"><i class="fd ${r.W >= 0.6 ? 'g' : r.W >= 0.4 ? 'a' : 'r'}"></i><span><b>${r.W >= 0.6 ? 'Favourite' : r.W >= 0.4 ? 'Close' : 'Underdog'}</b> (${Math.round(r.W * 100)}% to win) in Basketball Monster's Matchup Monster · <b>${r.games.me}</b> games for you, <b>${r.games.opp}</b> for them</span></div>`;
     // their actual Yahoo results so far (shown as facts; the forecast above comes from BBM projections only)
     const pf = M.prof && M.prof.teams[String(y.next.oppTid)];
     if (pf && pf.weeks) { const lb = c => ((H && H.LBL) || {})[c] || c; const by = M.ctx.cats.filter(c => pf.cat[c] && pf.cat[c].n).map(c => ({ c, r: (pf.cat[c].w + pf.cat[c].t / 2) / pf.cat[c].n }));

@@ -21,8 +21,9 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
   ok(r.tabs.length >= 4, `${r.tabs.length} pages: ${r.tabs.join(', ')}`);
   ok(!r.errors.length, 'no page errors', r.errors.join('\n    '));
   const broken = Object.entries(P).filter(([, p]) => p.broken).map(([k]) => k); ok(!broken.length, 'nothing shows "Something went wrong"', broken.join(', '));
+  ok(!/top 0\b/.test((P.players || {}).text || ''), 'Pickups never says "top 0"');
   // Players #1
-  const pl = frag(P.players && P.players.html); const top = pl && pl.querySelector('details.pr.fa');
+  const pl =frag(P.players && P.players.html); const top = pl && pl.querySelector('details.pr.fa');
   if (!top) { ok(true, 'no free agent list on Players (nothing to compare)'); continue; }
   const add = tx(top.querySelector('.l1 b')); const dropEl = top.querySelector('.ld .sub b'); const drop = tx(dropEl); const faNames = [...pl.querySelectorAll('details.pr.fa .l1 b')].map(tx);
   console.log(`  Players #1: ${add}, drop ${drop}`);
@@ -57,6 +58,14 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
   ok(!missing.length, `every sell is in Best moves (${sells.length})`, missing.join(', '));
   if (finder) { const fa = faNames.filter(n => has(finder.text, n)); ok(!fa.length, 'Finder shows rostered players only', 'free agents in Finder: ' + fa.join(', ')); }
   if (roster) ok(!roster.broken, 'Roster renders'); }
+  // the Matchup hero (7.53.0): Basketball Monster's Matchup Monster as given, expected categories = the sum of its category chances
+  { const st = JSON.parse(JSON.stringify(base)); Object.keys(st).filter(k => k.startsWith('ylive:')).forEach(k => delete st[k]);
+    const r = await render(st, { now: rep.at }); const t = (r.pages.week || {}).text || ''; const day = String(rep.at || new Date().toISOString()).slice(0, 10);
+    const mw = Object.keys(st).filter(k => k.startsWith('mmw:')).map(k => st[k]).find(x => x.bbmWin && x.start <= day && x.end >= day && x.opp && t.includes(x.opp));
+    console.log('\n=== Matchup hero' + (mw ? ' against ' + mw.opp : ''));
+    if (!mw) ok(/Matchup Monster hasn't given/.test(t), 'no Matchup Monster week: the hero says so', t.slice(0, 300));
+    else { const E = Object.values(mw.bbmWin).reduce((a, v) => a + v, 0); ok(t.includes(E.toFixed(1) + '/') || /chance to beat/.test(t), `the hero is Matchup Monster's ${E.toFixed(1)} categories`, t.slice(0, 300));
+      ok(/From Basketball Monster's Matchup Monster/.test(t) && !/fills every start/.test(t), 'the hero names Matchup Monster and has no planner odds switch', t.slice(0, 300)); } }
   // the Yahoo trade card (7.51.0): a one-for-one from Trade Monster's lists, with Analyze Trade's answer stubbed; it shows Trade
   // Monster's numbers and nothing of the co-pilot's own season measure
   { const tmk = Object.keys(base).find(k => k.startsWith('bbmtm:') && base[k].by && Object.keys(base[k].by).length); const lid = tmk && tmk.slice(6); const bx = lid && base['bx:' + lid];

@@ -113,6 +113,13 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return post(d, { StartDateTB: t.start, EndDateTB: t.end }, ['SetDatesButon', 'Update'], tag + ' dates', /^MD_/);
   }
   // drive Matchup Monster to: league, you, opponent, dates; import Yahoo lineups; process; read
+  // tick your Matchup Monster games (in the page d, before it's posted) to the plan: started = ticked, benched = not; days already
+  // played, and players the plan doesn't list that day, are left alone. Returns how many ticks changed.
+  function tickPlan(d, m, pl, today) { const D = new Map(pl.days.filter(x => x.open !== false && x.date >= today).map(x => [x.date, x])); let n = 0;
+    m.players.filter(p => p.side === 0 && p.type === 'cur').forEach(p => p.games.forEach(gm => { const dd = gm && !gm.fin && gm.cb && m.days[gm.day] && D.get(m.days[gm.day].date); if (!dd) return;
+      const on = dd.start.some(x => NM.same(x, p.name)); if (!on && !dd.bench.some(x => NM.same(x, p.name))) return; const el = d.getElementById(gm.cb); if (!el || el.hasAttribute('checked') === on) return;
+      if (on) el.setAttribute('checked', 'checked'); else el.removeAttribute('checked'); n++; }));
+    return n; }
   async function bbmWeek(t, tag) {
     let d = html(await bbmGet(BBM, tag + ' open'));
     if (!d.getElementById('Team1DD')) { trace(tag + ' open', false, 'no Matchup Monster form'); throw new Error('Matchup Monster page looks different (Basketball Monster may be updating)'); }
@@ -160,6 +167,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         try { d = await post(d, {}, ['pageTitleRowRefresh', ''], tag + ' refresh rosters'); if (!t.noImport) d = await post(d, {}, ['ImportButton', 'Import Provider Selections'], tag + ' import Yahoo lineups'); d = await post(d, {}, null, tag + ' process');
           const m2 = root.MMPARSE(d); if (m2 && !m2.error) m = m2; } catch (e) { trace(tag + ' refresh rosters', false, e.message); } }
       else trace(tag + ' roster check', true, 'BBM roster matches Yahoo'); }
+    // the co-pilot's planned lineup (plan:<league>, under 12 hours old): tick your games for exactly the days and players it
+    // plans, and process again, so Matchup Monster's win chances are for the lineup the Lineup page shows. Anyone the plan
+    // doesn't mention that day keeps Yahoo's imported tick.
+    const pl = t.planOf && t.planOf(m.league); if (pl && pl.days && Date.now() - (pl.ts || 0) < 12 * 3600e3 && pl.me === m.me) { const m0 = m; const n = tickPlan(d, m, pl, usToday());
+      if (n) { try { d = await post(d, {}, null, tag + ' process your planned lineup'); const m2 = root.MMPARSE(d); m = m2 && !m2.error ? m2 : m0; } catch (e) { trace(tag + ' planned lineup', false, e.message); } }
+      m.planned = { ts: pl.ts, changed: n }; trace(tag + ' planned lineup', true, n + ' game ticks changed'); }
     const check = [['league', strip(m.league) === strip(t.league)], ['you', !t.myTid || (m.t1 && m.t1.id === String(t.myTid))], ['opponent', !t.oppTid || (m.t2 && m.t2.id === String(t.oppTid))], ['dates', m.start === t.start]];
     const bad = check.filter(c => !c[1]).map(c => c[0]);
     trace(tag + ' read', !bad.length, `${m.league} · ${m.me} vs ${m.opp} · ${m.start}→${m.end} · ${m.players.length} rows · ${m.cats.length} cats${bad.length ? ' · WRONG: ' + bad.join(', ') : ''}`);
@@ -573,7 +586,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       // this week's Matchup Monster: if it fails (BBM down or showing no results), the Yahoo side of the sync still runs, and the
       // panel builds the week from BBM's projections instead
       log('this week'); let m;
-      try { m = await bbmWeek({ league: y.league, myTid: y.tid, oppTid: y.oppTid, start, end, yNames: y.rows.map(r => r.name) }, 'This week');
+      try { m = await bbmWeek({ league: y.league, myTid: y.tid, oppTid: y.oppTid, start, end, yNames: y.rows.map(r => r.name), planOf: k => all['plan:' + k] }, 'This week');
         await put({ ['mmw:' + m.league + ':' + m.start]: m, ['mm:' + m.league]: m }); st.mmOk = true; st.this = { opp: m.opp }; }
       catch (e) { if (e.auth) throw e; st.mmErr = e.message; m = { league: strip(y.league), start, end, teams: null, failed: true }; }
       const old = (k, h) => !all[k] || Date.now() - (all[k].ts || 0) > (h || 6) * 3600e3;
@@ -756,5 +769,5 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       return { mode, res }; }
     finally { lockBy = null; await put({ syncLock: null }); }
   }
-  root.SYNC = { usToday, unhide, parseTM, parseAnalyze, bbmAnalyze, parseFF, bbmFAs, bbmAnalyzeAdd, parseAM, parseRanks, teamPage, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
+  root.SYNC = { usToday, tickPlan, unhide, parseTM, parseAnalyze, bbmAnalyze, parseFF, bbmFAs, bbmAnalyzeAdd, parseAM, parseRanks, teamPage, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
 })(typeof window !== 'undefined' ? window : globalThis);

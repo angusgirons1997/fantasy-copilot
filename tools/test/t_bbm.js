@@ -12,4 +12,12 @@ const a = global.SYNC.parseAnalyze(html('bbm-analyze.html'));
 assert.deepStrictEqual(a.before, { 'Team A': 0.576, 'Team B': 0.384 }); assert.deepStrictEqual(a.after, { 'Team A': 0.606, 'Team B': 0.404 });
 assert.deepStrictEqual(a.gains, { p: 0.42, 3: 0.72, r: -0.13, to: -0.43 });
 console.log('✓ Analyze: Win% before and after for every team (with or without a leading column), and the Gains row');
+{ // Matchup Monster ticked to the planned lineup (7.53.0): started = ticked, benched = unticked; played days and unplanned players untouched
+  const d = new w.DOMParser().parseFromString('<form>' + ['a1', 'a2', 'b1', 'b2', 'c1'].map(id => `<input type="checkbox" name="MD_${id}" id="${id}"${/1$/.test(id) || id === 'b2' ? ' checked' : ''}>`).join('') + '</form>', 'text/html');
+  const days = [{ date: '2026-11-20' }, { date: '2026-11-21' }]; const G = (cb, day, fin) => ({ cb, day, fin: !!fin });
+  const m = { days, players: [{ side: 0, type: 'cur', name: 'Ann Able', games: [G('a1', 0, true), G('a2', 1)] }, { side: 0, type: 'cur', name: 'Bo Bee', games: [G('b1', 0, true), G('b2', 1)] }, { side: 0, type: 'cur', name: 'Cy Sea', games: [null, G('c1', 1)] }] };
+  const pl = { days: [{ date: '2026-11-20', open: false, start: ['Bo Bee'], bench: ['Ann Able'] }, { date: '2026-11-21', open: true, start: ['Ann Able'], bench: ['Bo Bee'] }] };
+  const n = global.SYNC.tickPlan(d, m, pl, '2026-11-21'); const on = id => d.getElementById(id).hasAttribute('checked');
+  assert.strictEqual(n, 2); assert.deepStrictEqual(['a1', 'a2', 'b1', 'b2', 'c1'].map(on), [true, true, true, false, true]);
+  console.log('✓ Matchup Monster ticked to the planned lineup: started on, benched off, played days and unplanned players left as imported'); }
 console.log('\nall passed');

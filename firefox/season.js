@@ -461,6 +461,14 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // this week in Basketball Monster's Matchup Monster: its win chance per category and its "free agents to consider", with games left
   function mmWeek(lg) { const t = usToday(); return weeks(lg).filter(w => w.start <= t && w.end >= t && !w.synthetic && w.players).sort((a, b) => (b.ts || 0) - (a.ts || 0))[0] || null; }
   const gamesLeft = (m, id) => { const p = m && m.players.find(x => x.bbm === id); return p ? p.games.filter(g => g && !g.fin && !g.zero).length : null; };
+  // ---- the Matchup page starts from Basketball Monster (7.53.0): Matchup Monster's Win Probability per category and its totals
+  // (games already played included; your games ticked to the planned lineup by the sync, theirs as imported from Yahoo). Expected
+  // categories and the chance to take the week only add up its category chances (taken as independent). No model of our own. ----
+  function bbmView(m, p) { if (!m || m.synthetic || !m.bbmWin || !m.totals) return null; const W = m.bbmWin, me = m.totals[m.me] || {}, op = m.totals[m.opp] || {};
+    const lab = c => ((p.cats || []).find(x => x.c === c) || {}).label || window.STRAT.name(c);
+    const cats = (m.cats || []).filter(c => W[c] != null).map(c => ({ c, label: lab(c), p: W[c], me: me[c], opp: op[c] })); if (!cats.length) return null;
+    const n = cats.length, Wmaj = window.H2H.weekWin(cats.map(c => c.p), Math.floor(n / 2) + 1);
+    return Object.assign({}, p, { cats, ncat: n, Ecats: cats.reduce((a, c) => a + c.p, 0), Wmaj, W: Object.assign({}, p.W, { plan: Wmaj }), bbm: m }); }
   function weekHoles(lg, M) { const m = mmWeek(lg); if (!m || !m.bbmWin) return null; const W = m.bbmWin; const cats = (m.cats || []).filter(c => W[c] != null && !(M.ctx.punt || []).includes(c));
     // in play: Basketball Monster gives you 20 to 80% to win it this week; behind: under 50%
     const play = cats.filter(c => W[c] >= 0.2 && W[c] <= 0.8).sort((a, b) => W[a] - W[b]); const wt = c => W[c] < 0.5 ? 1 : 0.5; const seen = new Set();
@@ -606,7 +614,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // ---- today at a glance ----
   function briefHtml(p, lg, M) {
     const y = yrFor(lg); const t = usToday(); const rows = [];
-    const lv = y && ST['ylive:' + y.lid]; if (M && lv && lv.week === y.week) { const card = window.CTX.liveCard(M, ST, y.lid, y); const m0 = card.match(/<div class="score"><b>([^<]+)<\/b>/), w0 = card.match(/hero-pct">(\d+)%/); if (m0 && w0) rows.push(['good', `Live: <b>${m0[1]}</b> in categories, <b>${w0[1]}%</b> to win the week`]); }
+    const lv = y && ST['ylive:' + y.lid]; if (M && lv && lv.week === y.week) { const card = window.CTX.liveCard(M, ST, y.lid, y, bbmView(mmWeek(lg), p)); const m0 = card.match(/<div class="score"><b>([^<]+)<\/b>/), w0 = card.match(/hero-pct">(\d+)%/); if (m0 && w0) rows.push(['good', `Live: <b>${m0[1]}</b> in categories, <b>${w0[1]}%</b> to win the week`]); }
     // in order: 1 the roster move (if one is due), 2 the lineup for the roster you then have
     const d = (p.nowDays || p.days).find(x => x.date === t); const due = p.moves.filter(x => x.date <= t), nxt = p.moves.filter(x => x.date > t);
     if (due.length) due.forEach(x => { const u = yLink(lg, x.add); rows.push(['warn', `<b>1 · Roster:</b> add <b>${esc(x.add)}</b>${x.drop ? ', drop <b>' + esc(x.drop.replace(/\.$/, '')) + '</b>' : x.il ? ' (' + esc(x.il) + ' to IL first)' : ''}${u ? ` · <a href="${esc(u)}" target="_blank" rel="noopener">open on Yahoo</a>` : ''}`]); });
@@ -709,22 +717,24 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
           if (out.length) { ST[fk] = { ts: Date.now(), week: wN, start: nx.start, sdMul: M.ctx.sdMul || 1, me: M.L.me, pairs: out, tot }; browser.storage.local.set({ [fk]: ST[fk] }); } } catch (e) { console.error(e); } finally { M.ctx.valuing = was; } } } }
     try { logAdvice(lg); } catch (e) { console.error(e); } // the advice backtest's raw material
     const stale = Date.now() - m.ts > 3 * 3600e3;
-    const W = p.W.plan;
+    // the hero is Basketball Monster's Matchup Monster for the week shown (bbmView), nothing of the planner's own odds
+    const q = bbmView(pNext ? nextOf(m) : m, p); const W = q ? q.W.plan : null;
     let h = '';
     if (stale) h += `<div class="warn">Numbers are ${ago(m.ts).replace(' ago', '')} old. Press Sync before acting.</div>`;
     const cNote = h.length;
-    const cs = p.cats.slice().sort((a, b) => b.p - a.p);
+    const cs = (q ? q.cats.slice() : []).sort((a, b) => b.p - a.p);
     const c0 = h.length;
     const catsMode = p.obj === 'cats';
-    { const Wv = catsMode ? (p.Wmaj || 0) : W; const vk = Wv >= 0.6 ? 'g' : Wv >= 0.4 ? 'a' : 'r'; const vt = Wv >= 0.6 ? 'Favourite' : Wv >= 0.4 ? 'Close week' : 'Underdog';
+    if (!q) h += `<div class="card"><div class="h"><span>${pNext ? 'Next week' : 'This week'} against ${esc(p.opp)}</span></div><div class="strnone">Basketball Monster's Matchup Monster hasn't given its win chances for this week yet. They're read with every sync.</div></div>`;
+    else { const Wv = catsMode ? (q.Wmaj || 0) : W; const vk = Wv >= 0.6 ? 'g' : Wv >= 0.4 ? 'a' : 'r'; const vt = Wv >= 0.6 ? 'Favourite' : Wv >= 0.4 ? 'Close week' : 'Underdog';
       const fmtT = (c, v) => v == null ? '–' : /%/.test(c.label) ? (v <= 1 ? (v * 100).toFixed(1) : (+v).toFixed(1)) + '%' : (+v).toFixed(v >= 100 ? 0 : 1);
-      const heroNum = catsMode ? `${(p.Ecats || 0).toFixed(1)}<small>/${p.ncat}</small>` : pct(W); const tcls = v => v > 0.6 ? 'cs-a' : v >= 0.4 ? 'cs-c' : 'cs-b';
-      h += `<div class="hero hv-${vk}"><div class="hero-top"><div class="hero-pct">${heroNum}</div><div class="hero-vs">${catsMode ? 'categories expected against' : 'chance to beat'}<br><b>${esc(p.opp)}</b>${p.playoffs ? ' · playoff week' : ''}</div><div class="hvk"><span class="fk ${vk}">${vt}</span>${catsMode ? `<i>${pct(p.Wmaj || 0)} to take the week</i>` : ''}</div></div>
-      <div class="bl">${bottomLine(p)}</div>
-      <div class="h" style="margin-top:12px"><span>Chance to win each category</span><span class="sub">you need ${p.need} of ${p.ncat}</span></div>
+      const heroNum = catsMode ? `${(q.Ecats || 0).toFixed(1)}<small>/${q.ncat}</small>` : pct(W); const tcls = v => v > 0.6 ? 'cs-a' : v >= 0.4 ? 'cs-c' : 'cs-b';
+      h += `<div class="hero hv-${vk}"><div class="hero-top"><div class="hero-pct">${heroNum}</div><div class="hero-vs">${catsMode ? 'categories expected against' : 'chance to beat'}<br><b>${esc(p.opp)}</b>${p.playoffs ? ' · playoff week' : ''}</div><div class="hvk"><span class="fk ${vk}">${vt}</span>${catsMode ? `<i>${pct(q.Wmaj || 0)} to take the week</i>` : ''}</div></div>
+      <div class="bl">${bottomLine(q)}</div>
+      <div class="h" style="margin-top:12px"><span>Chance to win each category</span><span class="sub">you need ${p.need} of ${q.ncat}</span></div>
       <div class="cgrid">${cs.map((c, i) => `<div class="tile ${tcls(c.p)}${i === p.need - 1 ? ' line' : ''}" title="${esc(c.label)}: you ${fmtT(c, c.me)}, them ${fmtT(c, c.opp)}"><b>${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</b><span>${Math.round(c.p * 100)}%</span><i>${fmtT(c, c.me)} v ${fmtT(c, c.opp)}</i></div>`).join('')}</div>
-      <div class="sub" style="margin-top:8px">Under each: your projected total against theirs for the week${p.live ? ', including games already played' : ''}${cs.some(c => c.label === 'turnovers') ? ' (fewer turnovers wins)' : ''}.</div>
-      <div class="omrow"><span class="sub">Their lineup:</span><span class="seg small"><button data-om="max" class="${p.oppMode === 'max' ? 'on' : ''}" title="Assume the opponent fills every start">fills every start</button><button data-om="set" class="${p.oppMode === 'set' ? 'on' : ''}" title="Opponent lineup exactly as set">as set now</button></span></div></div>`; }
+      <div class="sub" style="margin-top:8px">Under each: Matchup Monster's projected total for you against theirs, including games already played${cs.some(c => c.label === 'turnovers') ? ' (fewer turnovers wins)' : ''}.</div>
+      <div class="sub">From Basketball Monster's Matchup Monster: ${q.bbm.planned ? 'your games ticked to the lineup the Lineup page plans, theirs as set on Yahoo' : 'both lineups as set on Yahoo'}. Read ${esc(ago(q.bbm.ts))}.</div></div>`; }
     const c1 = h.length; const A = p.adds;
     const c2 = h.length;
     // LINEUP: the plan for each day, checked against what's actually set on Yahoo for that day
@@ -739,7 +749,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       ['hero', 'pick', 'week'].forEach(k => part[k] = nw(part[k])); }
     const TAB = curTab(); const yo = yahooOn(); const show = TABPARTS[TAB];
     const yL = yrFor(lg); const yLn = yL ? Object.assign({}, yL, { next: ynextOf(yL) }) : null; const onLg = yo && yo.league === lg;
-    const lazy = { ilback: () => ilBackCard(p, lg), brief: () => briefHtml(pThis, lg, M), live: () => M && yL && !pNext ? window.CTX.liveCard(M, ST, yL.lid, yL) : '', next: () => { if (!M || !yLn || pNext) return ''; let ov = null; try { const pn = nxOK ? compute('next') : null; if (pn) ov = { W: pn.obj === 'cats' ? pn.Wmaj : pn.W }; } catch (e) {} return window.CTX.nextCard(M, yLn, ov); }, league: () => leagueCard(lg, M, true), standings: () => standingsCard(lg, true), board: () => boardCard(p, lg, M),
+    const lazy = { ilback: () => ilBackCard(p, lg), brief: () => briefHtml(pThis, lg, M), live: () => M && yL && !pNext ? window.CTX.liveCard(M, ST, yL.lid, yL, bbmView(m, pThis)) : '', next: () => { if (!M || !yLn || pNext) return ''; return window.CTX.nextCard(M, yLn, bbmView(nextOf(m), pThis)); }, league: () => leagueCard(lg, M, true), standings: () => standingsCard(lg, true), board: () => boardCard(p, lg, M),
       strategy: () => M ? strategyCard(lg, M, { page: TAB, tid: onLg && yo.kind === 'trade' && ST.ypage && ST.ypage.mid2 ? ST.ypage.mid2 : null }) : `<div class="card">This page needs the first full sync from Basketball Monster.</div>`,
       // what the co-pilot reads from the Yahoo screen you're on, shown on the page it belongs to
       ctx: () => onLg && yo.tab === TAB && ['players', 'add', 'trade'].includes(yo.kind) ? `<div id="ctxBox">${ctxBlock()}</div>` : '' };
@@ -753,7 +763,6 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     setNav(lg);
     paint(o, h); wireHealth(); if (M) { wireTrades(lg, M); wireStrategy(lg, M); }
     o.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => { wkPick = { sel: b.dataset.wk, lg, ts: Date.now() }; selDay = null; render(); });
-    o.querySelectorAll('[data-om]').forEach(b => b.onclick = () => { s.oppMode = b.dataset.om; saveS(lg); render(); });
     o.querySelectorAll('[data-skip]').forEach(b => b.onclick = () => { s.exclude = (s.exclude || []).concat([b.dataset.skip]); saveS(lg); soon(); });
     o.querySelectorAll('[data-keep]').forEach(b => b.onclick = () => { s.protect = (s.protect || []).concat([b.dataset.keep]); saveS(lg); soon(); });
     const rx = $('resetX'); if (rx) rx.onclick = () => { s.exclude = []; s.protect = []; s.forceDrop = {}; s.pickAdds = {}; saveS(lg); soon(); };
@@ -1006,7 +1015,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     h += `<div class="mts">${H.play.map(c => `<span class="mt plain${H.W[c] < 0.5 ? ' minus' : ''}" title="Basketball Monster's chance you win it this week"><b>${esc(NM(c))}</b> ${pc(H.W[c])}</span>`).join('')}</div>`;
     const top = H.fas.slice(0, 5);
     h += top.length ? `<div class="sub" style="margin-top:4px">From Matchup Monster's ${H.n} free agents to consider, the ones strong in those categories, most games left this week first:</div>` + top.map(x => { const r = B.list.findIndex(z => z.id === x.id);
-      return `<div class="mvl"><span>${esc(x.n)}${x.inj ? ` <span class="minus">${esc(injChip(x.inj))}</span>` : ''}</span>${x.g} game${x.g === 1 ? '' : 's'} left · strong in <b>${esc(listW(x.fills.map(NM)))}</b>${r >= 0 ? ` · <i>number ${r + 1} below</i>` : ` · <i>a stream: not in the top ${B.list.length} for the rest of the season</i>`}</div>`; }).join('')
+      return `<div class="mvl"><span>${esc(x.n)}${x.inj ? ` <span class="minus">${esc(injChip(x.inj))}</span>` : ''}</span>${x.g} game${x.g === 1 ? '' : 's'} left · strong in <b>${esc(listW(x.fills.map(NM)))}</b>${r >= 0 ? ` · <i>number ${r + 1} below</i>` : B.list.length ? ` · <i>a stream: not in the top ${B.list.length} for the rest of the season</i>` : ""}</div>`; }).join('')
       : `<div class="sub" style="margin-top:4px">None of Matchup Monster's ${H.n} free agents to consider is strong in those categories with games left.</div>`;
     return h + `<div class="sub">From Basketball Monster's Matchup Monster against ${esc(H.m.opp || 'your opponent')} (${esc(fmtD(H.m.start))} to ${esc(fmtD(H.m.end))}).</div>`; }
   function boardCard(p, lg, M) {
@@ -1015,8 +1024,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const SL = new Map(((p.streams && p.streams.list) || []).map(x => [K(x.add), x])); const mv = (p.moves || []).find(x => bd && K(x.add) === K(bd.add));
     const o99 = (v, al) => v == null ? '–' : (al ? '≥ ' : '') + of99(v);
     let h = `<div class="card prim fal"><div class="h"><span>Free agents</span><span class="sub">${nx ? 'next week' : `${Math.max(0, A.left || 0)} of ${A.limit || 0} adds left this week${A.spare ? ' (1 kept spare)' : ''}`}</span></div>`;
-    if (!B.bbm) return h + `<div class="strnone">Basketball Monster's Find Free Agents hasn't been read for this league yet. It's read every 6 hours with the sync.</div>${holesHtml(lg, M, B)}</div>`;
-    if (!B.list.length) return h + `<div class="strnone">Find Free Agents lists no available free agent for any player you'd drop (your keeps, injured-list spots and recent adds are never drops).</div>${holesHtml(lg, M, B)}</div>`;
+    if (!B.bbm) return h + `<div class="strnone">Basketball Monster's Find Free Agents hasn't been read for this league yet. It's read every 6 hours with the sync.</div>${nx ? "" : holesHtml(lg, M, B)}</div>`;
+    if (!B.list.length) return h + `<div class="strnone">Find Free Agents lists no available free agent for any player you'd drop (your keeps, injured-list spots and recent adds are never drops).</div>${nx ? "" : holesHtml(lg, M, B)}</div>`;
     if (bd && bd.worth && !bd.wait) h += `<div class="hl">Add <b class="plus">${esc(bd.add)}</b>${bd.dropName ? `, drop <b>${esc(bd.dropName)}</b>` : ' into your empty roster spot'}${mv ? ` on ${esc(fmtD(mv.date))}` : ''}</div><div class="sub hls"><b class="plus">${o99(bd.you, bd.atLeast)}</b> of 99 a week over the rest of the season${bd.chosen ? ' · your pick' : ''}</div>`;
     else if (bd && bd.worth) h += `<div class="hl"><b>${esc(bd.add)}</b> is the best pickup: wait until Monday</div><div class="sub hls">${bd.why === 'adds' ? 'No adds left this week.' : `${esc(sur(bd.dropName))} has ${bd.gd} game${bd.gd === 1 ? '' : 's'} left this week and ${esc(sur(bd.add))} ${bd.ga}, so adding now costs games; from Monday it's ${o99(bd.you, bd.atLeast)} of 99 a week.`}</div>`;
     else h += `<div class="hl">No free agent clears your bar</div><div class="sub hls">The best, ${esc(nm(B.list[0].id))}, adds ${o99(B.list[0].you, B.list[0].atLeast)} of 99 a week${B.list[0].drop ? ' for ' + esc(sur(nm(B.list[0].drop))) : ''}; your bar is ${of99(pick99(lg))} (Settings → Advice).</div>`;

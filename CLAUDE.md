@@ -129,7 +129,19 @@ week (Win% x 99). The co-pilot has no trade maths of its own (`trade.js` and `H2
   strong in them (category value +0.5 or more), most games left first. Timing only: it never reorders the list.
 - **Analyze Add/Drop** (`bbmAnalyzeAdd`, live via `M.anaAdd`): the Yahoo add card's swap. Empty roster spot: the list shows each
   free agent with his best drop ("≥"); the Yahoo card asks for the plain add.
-- Not yet on Basketball Monster (the Matchup phase): the week planner's streams and `b.swap` for pairs it didn't list.
+- Not yet on Basketball Monster (the Lineup phase): the week planner's streams and `b.swap` for pairs it didn't list.
+
+## Matchup from Matchup Monster (7.53.0)
+
+- **The hero, the live card and the next-week card** read `bbmView(m, p)` in `season.js`: Matchup Monster's Win Probability per
+  category (`bbmWin`) and its totals, as given. Expected categories = their sum; the chance to take the week = `H2H.weekWin` on them
+  (categories taken as independent). No odds of our own; the planner's "their lineup" switch is gone from the hero.
+- **Your planned lineup is ticked** before the read: `tickPlan` in `sync.js` sets your game ticks to `plan:<league>` (under 12 hours
+  old) and processes again (`m.planned`). Started = ticked, benched = not; played days and players the plan doesn't list keep
+  Yahoo's imported ticks. The opponent is as imported from Yahoo. Next week is as set on Yahoo.
+- **Live:** Yahoo's score and totals so far are the facts; the chances and the totals at the finish are Matchup Monster's.
+- No Matchup Monster week (a failed read or a synthetic week): the card says so instead of showing numbers.
+- Still the old measure, on purpose: the forecast logs (`h2hfc`, `lgfc`) that feed the forecast check.
 
 **Basketball Monster first (7.50.0, owner's founding rule):** advice starts from BBM's own outputs. The add-on's existing logic sifts and adds detail to them, but never replaces them with its own numbers. Nothing existing is removed. Trades: sync.js `bbmTrades` runs Trade Monster's "Find Trades" (button FINDTRADES, DD2 blank = whole league) for each of your players once a day, stored as `bbmtm:<lid>`. `tmDeals` in season.js turns Team1+/Team2+ (Win% points) into category matchups out of 99 (× 0.99). A swap is shown when you gain at least `bar99` (default +3). It's realistic when they lose at most `themMin` (default −1) and the Yahoo ranks are within `rankGap` (default 15). Otherwise it goes under "Good for you, unlikely to be accepted", with the reason. All three are per-league settings. Best trades shows the profile you're selling, then the teams he fits (their needs from teamNeeds) and their players. The co-pilot's own category breakdown only adds the ">70% in one category" note. Do next names your player only. Next phases: Pickups from Matchup Monster's "Free Agents to Consider" and BBM weekly projections (fill the week's category holes), then Matchup, then Lineup.
 

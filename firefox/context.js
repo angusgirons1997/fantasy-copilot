@@ -110,35 +110,44 @@
     const t = note ? note.text : c ? c.text : ''; if (!t) return ''; return `<div class="nt" title="${esc(t)}"><b>Josh on ${esc(sur(p.n))}:</b> “${esc(t.length > 140 ? t.slice(0, 137) + '…' : t)}”</div>`; };
   const g = (M, id) => M.P[id] && M.P[id].rest ? M.P[id].rest.g : null;
 
-  // ---- one trade, laid out the same everywhere (the deal list, Build, and Yahoo's trade and offer pages) ----
-  // o.tm: Basketball Monster's Trade Monster results ({ by: { yourPlayer: [rows] } }); o.offer: an offer you received
-  function dealView(M, d, o) { o = o || {};
-    const yr = id => (M.yrank && M.yrank(id)) || null; const gl = id => ((M.P[id] || {}).ros || {}).g;
-    const who = id => { const p = M.P[id] || {}; const r = yr(id); return `<span class="tdp"><b>${esc(p.n || id)}</b><small>${[r ? 'Yahoo rank ' + r : '', gl(id) != null ? gl(id) + ' games left' : ''].filter(Boolean).join(' · ')}</small></span>`; };
-    const nm = id => esc((M.P[id] || {}).n || id);
-    const cs = v => { const r = Math.round(v * 10) / 10; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(1); };
-    const cw = v => { const r = Math.round(v * 100) / 100; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(2); };
-
-    const pills = d.cats.filter(c => Math.abs(c.d) >= 0.01).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 8).map(c => `<span class="mt plain" title="Share of weeks you win ${esc(c.label)}: now, then after the trade"><b>${esc(c.label)}</b> ${pctTo(c)}</span>`).join('') || '<span class="sub">no category changes by 1 point or more</span>';
-    const tc = (d.theirCats || []).filter(c => Math.abs(c.d) >= 0.03).sort((a, b) => b.d - a.d); const up = tc.filter(c => c.d > 0).slice(0, 3).map(c => c.label), dn = tc.filter(c => c.d < 0).slice(-3).reverse().map(c => c.label);
-    // Basketball Monster's own view of a 1-for-1 (Trade Monster), when it has looked at that swap
-    let tmL = ''; if (o.tm && o.tm.by && d.give.length === 1 && d.get.length === 1) { const row = (o.tm.by[d.give[0]] || []).find(x => x.id === d.get[0]);
-      if (row) tmL = `<div class="sub">Basketball Monster's Trade Monster: your win rate ${row.t1 >= 0 ? '+' : ''}${row.t1}%, theirs ${row.t2 >= 0 ? '+' : ''}${row.t2}% · trade value ${row.give} given for ${row.get}.</div>`; }
-    // the season so far next to the projection, for the players in the deal who have played enough to say anything
+  // ---- trades on Yahoo's pages start from Basketball Monster (7.51.0): the deal as ticked goes to Trade Monster's "Analyze Trade"
+  // (M.ana, asked live), and every player number comes from its daily "Find Trades" lists (M.tm). Both teams' Win% change is shown
+  // as category matchups won out of 99 a week. The co-pilot adds only checks and detail: your bar, whether they'd say yes, what
+  // they need, Yahoo's ranks, injuries, Josh's notes. ----
+  const o99 = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v);
+  // Find Trades' one-for-one: your player g for their player t
+  const o1 = (M, g, t) => { const r = ((M.tm && M.tm.by && M.tm.by[g]) || []).find(x => x.id === t); return r ? { you: Math.round(r.t1 * 0.99), them: Math.round(r.t2 * 0.99), g, t } : null; };
+  const bestOf = a => a.filter(Boolean).sort((x, y) => y.you - x.you || y.them - x.them)[0] || null;
+  function tmVerdict(M, them, give, get, N, L, offer) {
+    const and = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '';
+    const who = id => { const p = M.P[id] || {}; const r = M.yrank && M.yrank(id); const gl = (p.ros || {}).g;
+      return `<span class="tdp"><b>${esc(p.n || id)}</b>${p.inj ? ` <span class="fk r">${esc(p.inj)}</span>` : ''}<small>${[r ? 'Yahoo rank ' + r : '', gl != null ? gl + ' games left' : ''].filter(Boolean).join(' · ')}</small></span>`; };
+    const sides = `<div class="tdl"><div class="tdl-sides"><div class="tds"><span class="lab plus">Get</span><span>${get.map(who).join('')}</span></div><div class="tds"><span class="lab minus">Give</span><span>${give.map(who).join('')}</span></div><div class="sub">${esc(M.teamName(them))} · ${give.length}-for-${get.length}</div></div></div>`;
+    const A = M.ana ? M.ana(them, give, get) : { err: 'Trade Monster can only be asked from the add-on on the PC' };
+    if (!A || A.pending) return sides + `<div class="sub">Asking Basketball Monster's Trade Monster (Analyze Trade)…</div><span class="skel" style="width:70%"></span>`;
+    if (A.err) return sides + `<div class="sub minus">Couldn't ask Trade Monster: ${esc(A.err)}</div>`;
+    if (A.miss) return sides + `<div class="sub minus">Trade Monster doesn't list ${esc(and(A.miss.map(id => (M.P[id] || {}).n || id)))} on these rosters (an injured-list spot, or a move it hasn't seen yet).</div>`;
+    const bar = M.bar99 != null ? M.bar99 : 3, tmin = M.themMin != null ? M.themMin : -1, gap = M.rankGap != null ? M.rankGap : 15;
+    const why = []; if (A.them < tmin) why.push('they lose ' + Math.abs(A.them) + ' of 99');
+    if (give.length === 1 && get.length === 1) { const ra = M.yrank && M.yrank(give[0]), rb = M.yrank && M.yrank(get[0]); if (ra && rb && Math.abs(ra - rb) > gap) why.push('Yahoo ranks them ' + ra + ' and ' + rb); }
+    let h = `<div class="vd ${A.you >= bar ? 'good' : A.you < 0 ? 'bad' : ''}">You ${o99(A.you)} · them ${o99(A.them)} <small>of 99 per week</small></div>`;
+    h += `<div class="sub">${A.you >= bar ? `Clears your ${o99(bar)} bar` : A.you > 0 ? `Under your ${o99(bar)} bar (+1 or +2 is inside forecast noise)` : A.you === 0 ? 'No change for you' : 'Costs you'}${offer ? '' : why.length ? ` · <b>unlikely to be accepted:</b> ${esc(why.join('; '))}` : A.you >= bar ? ` · realistic: ${A.them > 0 ? 'they gain too' : A.them === 0 ? 'even for them' : 'they lose only ' + Math.abs(A.them)}` : ''}</div>` + sides;
+    // Basketball Monster's own category gains (what you get less what you give, in its category values)
+    const G = Object.entries(A.gains || {}).filter(([c]) => M.ctx.cats.includes(c)); const up = G.filter(g => g[1] >= 0.3).sort((a, b) => b[1] - a[1]), dn = G.filter(g => g[1] <= -0.3).sort((a, b) => a[1] - b[1]);
+    const gl = a => a.slice(0, 4).map(([c, v]) => `${esc(L([c])[0])} ${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}`).join(', ');
+    if (up.length || dn.length) h += `<div class="label lbl2">Basketball Monster's category gains</div>${up.length ? `<div class="sub"><b class="plus">Helps</b> ${gl(up)}</div>` : ''}${dn.length ? `<div class="sub"><b class="minus">Costs</b> ${gl(dn)}</div>` : ''}`;
+    const pos = G.filter(g => g[1] > 0), tot = pos.reduce((a, g) => a + g[1], 0); if (up[0] && tot > 0 && up[0][1] / tot > 0.7) h += `<div class="sub">Most of the gain is in ${esc(L([up[0][0]])[0])}.</div>`;
+    // does what you send fill their needs? (Basketball Monster's team values)
+    if (N && N.need.length && !offer) { const fill = [...new Set(give.flatMap(id => N.helpOf(id).cats))];
+      h += `<div class="sub hls">${fill.length ? `What you send is strong in <b>${esc(and(L(fill)))}</b>, ${fill.length > 1 ? 'all categories' : 'a category'} they need.` : `What you send isn't strong in any category they need.`}</div>`; }
+    // the season so far next to Basketball Monster's projection, for players who have played enough to say anything
     const SL = { m: 'minutes', p: 'points', 3: '3-pointers', r: 'rebounds', a: 'assists', s: 'steals', b: 'blocks' }; const f1 = v => (Math.round(v * 10) / 10).toFixed(1);
     const trend = id => { const p = M.P[id]; const x = p && p.ros, z = p && p.season; if (!x || !z || !(z.g >= 3) || !x.st || !z.st) return '';
       const ks = ['p', '3', 'r', 'a', 's', 'b'].filter(k => x.st[k] != null && z.st[k] != null).map(k => ({ k, d: Math.abs(z.st[k] - x.st[k]) / Math.max(0.5, x.st[k]) })).sort((a, b) => b.d - a.d).slice(0, 3).map(o => o.k);
-      const bits = (x.m && z.m ? [`${f1(z.m)} minutes (${f1(x.m)})`] : []).concat(ks.map(k => `${SL[k]} ${f1(z.st[k])} (${f1(x.st[k])})`));
-      return `<div class="sub"><b>${esc(p.n)}</b>, ${z.g} games: ${bits.join(' · ')}</div>`; };
-    const trendH = d.get.concat(d.give).map(trend).join('');
-    const timeH = '';
-    const body = `${timeH}${trendH ? `<div class="label lbl2">This season so far (projection in brackets)</div>${trendH}` : ''}<div class="label lbl2">Your categories, rest of season</div><div class="mts">${pills}</div>
-        <div class="sub"><b>${cs(d.mine.season)}</b> categories over the rest of the season: ${cw(d.mine.ros)} categories a week ${d.mine.board ? 'against your league through the end of your playoffs' : 'for the rest of the regular season'}${d.mine.po != null ? ` · ${cw(d.mine.po)} a week in the playoff weeks` : ''}.${d.cut.length ? ` You'd drop ${d.cut.map(nm).join(', ')} to make room.` : ''}${d.fill.length ? ` Frees ${d.fill.length > 1 ? d.fill.length + ' spots' : 'a spot'}: pick up ${d.fill.map(nm).join(', ')}.` : ''}</div>
-        ${o.offer ? '' : `<div class="label lbl2">Their side</div><div class="sub">${d.theirs.season >= 0.5 ? `Helps them too (${cs(d.theirs.season)} categories this season)` : d.theirs.season > -0.5 ? 'About even for their categories' : `Costs them (${cs(d.theirs.season)} categories this season)`}${up.length ? `, stronger in ${esc(up.join(', '))}` : ''}${dn.length ? `, weaker in ${esc(dn.join(', '))}` : ''}.${d.theirCut.length ? ` They'd drop ${d.theirCut.map(nm).join(', ')}.` : ''}</div>
-        ${tmL}`}`;
-    return `<div class="tdl"><div class="tdl-t"><div class="tdl-sides"><div class="tds"><span class="lab plus">Get</span><span>${d.get.map(who).join('')}</span></div><div class="tds"><span class="lab minus">Give</span><span>${d.give.map(who).join('')}</span></div><div class="sub">${esc(M.teamName(d.tid))} · ${d.give.length}-for-${d.get.length}</div>${(() => { const N = o.needs; if (!N || !N.need.length || o.offer) return ''; const f = [...new Set(d.give.flatMap(id => N.helpOf(id).cats))]; return f.length ? `<div class="sub plus">Covers their need for ${esc(f.map(c => H.LBL[c]).join(', '))}</div>` : ''; })()}</div>
-        <div class="tdl-n">${GC(d.mine.season, true)}<span>rest of season</span>${(() => { const f = M.finish && M.finish(d); return f ? `<span class="fin ${f.to < f.from ? 'plus' : f.to > f.from ? 'minus' : ''}" title="Projected finish in Basketball Monster's standings">${ordinal(f.from)} → ${ordinal(f.to)}</span>` : ''; })()}${d.timing ? `<span class="chip ${d.timing === 'now' ? 'safe' : 'toss-up'}" title="${d.timing === 'now' ? 'The season so far and Basketball Monster\'s projection both back it' : 'The season so far backs it; Basketball Monster\'s projection doesn\'t yet'}">${d.timing === 'now' ? 'Act now' : 'Watch'}</span>` : ''}${!o.offer && d.theirs && d.theirs.season >= 0.5 ? `<span class="chip safe">Helps both teams</span>` : ''}</div></div>
-      ${o.open ? body : `<details class="tdd"><summary>Why</summary>${body}</details>`}${o.link || ''}</div>`; }
+      return `<div class="sub"><b>${esc(p.n)}</b>, ${z.g} games: ${(x.m && z.m ? [`${f1(z.m)} minutes (${f1(x.m)})`] : []).concat(ks.map(k => `${SL[k]} ${f1(z.st[k])} (${f1(x.st[k])})`)).join(' · ')}</div>`; };
+    const extra = get.concat(give).map(trend).join(''), josh = get.map(id => joshLine(M, id)).join('');
+    if (extra || josh) h += `<details class="more"><summary>Season so far and analyst notes</summary>${extra ? `<div class="label lbl2">This season so far (projection in brackets)</div>${extra}` : ''}${josh}</details>`;
+    return h + `<div class="sub tcf">From Trade Monster's Analyze Trade (${esc(ago(A.ts))}): both teams' Win% change × 99.</div>`; }
 
   // ---- trade card: the deal on Yahoo's screen, whether you're building it or it was offered to you ----
   function tradeCard(M, yp) {
@@ -159,71 +168,47 @@
       if (own === M.L.me || (!own && side === 'give')) { if (!give.includes(id)) give.push(id); } else if (own || side === 'get') { if (!get.includes(id)) get.push(id); } });
     const owners = [...new Set(get.map(ownerOf).filter(Boolean))]; if (owners.length === 1) them = owners[0];
     const name = them ? M.teamName(them) : 'another team';
-    const S = root.TRADE && them ? root.TRADE.setup(M.ctx, M.L, M) : null; const N = them && M.needs ? M.needs(them) : null;
+    const N = them && M.needs ? M.needs(them) : null;
     const L = cs => cs.map(c => (root.STRAT ? root.STRAT.name(c) : H.LBL[c])); const and = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '';
     const sn = id => esc(sur((M.P[id] || {}).n || id));
     let h = `<div class="h"><span>${offer ? 'Offer from ' : 'Trade with '}${esc(name)}</span><span class="sub" id="ctxAge"></span></div>`;
-    // building a trade: the companion (every player on both rosters priced as an addition to the deal as ticked)
-    if (!offer && them && S) return h + companion(M, S, them, give, get, N, miss, L);
+    const missH = miss.length ? `<div class="sub minus">Not found in Basketball Monster, left out: ${esc(miss.join(', '))}</div>` : '';
+    // building a trade: the companion (Trade Monster's one-for-ones for every player on both rosters, and the deal as ticked)
+    if (!offer && them) return h + companion(M, them, give, get, N, L) + missH;
     // first thing to read: what this team needs (and what it's strong in or has given up on)
-    if (N && N.need.length) { h += `<div class="hl">${esc(name)}'s swing categories: <b>${esc(and(L(N.need)))}</b></div>`;
+    if (N && N.need.length) { h += `<div class="hl">${esc(name)} needs <b>${esc(and(L(N.need)))}</b></div>`;
       const bits = []; if (N.strong.length) bits.push('already winning ' + and(L(N.strong))); if (N.punt.length) bits.push('losing ' + and(L(N.punt)));
-      if (bits.length) h += `<div class="sub hls">${esc(bits.join(' · ').replace(/^./, c => c.toUpperCase()))} (Basketball Monster's team values, your band cut-offs)</div>`; }
-    if (offer && (owners.length > 1 || give.length > 3 || get.length > 3 || !give.length || !get.length)) return h + `<div class="sub">Open a single trade offer to see the verdict on it.</div>`;
+      if (bits.length) h += `<div class="sub hls">${esc(bits.join(' · ').replace(/^./, c => c.toUpperCase()))} (Basketball Monster's team values)</div>`; }
+    if (offer && (owners.length > 1 || give.length > 3 || get.length > 3 || !give.length || !get.length)) return h + `<div class="sub">Open a single trade offer to see Trade Monster's answer.</div>`;
     if (!give.length || !get.length) {
       if (N && N.helpers.length) h += `<div class="hlp"><span class="label">Your players who help there</span>${N.helpers.map(x => `<span class="hlpr"><b>${sn(x.id)}</b> <span class="muted">${esc(L(x.cats).join(', '))}</span></span>`).join('')}</div>`;
-      return h + `<div class="sub" style="margin-top:8px">Tick players on both sides for the verdict.</div>` + (miss.length ? `<div class="sub minus">Not found in Basketball Monster: ${esc(miss.join(', '))}</div>` : ''); }
+      return h + `<div class="sub" style="margin-top:8px">Tick players on both sides for Trade Monster's answer.</div>` + missH; }
     if (owners.length > 1) return h + `<div class="sub">The players you've ticked are on more than one team.</div>`;
-    const d = S && root.TRADE.evalDeal(S, them, give, get);
-    if (!d) return h + `<div class="sub">Couldn't find ${esc(name)}'s roster yet. It arrives with the next sync.</div>`;
-    // the verdict, in one line, with the same bar the deal list uses (+4 categories over the season, +5 in an 11-category league)
-    const gv = GW(d.mine.season, true); h += `<div class="vd ${{ g: 'good', n: '', r: 'bad' }[gv[0]]}">${gv[1]} over the rest of the season</div>`;
-    // does what you send fill their needs?
-    if (N && N.need.length && !offer) { const fill = [...new Set(give.flatMap(id => N.helpOf(id).cats))];
-      h += `<div class="sub hls">${fill.length ? `What you send is strong in <b>${esc(and(L(fill)))}</b>, ${fill.length > 1 ? 'all swing categories' : 'a swing category'} for them.` : `What you send isn't strong in any of their swing categories.`}</div>`; }
-    h += dealView(M, d, { offer, tm: M.tm, needs: N });
-    if (miss.length) h += `<div class="sub minus">Not found in Basketball Monster, left out: ${esc(miss.join(', '))}</div>`;
-    { const extra = (M.ctx.punt ? `<div class="sub">Ignoring ${M.ctx.punt.map(c => H.LBL[c]).join(', ')} (your punt).</div>` : '') + (M.standing && d.mine.po != null ? `<div class="sub">Playoff weeks count for ${Math.round(S.wpo * 100)}% of the season total: their share of the weeks left.</div>` : '') + get.map(id => joshLine(M, id)).join('');
-      if (extra) h += `<details class="more"><summary>Analyst notes and assumptions</summary>${extra}</details>`; }
-    return h;
+    return h + tmVerdict(M, them, give, get, N, L, offer) + missH;
   }
-  // ---- trade companion: while you build a trade on Yahoo, every player on their roster (what he'd add to the deal as it stands)
-  // and on yours (what sending him would cost), in categories over the rest of the season on the one measure. Ticking players on
-  // Yahoo re-prices everything against the new deal. The full verdict follows once both sides have a player. ----
-  function companion(M, S, them, give, get, N, miss, L) {
+  // ---- trade companion: while you build a trade on Yahoo, every player on both rosters with Trade Monster's one-for-one for him
+  // (their player: for the one of yours you've ticked, or your best; your player: his best swap with this team). Once both sides
+  // are ticked, Trade Monster's Analyze Trade answers for the deal as it stands. ----
+  function companion(M, them, give, get, N, L) {
     const and = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '';
-    const team = M.L.teams.find(t => t.tid === them); const name = M.teamName(them);
-    if (!team || !team.ids.length) return `<div class="sub">Couldn't find ${esc(name)}'s roster yet. It arrives with the next sync.</div>`;
-    const cn = v => { const r = Math.round(v * 10) / 10; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(1); };
-    const tone = v => v >= 0.05 ? 'plus' : v <= -0.05 ? 'minus' : 'muted';
-    const nm = id => esc((M.P[id] || {}).n || id);
+    const team = M.L.teams.find(t => t.tid === them), me = M.L.teams.find(t => t.tid === M.L.me); const name = M.teamName(them);
+    if (!team || !team.ids.length || !me) return `<div class="sub">Couldn't find ${esc(name)}'s roster yet. It arrives with the next sync.</div>`;
+    const nm = id => esc((M.P[id] || {}).n || id); const LB = c => esc(L([c])[0]);
     let h = '';
-    // their categories, as chips: the swing ones are what they'll trade for
     if (N && (N.need.length || N.strong.length || N.punt.length)) h += `<div class="tcn">${N.need.length ? `<span class="tcn-l">They need</span>${L(N.need).map(c => `<span class="fk a">${esc(c)}</span>`).join('')}` : ''}${N.strong.length || N.punt.length ? `<div class="sub">${[N.strong.length ? 'Winning ' + and(L(N.strong)) : '', N.punt.length ? 'losing ' + and(L(N.punt)) : ''].filter(Boolean).join(' · ')}</div>` : ''}</div>`;
-    // the deal so far
-    const cur = root.TRADE.mySide(S, give, get); const both = give.length && get.length;
-    h += `<div class="tcs"><div class="tcs-sides"><div><span class="lab plus">Get</span>${get.length ? get.map(nm).join(', ') : '<span class="muted">tick their players</span>'}</div><div><span class="lab minus">Give</span>${give.length ? give.map(nm).join(', ') : '<span class="muted">tick yours</span>'}</div>${cur.cut.length ? `<div class="sub">You'd drop ${cur.cut.map(nm).join(', ')} to make room</div>` : ''}${cur.fill.length ? `<div class="sub">Frees a spot for ${cur.fill.map(nm).join(', ')}</div>` : ''}</div>
-      <div class="tcs-n ${give.length || get.length ? tone(cur.season) : 'muted'}"><b>${give.length || get.length ? cn(cur.season) : '0.0'}</b><span>for you, rest of season</span></div>${(() => { const th = (give.length || get.length) && root.TRADE.theirSide ? root.TRADE.theirSide(S, them, give, get) : null;
-        return th == null ? '' : `<div class="tcs-n ${tone(th)}"><b>${cn(th)}</b><span>for them</span></div>`; })()}</div>`;
-    // one row per player: tick state, name, the number; tap for what it does to your categories
-    const LB = c => esc(root.STRAT ? root.STRAT.name(c) : H.LBL[c]);
-    const row = (x, mine) => { const p = M.P[x.id] || {}; const fills = mine && N ? N.helpOf(x.id).cats : [];
-      const up = (x.cats || []).filter(c => c.d >= 0.02).sort((a, b) => b.d - a.d).slice(0, 3).map(c => LB(c.c)), dn = (x.cats || []).filter(c => c.d <= -0.02).sort((a, b) => a.d - b.d).slice(0, 3).map(c => LB(c.c));
-      const gl = p.ros && p.ros.g != null ? p.ros.g + ' games left' : '';
-      return `<details class="tcr${x.inDeal ? ' in' : ''}" data-k="tcr${esc(x.id)}"><summary><i class="tck" aria-label="${x.inDeal ? 'In the deal' : 'Not in the deal'}"></i><span class="tcr-w"><b>${esc(p.n || x.id)}</b><small>${[p.pos, p.t].filter(Boolean).map(esc).join(' · ')}${fills.length ? ` · <span class="hint">fills their ${esc(and(L(fills)))}</span>` : ''}</small></span><span class="tcr-v ${tone(x.v)}">${cn(x.v)}</span></summary>
-        <div class="tcr-d">${up.length ? `<div><span>Helps you</span>${up.join(', ')}</div>` : ''}${dn.length ? `<div><span>Costs you</span>${dn.join(', ')}</div>` : ''}${!up.length && !dn.length ? '<div>Barely moves any of your categories</div>' : ''}${(give.length || get.length) ? `<div><span>This deal</span>${x.inDeal ? `${cn(x.with)} with him, ${cn(x.without)} without${x.withoutFill && x.withoutFill.length ? ` (you'd pick up ${x.withoutFill.map(nm).join(', ')} instead)` : ''}` : `${cn(x.without)} now, ${cn(x.with)} with him`}</div>` : `<div><span>On his own</span>${mine ? 'sent for nothing, his spot filled from free agents' : S.board && S.board.open ? 'into your empty roster spot' : 'in place of your least valuable player'}</div>`}${gl ? `<div><span>Plays</span>${gl}</div>` : ''}${M.yrank && M.yrank(x.id) ? `<div><span>Yahoo rank</span>${M.yrank(x.id)}</div>` : ''}</div></details>`; };
-    const sortIn = a => a.sort((x, y) => (y.inDeal - x.inDeal) || (y.v - x.v));
-    const theirs = sortIn(root.TRADE.marginal(S, give, get, team.ids, 'get'));
-    const mine = sortIn(root.TRADE.marginal(S, give, get, S.me.ids, 'give'));
-    h += `<div class="tch"><span>${esc(name)}</span><span class="sub">what each adds to this deal</span></div><div class="tcl">${theirs.map(x => row(x, false)).join('')}</div>`;
-    h += `<div class="tch"><span>Your roster</span><span class="sub">what sending each costs you</span></div><div class="tcl">${mine.map(x => row(x, true)).join('')}</div>`;
-    h += `<div class="sub tcf">Categories won over the rest of the season against your league, the same measure as every page. Tick players on Yahoo and every number updates. Tap a player for what he does to your categories.</div>`;
-    if (miss.length) h += `<div class="sub minus">Not found in Basketball Monster, left out: ${esc(miss.join(', '))}</div>`;
-    // both sides ticked: the full verdict
-    if (both) { const d = root.TRADE.evalDeal(S, them, give, get);
-      if (d) { const gv = GW(d.mine.season, true); h += `<div class="vd ${{ g: 'good', n: '', r: 'bad' }[gv[0]]}" style="margin-top:12px">${gv[1]} over the rest of the season</div>` + dealView(M, d, { tm: M.tm, needs: N });
-        const extra = (M.ctx.punt ? `<div class="sub">Ignoring ${M.ctx.punt.map(c => H.LBL[c]).join(', ')} (your punt).</div>` : '') + get.map(id => joshLine(M, id)).join('');
-        if (extra) h += `<details class="more"><summary>Analyst notes and assumptions</summary>${extra}</details>`; } }
+    else h += `<div class="tcs"><div class="tcs-sides"><div><span class="lab plus">Get</span>${get.length ? get.map(nm).join(', ') : '<span class="muted">tick their players</span>'}</div><div><span class="lab minus">Give</span>${give.length ? give.map(nm).join(', ') : '<span class="muted">tick yours</span>'}</div></div></div>`;
+    if (give.length && get.length) h += tmVerdict(M, them, give, get, N, L, false);
+    const row = (id, mine, o, inDeal) => { const p = M.P[id] || {}; const cv = (p.ros || {}).cv || {}; const fills = mine && N ? N.helpOf(id).cats : [];
+      const good = M.ctx.cats.filter(c => (cv[c] || 0) >= 0.5).sort((a, b) => cv[b] - cv[a]).slice(0, 3).map(LB), weak = M.ctx.cats.filter(c => (cv[c] || 0) <= -0.5).sort((a, b) => cv[a] - cv[b]).slice(0, 3).map(LB);
+      const gl = p.ros && p.ros.g != null ? p.ros.g + ' games left' : ''; const yr = M.yrank && M.yrank(id);
+      return `<details class="tcr${inDeal ? ' in' : ''}" data-k="tcr${esc(id)}"><summary><i class="tck" aria-label="${inDeal ? 'In the deal' : 'Not in the deal'}"></i><span class="tcr-w"><b>${esc(p.n || id)}</b><small>${[p.pos, p.t].filter(Boolean).map(esc).join(' · ')}${p.inj ? ` · <span class="minus">${esc(p.inj)}</span>` : ''}${fills.length ? ` · <span class="hint">fills their ${esc(and(L(fills)))}</span>` : ''}</small></span><span class="tcr-v ${o ? (o.you >= (M.bar99 != null ? M.bar99 : 3) ? 'plus' : o.you < 0 ? 'minus' : 'muted') : 'muted'}">${o ? o99(o.you) : '–'}</span></summary>
+        <div class="tcr-d">${o ? `<div><span>Trade Monster</span>${mine ? `for ${nm(o.t)}` : `for your ${nm(o.g)}`}: you ${o99(o.you)} · them ${o99(o.them)} of 99</div>` : `<div><span>Trade Monster</span>no one-for-one at his trade value${mine ? ' with this team' : ''}</div>`}${good.length ? `<div><span>Strong in</span>${good.join(', ')}</div>` : ''}${weak.length ? `<div><span>Weak in</span>${weak.join(', ')}</div>` : ''}${gl ? `<div><span>Plays</span>${gl}</div>` : ''}${yr ? `<div><span>Yahoo rank</span>${yr}</div>` : ''}</div></details>`; };
+    const sortIn = a => a.sort((x, y) => (y.inDeal - x.inDeal) || ((y.o ? y.o.you : -99) - (x.o ? x.o.you : -99)));
+    const theirs = sortIn(team.ids.map(id => ({ id, inDeal: get.includes(id), o: give.length === 1 ? o1(M, give[0], id) : bestOf(me.ids.map(g => o1(M, g, id))) })));
+    const mine = sortIn(me.ids.map(id => ({ id, inDeal: give.includes(id), o: bestOf(team.ids.map(t => o1(M, id, t))) })));
+    h += `<div class="tch"><span>${esc(name)}</span><span class="sub">${give.length === 1 ? 'one-for-one for ' + nm(give[0]) : 'best one-for-one for you'}</span></div><div class="tcl">${theirs.map(x => row(x.id, false, x.o, x.inDeal)).join('')}</div>`;
+    h += `<div class="tch"><span>Your roster</span><span class="sub">best one-for-one with ${esc(name)}</span></div><div class="tcl">${mine.map(x => row(x.id, true, x.o, x.inDeal)).join('')}</div>`;
+    h += `<div class="sub tcf">Numbers are Trade Monster's "Find Trades" (read once a day${M.tm && M.tm.ts ? ', ' + esc(ago(M.tm.ts)) : ''}): category matchups won out of 99 a week. A dash: Trade Monster doesn't pair him at his trade value. Tick players on Yahoo for Analyze Trade on the whole deal.</div>`;
     return h; }
   // ---- add/drop card ----
   // the long-term part comes from the panel's one measure when it's available (M.board: categories over the rest of the season
@@ -411,5 +396,5 @@
     if (streams.length) h += `<div class="label" style="margin-top:12px">Four-game free agents next week</div>` + streams.map(id => `<div class="pr"><b>${nm(id)}</b><span>${M.P[id].next.g} games</span></div>`).join('');
     return h + '</div>';
   }
-  root.CTX = { calibrate, forecastPairs, uplift, projScore, fillRows, profiles, schedOf, curWeek, weekModel, model, freshness, tradeCard, dealView, addCard, listCard, liveCard, nextCard };
+  root.CTX = { calibrate, forecastPairs, uplift, projScore, fillRows, profiles, schedOf, curWeek, weekModel, model, freshness, tradeCard, addCard, listCard, liveCard, nextCard };
 })(typeof window !== 'undefined' ? window : globalThis);

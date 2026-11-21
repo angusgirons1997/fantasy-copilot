@@ -17,7 +17,7 @@ stats), with punted categories held at a usual loss. It is `H2H.board` in `h2h.j
 - **Pickup** = what the number gains when he replaces one of your players. His drop is the one that leaves
   you best off (`board.list`: top 30 of all BBM free agents; the Pickups page filters it by guard, forward or centre, keeping
   overall ranks. Yahoo's player-list pages get no card: Players shows only the best free agents across the league).
-- **Trade** = the gain after the swap (`board.of(ids)`, also used by `trade.js`).
+- **Trade** = not this measure: every trade number is Basketball Monster's Trade Monster (see "Trades from Trade Monster" below).
 - **Empty roster spot** (7.39.0): `openSpots` in `season.js` (Yahoo's starting spots + bench, less players not on the injured
   list). When one is open, every pickup is a plain add (`board.list[].drop` is null) on every page: Players, Week, Team, Best
   moves, Yahoo's add page, and the trade companion's roster size. The planner adds without a drop.
@@ -106,16 +106,19 @@ Categories a week come from Yahoo's settings (`ysetp.cats`). Weeks left = (first
 standings, counted as (W + L + T) ÷ categories, so a finished week is never counted twice. No model of our own and no adjustments:
 the rate is Analysis Monster's as given. Checked by hand against the 16 Nov Mad dogs numbers.
 
-## Trade companion (7.38.0)
+## Trades from Trade Monster (7.50.0, every trade feature since 7.51.0)
 
-On Yahoo's propose-trade page, `companion` in `context.js` prices every player on their roster and on yours as an addition to the
-deal as ticked (`TRADE.marginal`: the deal with him against the deal without him, on the one measure via `TRADE.mySide`). Ticking
-on Yahoo re-prices everything. The full verdict (`dealView`) follows once both sides have a player. The panel only reads Yahoo's
-page: it never ticks boxes itself. "How it works" is a sub-page of Season (7.46.0).
-
-**For them (7.44.0):** every trade number has the other team's side next to it, on the same measure from their side
-(`H2H.side`: their board, no punt; `TRADE.theirSide`, `forThemRow` in `season.js`). It is an overlay: it never reorders lists.
-The full verdict's "Their side" and its accept/sweetener/unlikely label use it too.
+Every trade number is Basketball Monster's: both teams' Win% change in Trade Monster, shown as category matchups won out of 99 a
+week (Win% x 99). The co-pilot has no trade maths of its own (`trade.js` and `H2H.side`'s "for them" were removed in 7.51.0).
+- **Find Trades** (`bbmTrades` in `sync.js`, daily with the full sync, `bbmtm:<lid>`): each of your players' one-for-ones.
+  `tmDeals` in `season.js` applies the bar (`bar99`, +3), the acceptance checks (`themMin` −1, `rankGap` 15) and indexes the
+  deals by your player (`by`) and by theirs (`tgt`). Best trades, the Trade block, Finder, the Roster trade lines and its sell
+  labels (a sell = a realistic swap that clears the bar) all read it.
+- **Analyze Trade** (`bbmAnalyze` in `sync.js`, asked live via `M.ana` in `ctxBlock`): the deal ticked on Yahoo's trade or offer
+  page, with Basketball Monster's category "Gains" row. `tmVerdict` in `context.js` shows it. The companion (`companion`) lists
+  both rosters with Find Trades' one-for-one for each player. The phone page can't ask Trade Monster and says so.
+- The co-pilot only adds detail: what the other team needs, Yahoo ranks, injuries, the season so far, Josh's notes, and the
+  "most of the gain is in one category" note (over 70% of Basketball Monster's positive category gain).
 
 **Basketball Monster first (7.50.0, owner's founding rule):** advice starts from BBM's own outputs. The add-on's existing logic sifts and adds detail to them, but never replaces them with its own numbers. Nothing existing is removed. Trades: sync.js `bbmTrades` runs Trade Monster's "Find Trades" (button FINDTRADES, DD2 blank = whole league) for each of your players once a day, stored as `bbmtm:<lid>`. `tmDeals` in season.js turns Team1+/Team2+ (Win% points) into category matchups out of 99 (× 0.99). A swap is shown when you gain at least `bar99` (default +3). It's realistic when they lose at most `themMin` (default −1) and the Yahoo ranks are within `rankGap` (default 15). Otherwise it goes under "Good for you, unlikely to be accepted", with the reason. All three are per-league settings. Best trades shows the profile you're selling, then the teams he fits (their needs from teamNeeds) and their players. The co-pilot's own category breakdown only adds the ">70% in one category" note. Do next names your player only. Next phases: Pickups from Matchup Monster's "Free Agents to Consider" and BBM weekly projections (fill the week's category holes), then Matchup, then Lineup.
 

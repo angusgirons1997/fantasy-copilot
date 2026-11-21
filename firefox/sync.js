@@ -462,6 +462,26 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const mine = [...d0.querySelectorAll('select[name^="DD1"]')].map(s => s.getAttribute('name').slice(3)).filter(x => /^\d+$/.test(x)).slice(0, max || 16);
     for (const id of mine) { try { const r = parseTM(await postAt(TM, d0, { ['DD1' + id]: 'Trade', DD2: '0' }, ['FINDTRADES', 'Find Trades'], 'Trade Monster ' + id)); if (r) out[r.give] = r.rows; } catch (e) { if (e.auth) throw e; trace('Trade Monster ' + id, false, e.message); } }
     trace('Trade Monster', Object.keys(out).length > 0, Object.keys(out).length + ' of ' + mine.length + ' players'); return { ts: Date.now(), by: out }; }
+  // Trade Monster's "Analyze Trade" for one deal (the Yahoo trade card): both teams' Win% before and after, as category matchups
+  // out of 99 (x 99), and Basketball Monster's own category gains (its "Gains" row: what you get less what you give, in its values)
+  const sq = s => String(s || '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+  const tableAfter = (d, text) => { const all = [...d.querySelectorAll('.q-heading, table')]; const i = all.findIndex(e => e.tagName !== 'TABLE' && sq(e.textContent) === text); return i < 0 ? null : all.slice(i + 1).find(e => e.tagName === 'TABLE') || null; };
+  const rowsOf = tb => { const tr = [...tb.querySelectorAll('tr')]; const hd = [...tr[0].children].map(c => sq(c.textContent)); return { hd, rows: tr.slice(1).map(r => [...r.children].map(c => sq(c.textContent))) }; };
+  function parseAnalyze(d) { const win = h => { const tb = tableAfter(d, h); if (!tb) return null; const { hd, rows } = rowsOf(tb); const n = hd.indexOf('Name'), w = hd.indexOf('Win%'); if (n < 0 || w < 0) return null;
+      const o = {}; rows.forEach(r => { if (r[n] && !isNaN(parseFloat(r[w]))) o[r[n]] = parseFloat(r[w]); }); return o; };
+    const before = win('Projected Standings - Before'), after = win('Projected Standings - After'); if (!before || !after) return null;
+    const gains = {}; const ts = tableAfter(d, 'Trade Summary'); if (ts) { const { hd, rows } = rowsOf(ts); const g = rows.find(r => r.includes('Gains'));
+      if (g) hd.forEach((h, i) => { const m = h.match(/^(p|3|r|a|s|b|fg%|ft%|2d|fg|ft|to)V$/); if (m && g[i] !== '' && !isNaN(parseFloat(g[i]))) gains[m[1]] = parseFloat(g[i]); }); }
+    return { before, after, gains }; }
+  async function bbmAnalyze(y0, them, give, get) { let d = await bbmOpen(TM, y0.league, 'Analyze Trade');
+    const me = sq((d.querySelector('select[name="DD1"] option[selected]') || {}).textContent);
+    const o = [...d.querySelectorAll('select[name="DD2"] option')].find(o => sq(o.textContent) === sq(them)); if (!me || !o) throw new Error('Trade Monster has no team called "' + them + '"');
+    d = await postAt(TM, d, { __EVENTTARGET: 'DD2', DD2: o.getAttribute('value') }, null, 'Analyze Trade team');
+    const over = {}, miss = []; give.forEach(id => d.querySelector('select[name="DD1' + id + '"]') ? over['DD1' + id] = 'Trade' : miss.push(id)); get.forEach(id => d.querySelector('select[name="DD2' + id + '"]') ? over['DD2' + id] = 'Trade' : miss.push(id));
+    if (miss.length) return { miss };
+    const r = parseAnalyze(await postAt(TM, d, over, ['AnalyzeChangesButton', 'Analyze Trade'], 'Analyze Trade'));
+    if (!r || r.before[me] == null || r.after[me] == null || r.before[sq(them)] == null) throw new Error("Trade Monster's answer looks different (Basketball Monster may be updating)");
+    return { ts: Date.now(), you: Math.round((r.after[me] - r.before[me]) * 99), them: Math.round((r.after[sq(them)] - r.before[sq(them)]) * 99), gains: r.gains }; }
   // ---- is a player really available? Yahoo's player search shows his roster status in your league ----
   function parseStatus(d) { const tb = [...d.querySelectorAll('table')].find(t => /Roster Status/.test((t.querySelector('thead') || {}).textContent || '')); if (!tb) return null;
     const hr = [...tb.querySelectorAll('thead tr')].pop(); const hd = [...hr.querySelectorAll('th')].map(th => (th.textContent || '').replace(/\s+/g, ' ').trim()); const ix = hd.indexOf('Roster Status'); if (ix < 0) return null;
@@ -717,5 +737,5 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       return { mode, res }; }
     finally { lockBy = null; await put({ syncLock: null }); }
   }
-  root.SYNC = { usToday, unhide, parseTM, parseAM, parseRanks, teamPage, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
+  root.SYNC = { usToday, unhide, parseTM, parseAnalyze, bbmAnalyze, parseAM, parseRanks, teamPage, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
 })(typeof window !== 'undefined' ? window : globalThis);

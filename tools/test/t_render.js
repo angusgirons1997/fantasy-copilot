@@ -57,4 +57,15 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
   ok(!missing.length, `every sell is in Best moves (${sells.length})`, missing.join(', '));
   if (finder) { const fa = faNames.filter(n => has(finder.text, n)); ok(!fa.length, 'Finder shows rostered players only', 'free agents in Finder: ' + fa.join(', ')); }
   if (roster) ok(!roster.broken, 'Roster renders'); }
+  // the Yahoo trade card (7.51.0): a one-for-one from Trade Monster's lists, with Analyze Trade's answer stubbed; it shows Trade
+  // Monster's numbers and nothing of the co-pilot's own season measure
+  { const tmk = Object.keys(base).find(k => k.startsWith('bbmtm:') && base[k].by && Object.keys(base[k].by).length); const lid = tmk && tmk.slice(6); const bx = lid && base['bx:' + lid];
+    const [g, rows] = tmk ? Object.entries(base[tmk].by).find(([, r]) => r.length) || [] : []; const t = rows && rows[0] && rows[0].id; const V = bx ? Object.assign({}, bx.views.ros, bx.views.rest) : {};
+    if (!t || !V[g] || !V[t]) console.log('\n- Yahoo trade card not checked: no Trade Monster lists in this store');
+    else { console.log('\n=== Yahoo trade card: ' + V[g].n + ' for ' + V[t].n); const st = JSON.parse(JSON.stringify(base));
+      st.ypage = { kind: 'trade', lid, ts: rep.at ? Date.parse(rep.at) : Date.now(), url: 'x', give: ['y1'], get: ['y2'], players: { y1: { n: V[g].n, t: V[g].t }, y2: { n: V[t].n, t: V[t].t } } };
+      const r = await render(st, { now: rep.at, stub: w => { w.SYNC.bbmAnalyze = async () => ({ ts: Date.now(), you: 4, them: 1, gains: {} }); } });
+      const h = (r.pages.trades || {}).html || ''; const c = tx(frag(h).querySelector('.card.ctx'));
+      ok(!r.errors.length, 'no page errors', r.errors.join('\n    ')); ok(/You \+4 · them \+1 of 99/.test(c), "the card shows Trade Monster's Analyze Trade answer", c.slice(0, 300));
+      ok(!/rest of season|over the rest of the season/.test(c), "the card has none of the co-pilot's own season numbers", c.slice(0, 300)); } }
   console.log(bad ? `\n${bad} FAILED` : '\nall passed'); process.exit(bad ? 1 : 0); })();

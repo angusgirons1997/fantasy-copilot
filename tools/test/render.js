@@ -32,6 +32,7 @@ async function render(store, opt) { opt = opt || {};
   w.HTMLElement.prototype.scrollIntoView = function () {};
   const files = [...fs.readFileSync(path.join(FF, 'season.html'), 'utf8').matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1]);
   for (const f of files) { try { w.eval(fs.readFileSync(path.join(FF, f), 'utf8') + '\n//# sourceURL=' + f); } catch (e) { errors.push(f + ': ' + (e.stack || e.message)); } }
+  if (opt.stub) opt.stub(w); // a test may replace page functions (for example the live Trade Monster call) before the first render
   const settle = ms => new Promise(z => setTimeout(z, ms || 300)); await settle(600);
   const $ = s => w.document.querySelector(s); const text = el => (el ? el.textContent : '').replace(/\s+/g, ' ').trim();
   const tabs = [...w.document.querySelectorAll('#bnav [data-tab]')].map(b => b.dataset.tab); const pages = {};

@@ -446,8 +446,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (val(d, 'DateFilterControl') && val(d, 'DateFilterControl') !== 'RemainingProjections') d = await postAt(AM, d, { __EVENTTARGET: 'DateFilterControl', DateFilterControl: 'RemainingProjections' }, null, 'Analysis Monster rest of season');
     let r = parseAM(d); if (!r) { d = await postAt(AM, d, { StandingsControlH2H: 'on' }, null, 'Analysis Monster H2H standings'); r = parseAM(d); }
     trace('Analysis Monster standings', !!r, r ? r.teams.length + ' teams' : 'standings table not found'); if (!r) throw new Error('Analysis Monster standings not found'); return r; }
-  // ---- Basketball Monster's Trade Monster: for each of your best players, every player in the league he could be swapped for,
-  // with BBM's trade values and how much the swap changes your projected win rate and the other team's (1-for-1 only) ----
+  // ---- Basketball Monster's Trade Monster "Find Trades": for each of your players, every one-for-one swap in the league at a similar
+  // BBM trade value, with how much the swap changes your projected Win% and the other team's (Team1+ / Team2+, in % points: × 0.99
+  // is category matchups out of 99). The Trades page starts from this list (7.50.0). Team 2 is left blank so the whole league is searched. ----
   const TM = 'https://basketballmonster.com/trademonster.aspx';
   function parseTM(d) { const head = [...d.querySelectorAll('.q-heading')].find(e => /^Trade:/i.test((e.textContent || '').trim())); if (!head) return null;
     const tb = head.parentElement && head.parentElement.querySelector('table'); if (!tb) return null; const num = s => { const t = String(s || '').replace(/[,%+\s]/g, '').replace('−', '-'); return t === '' || isNaN(+t) ? null : +t; };
@@ -458,8 +459,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return give ? { give, rows } : null; }
   async function bbmTrades(y0, max) { const d0 = await bbmOpen(TM, y0.league, 'Trade Monster'); const out = {};
     // your players as Trade Monster lists them (best first); the first few are the ones worth asking about
-    const mine = [...d0.querySelectorAll('select[name^="DD1"]')].map(s => s.getAttribute('name').slice(3)).filter(x => /^\d+$/.test(x)).slice(0, max || 8);
-    for (const id of mine) { try { const r = parseTM(await postAt(TM, d0, { ['DD1' + id]: 'Trade' }, ['AnalyzeChangesButton', 'Analyze Trade'], 'Trade Monster ' + id)); if (r) out[r.give] = r.rows; } catch (e) { if (e.auth) throw e; trace('Trade Monster ' + id, false, e.message); } }
+    const mine = [...d0.querySelectorAll('select[name^="DD1"]')].map(s => s.getAttribute('name').slice(3)).filter(x => /^\d+$/.test(x)).slice(0, max || 16);
+    for (const id of mine) { try { const r = parseTM(await postAt(TM, d0, { ['DD1' + id]: 'Trade', DD2: '0' }, ['FINDTRADES', 'Find Trades'], 'Trade Monster ' + id)); if (r) out[r.give] = r.rows; } catch (e) { if (e.auth) throw e; trace('Trade Monster ' + id, false, e.message); } }
     trace('Trade Monster', Object.keys(out).length > 0, Object.keys(out).length + ' of ' + mine.length + ' players'); return { ts: Date.now(), by: out }; }
   // ---- is a player really available? Yahoo's player search shows his roster status in your league ----
   function parseStatus(d) { const tb = [...d.querySelectorAll('table')].find(t => /Roster Status/.test((t.querySelector('thead') || {}).textContent || '')); if (!tb) return null;

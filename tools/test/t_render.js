@@ -39,8 +39,14 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
   // Strategy
   const moves = P['trades:moves'], roster = P['trades:roster'], finder = P['trades:finder'];
   if (!moves || /Waiting for Basketball Monster's Analysis Monster/.test(moves.text)) { console.log('  - Strategy checks skipped: no Analysis Monster in this store (use Download test data)'); continue; }
-  ok(has(moves.text, add) && has(moves.text, drop), "Best moves includes the same pickup and drop", moves.text.slice(0, 300));
-  { const mi = nk(moves.text).indexOf(nk(add)); const firstFa = faNames.filter(n => n !== add).map(n => nk(moves.text).indexOf(nk(n))).filter(i => i >= 0); ok(mi >= 0 && firstFa.every(i => i > mi), "it's the first free agent in Best moves"); }
+  // Best trades starts from Trade Monster (7.50.0): no pickups there (they're on Pickups), and every swap shown clears the +3 bar;
+  // the realistic ones (outside "unlikely to be accepted") also cost the other team at most 1 of 99
+  ok(!/Waiver wire/.test(moves.text), 'Best trades has no waiver section (pickups live on Pickups)');
+  { const d = frag(moves.html); const rows = [...d.querySelectorAll('.tmd')]; const n99 = (r, w) => { const m = tx(r).match(new RegExp(w + ' ([+−]?)(\\d+)')); return m ? (m[1] === '−' ? -1 : 1) * +m[2] : NaN; };
+    const you = rows.map(r => n99(r, 'You'));
+    ok(you.every(v => v >= 3), 'every Trade Monster swap shown clears +3 of 99 (' + rows.length + ')', you.join(','));
+    const real = rows.filter(r => !r.closest('details')); const them = real.map(r => n99(r, 'them'));
+    ok(them.every(v => v >= -1), 'realistic swaps cost them at most 1 of 99 (' + real.length + ')', them.join(',')); }
   // labels on your players: the drop reads "A free agent does more"; sells are in Best moves
   const lab = {}; [P['trades:roster'], P.team, P.players].filter(Boolean).forEach(p => { const d = frag(p.html); d.querySelectorAll('*').forEach(el => { const t = tx(el); if (!LABELS.includes(t)) return;
     let row = el.parentElement; while (row && row !== d && !row.querySelector('b')) row = row.parentElement; const who = row && row.querySelector('b') ? tx(row.querySelector('b')) : null; if (who && !lab[who]) lab[who] = t; }); });

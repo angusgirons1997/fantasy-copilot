@@ -616,3 +616,8 @@ body.app .w{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(1
 .bnav button{min-height:48px;touch-action:manipulation}
 /* iOS zooms into any field under 16px when you tap it; only on iOS (the sidebar keeps its smaller fields) */
 @supports (-webkit-touch-callout:none){input,select,textarea{font-size:16px!important}}
+/* ---- trades from Trade Monster (7.50.0): one block per team, one line per player with both sides' numbers ---- */
+.tmteam{margin-top:8px;padding:8px 10px;border-radius:var(--r-sm);background:var(--soft)}
+.tmteam>.mvl:first-child>span{display:block;margin:0 0 2px;color:var(--ink);font-weight:600}
+.tmd{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 6px;margin-top:6px}.tmd>span:first-child{flex:1 1 100%;margin:0;color:var(--ink);font-weight:500}
+.tmd .fk{margin-left:6px}.tmd .sub{flex-basis:100%;margin:0;font-size:11px}

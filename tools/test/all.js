@@ -10,6 +10,7 @@ const steps = [
   ['t_names', 'node', ['tools/test/t_names.js']],
   ['t_yahoo', 'node', ['tools/test/t_yahoo.js']],
   ['t_phone', 'node', ['tools/test/t_phone.js']],
+  ['t_bbm', 'node', ['tools/test/t_bbm.js']],
 ];
 let bad = 0;
 for (const [name, cmd, args] of steps) {

@@ -14,9 +14,7 @@ stats), with punted categories held at a usual loss. It is `H2H.board` in `h2h.j
 `boardFor(lg)` in `season.js`.
 
 - **Player value to you** = what the number loses without him (`board.mine[].val`).
-- **Pickup** = what the number gains when he replaces one of your players. His drop is the one that leaves
-  you best off (`board.list`: top 30 of all BBM free agents; the Pickups page filters it by guard, forward or centre, keeping
-  overall ranks. Yahoo's player-list pages get no card: Players shows only the best free agents across the league).
+- **Pickup** = not this measure since 7.52.0: Basketball Monster's Trade Monster (see "Pickups from Find Free Agents" below).
 - **Trade** = not this measure: every trade number is Basketball Monster's Trade Monster (see "Trades from Trade Monster" below).
 - **Empty roster spot** (7.39.0): `openSpots` in `season.js` (Yahoo's starting spots + bench, less players not on the injured
   list). When one is open, every pickup is a plain add (`board.list[].drop` is null) on every page: Players, Week, Team, Best
@@ -119,6 +117,19 @@ week (Win% x 99). The co-pilot has no trade maths of its own (`trade.js` and `H2
   both rosters with Find Trades' one-for-one for each player. The phone page can't ask Trade Monster and says so.
 - The co-pilot only adds detail: what the other team needs, Yahoo ranks, injuries, the season so far, Josh's notes, and the
   "most of the gain is in one category" note (over 70% of Basketball Monster's positive category gain).
+
+## Pickups from Find Free Agents (7.52.0)
+
+- **Find Free Agents** (`bbmFAs` in `sync.js`, every 6 hours, `bbmfa:<lid>`): each of your players set to Drop, its top 20 free agents
+  with your Win% change. `bbmBoard` in `season.js` rebuilds the board's `list` from it (best drop per free agent, the old drop rules
+  kept: never an injured-list spot, a keep, a recent add or a top-half player) and `B.you(add, drop)` gives any listed pair, x 99.
+  The bar is `pick99` (Settings → Advice: +3 / +2 / +1 of 99). Pickups, the Week brief, Lineup step 1 and the drop label all read it.
+- **Wait until Monday**: the drop has more games left this week than the add in Matchup Monster's grid (`mmWeek`, `gamesLeft`).
+- **This week: categories in play** (`weekHoles`): Matchup Monster's category win chances (20 to 80%) and its free agents to consider
+  strong in them (category value +0.5 or more), most games left first. Timing only: it never reorders the list.
+- **Analyze Add/Drop** (`bbmAnalyzeAdd`, live via `M.anaAdd`): the Yahoo add card's swap. Empty roster spot: the list shows each
+  free agent with his best drop ("≥"); the Yahoo card asks for the plain add.
+- Not yet on Basketball Monster (the Matchup phase): the week planner's streams and `b.swap` for pairs it didn't list.
 
 **Basketball Monster first (7.50.0, owner's founding rule):** advice starts from BBM's own outputs. The add-on's existing logic sifts and adds detail to them, but never replaces them with its own numbers. Nothing existing is removed. Trades: sync.js `bbmTrades` runs Trade Monster's "Find Trades" (button FINDTRADES, DD2 blank = whole league) for each of your players once a day, stored as `bbmtm:<lid>`. `tmDeals` in season.js turns Team1+/Team2+ (Win% points) into category matchups out of 99 (× 0.99). A swap is shown when you gain at least `bar99` (default +3). It's realistic when they lose at most `themMin` (default −1) and the Yahoo ranks are within `rankGap` (default 15). Otherwise it goes under "Good for you, unlikely to be accepted", with the reason. All three are per-league settings. Best trades shows the profile you're selling, then the teams he fits (their needs from teamNeeds) and their players. The co-pilot's own category breakdown only adds the ">70% in one category" note. Do next names your player only. Next phases: Pickups from Matchup Monster's "Free Agents to Consider" and BBM weekly projections (fill the week's category holes), then Matchup, then Lineup.
 

@@ -482,6 +482,24 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const r = parseAnalyze(await postAt(TM, d, over, ['AnalyzeChangesButton', 'Analyze Trade'], 'Analyze Trade'));
     if (!r || r.before[me] == null || r.after[me] == null || r.before[sq(them)] == null) throw new Error("Trade Monster's answer looks different (Basketball Monster may be updating)");
     return { ts: Date.now(), you: Math.round((r.after[me] - r.before[me]) * 99), them: Math.round((r.after[sq(them)] - r.before[sq(them)]) * 99), gains: r.gains }; }
+  // Trade Monster's "Find Free Agents" with one of your players set to Drop: its top free agents for that drop, each with your
+  // projected Win% after the swap (the change x 99 = category matchups won out of 99 a week, rest of season)
+  function parseFF(d) { const h = [...d.querySelectorAll('.q-heading')].find(e => /^Drop:/.test(sq(e.textContent))); const tb = h && tableAfter(d, sq(h.textContent)); if (!tb) return null;
+    const rows = []; [...tb.querySelectorAll('tr')].forEach(tr => { const a = tr.querySelector('a[href*="playerinfo"]'); const id = a && ((a.getAttribute('href') || '').match(/[?&]i=(\d+)/) || [])[1]; if (!id) return;
+      const m = sq((tr.children[1] || {}).textContent).replace('−', '-').match(/^(\d*\.\d+)\s*([+-]\d*\.\d+)$/); if (m) rows.push({ id, d: +m[2] }); }); return rows; }
+  async function bbmFAs(y0) { const d0 = await bbmOpen(TM, y0.league, 'Find Free Agents'); const out = {};
+    const mine = [...d0.querySelectorAll('select[name^="DD1"]')].map(s => s.getAttribute('name').slice(3)).filter(x => /^d+$/.test(x));
+    for (const id of mine) { try { const r = parseFF(await postAt(TM, d0, { ['DD1' + id]: 'Drop', DD2: '0' }, ['FINDFREEAGENTS', 'Find Free Agents'], 'Find Free Agents ' + id)); if (r) out[id] = r; } catch (e) { if (e.auth) throw e; trace('Find Free Agents ' + id, false, e.message); } }
+    trace('Find Free Agents', Object.keys(out).length > 0, Object.keys(out).length + ' of ' + mine.length + ' drops'); return { ts: Date.now(), by: out }; }
+  // Trade Monster's "Analyze Add/Drop" for one pickup (the Yahoo add card): your Win% before and after, x 99. No drop: a plain add.
+  async function bbmAnalyzeAdd(y0, add, drop) { let d = await bbmOpen(TM, y0.league, 'Analyze Add/Drop');
+    const me = sq((d.querySelector('select[name="DD1"] option[selected]') || {}).textContent); if (!me) throw new Error("Trade Monster's page looks different (Basketball Monster may be updating)");
+    if (!d.querySelector('select[name="DD0' + add + '"]')) d = await postAt(TM, d, { __EVENTTARGET: 'FADD', FADD: '150', DD2: '0' }, null, 'Analyze Add/Drop list');
+    if (!d.querySelector('select[name="DD0' + add + '"]')) return { miss: [add] }; if (drop && !d.querySelector('select[name="DD1' + drop + '"]')) return { miss: [drop] };
+    const over = { ['DD0' + add]: 'To Team 1' }; if (drop) over['DD1' + drop] = 'Drop';
+    const r = parseAnalyze(await postAt(TM, d, over, ['AnalyzeChangesButton', 'Analyze Add/Drop'], 'Analyze Add/Drop'));
+    if (!r || r.before[me] == null || r.after[me] == null) throw new Error("Trade Monster's answer looks different (Basketball Monster may be updating)");
+    return { ts: Date.now(), you: Math.round((r.after[me] - r.before[me]) * 99) }; }
   // ---- is a player really available? Yahoo's player search shows his roster status in your league ----
   function parseStatus(d) { const tb = [...d.querySelectorAll('table')].find(t => /Roster Status/.test((t.querySelector('thead') || {}).textContent || '')); if (!tb) return null;
     const hr = [...tb.querySelectorAll('thead tr')].pop(); const hd = [...hr.querySelectorAll('th')].map(th => (th.textContent || '').replace(/\s+/g, ' ').trim()); const ix = hd.indexOf('Roster Status'); if (ix < 0) return null;
@@ -597,6 +615,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         if (mode === 'full' || old('ystand:' + y.lid, 6) || (all['ystand:' + y.lid] || {}).week !== y.week) { try { const sd = await yStand(y.lid); if (sd) { sd.week = y.week || null; await put({ ['ystand:' + y.lid]: sd }); } } catch (e) { trace('Yahoo standings', false, e.message); } }        if (old('ytrend:' + y.lid, 3)) { try { log('trends'); const tr = await yTrend(y.lid); if (tr) await put({ ['ytrend:' + y.lid]: tr }); } catch (e) { trace('Yahoo transaction trends', false, e.message); } }
         if (old('ytrendMy:' + y.lid, 3)) { try { const tm = await yTrendMine(y.lid); if (tm) await put({ ['ytrendMy:' + y.lid]: tm }); } catch (e) { trace('Yahoo trends for your players', false, e.message); } }
         if (old('bbmstand:' + y.lid, 12)) { try { log('projected standings'); const sd = await bbmStand(y); await put({ ['bbmstand:' + y.lid]: sd }); } catch (e) { trace('Analysis Monster standings', false, e.message); } } // never stops the rest of the sync
+        if (old('bbmfa:' + y.lid, 6)) { try { log('Find Free Agents'); const fa = await bbmFAs(y); if (Object.keys(fa.by).length) await put({ ['bbmfa:' + y.lid]: fa }); } catch (e) { trace('Find Free Agents', false, e.message); } }
         if (old('bbmtm:' + y.lid, 24)) { try { log('Trade Monster'); const tm = await bbmTrades(y); if (Object.keys(tm.by).length) await put({ ['bbmtm:' + y.lid]: tm }); } catch (e) { trace('Trade Monster', false, e.message); } }
       }
       // the league week by week: the regular-season schedule (once) and every team's category results for each finished week
@@ -737,5 +756,5 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       return { mode, res }; }
     finally { lockBy = null; await put({ syncLock: null }); }
   }
-  root.SYNC = { usToday, unhide, parseTM, parseAnalyze, bbmAnalyze, parseAM, parseRanks, teamPage, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
+  root.SYNC = { usToday, unhide, parseTM, parseAnalyze, bbmAnalyze, parseFF, bbmFAs, bbmAnalyzeAdd, parseAM, parseRanks, teamPage, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -68,4 +68,14 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
       const h = (r.pages.trades || {}).html || ''; const c = tx(frag(h).querySelector('.card.ctx'));
       ok(!r.errors.length, 'no page errors', r.errors.join('\n    ')); ok(/You \+4 · them \+1 of 99/.test(c), "the card shows Trade Monster's Analyze Trade answer", c.slice(0, 300));
       ok(!/rest of season|over the rest of the season/.test(c), "the card has none of the co-pilot's own season numbers", c.slice(0, 300)); } }
+  // the Yahoo pickup card (7.52.0): the best Find Free Agents pair, with Analyze Add/Drop's answer stubbed
+  { const fk = Object.keys(base).find(k => k.startsWith('bbmfa:') && base[k].by); const lid = fk && fk.slice(6); const bx = lid && base['bx:' + lid]; const V = bx ? Object.assign({}, bx.views.ros, bx.views.rest) : {};
+    const best = fk ? Object.entries(base[fk].by).flatMap(([d, rows]) => rows.map(r => ({ add: r.id, drop: d, d: r.d }))).filter(x => V[x.add] && V[x.drop]).sort((a, b) => b.d - a.d)[0] : null;
+    if (!best) console.log('\n- Yahoo pickup card not checked: no Find Free Agents lists in this store');
+    else { console.log('\n=== Yahoo pickup card: ' + V[best.add].n + ', drop ' + V[best.drop].n); const st = JSON.parse(JSON.stringify(base));
+      st.ypage = { kind: 'add', lid, ts: rep.at ? Date.parse(rep.at) : Date.now(), url: 'x', apid: 'y1', dpid: 'y2', dropChoices: ['y2'], players: { y1: { n: V[best.add].n, t: V[best.add].t }, y2: { n: V[best.drop].n, t: V[best.drop].t } } };
+      const r = await render(st, { now: rep.at, stub: w => { w.SYNC.bbmAnalyzeAdd = async () => ({ ts: Date.now(), you: 4 }); } });
+      const c = tx(frag((r.pages.players || {}).html).querySelector('.card.ctx'));
+      ok(!r.errors.length, 'no page errors', r.errors.join('\n    ')); ok(/\+4 of 99 a week over the rest of the season/.test(c), "the card shows Trade Monster's Analyze Add/Drop answer", c.slice(0, 300));
+      ok(!/categor(y|ies) (over|this season)/.test(c), "the card has none of the co-pilot's own season numbers", c.slice(0, 300)); } }
   console.log(bad ? `\n${bad} FAILED` : '\nall passed'); process.exit(bad ? 1 : 0); })();

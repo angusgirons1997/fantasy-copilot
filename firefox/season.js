@@ -421,7 +421,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // the model also carries what the trade tools need: regular-season weeks left, the bar a deal must clear, Trade Monster's results
   function modelFor(lg) { return memo('model|' + lg, () => { const M = modelForRaw(lg); if (!M) return M; const l = leaguesKnown().find(x => x.league === lg), y = yrFor(lg);
     const sp = (l && ST['ysetp:' + l.lid]) || {}; const po = (sp.poWeeks || [])[0] || null; const cw = l && window.CTX.curWeek(ST, l.lid, y);
-    M.weeksLeft = cw && po ? Math.max(1, po - cw) : null; M.tm = l ? ST['bbmtm:' + l.lid] || null : null; M.finish = null; M.needs = tid => teamNeeds(lg, M, tid); return M; }); }
+    M.weeksLeft = cw && po ? Math.max(1, po - cw) : null; M.tm = l ? ST['bbmtm:' + l.lid] || null : null; M.fa = l ? ST['bbmfa:' + l.lid] || null : null; M.finish = null; M.needs = tid => teamNeeds(lg, M, tid); return M; }); }
   function modelForRaw(lg) { const l = leaguesKnown().find(x => x.league === lg); if (!l || !window.CTX) return null; const y = yrFor(lg); const m = mm(); const same = m && m.league === lg;
     try { return window.CTX.model(ST, l.lid, { punt: puntFor(lg), yr: y, obj: scoringOf(lg).mode, today: usToday(), rules: rulesFor(lg, y), cats: same ? m.cats.filter(c => E.LBL[c]) : null, weekEnd: same ? m.end : null }); } catch (e) { console.error(e); return null; } }
   // ---- the one measure (every page reads it): expected categories won a week over the rest of the season, against every other
@@ -441,9 +441,34 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   function boardFor(lg, punt) { const M = modelFor(lg); if (!M || !window.H2H || !window.H2H.board) return null; const k = boardKeep(lg, M);
     const fas = M.L.fas.filter(id => !k.block.has(id) && !k.taken.has(K(M.P[id].n)));
     const pu = punt === undefined ? M.ctx.punt : (punt && punt.length ? punt : null); const open = openSpots(lg);
-    const sig = [...k.keep].sort().join(',') + '|' + fas.join(',').length + '|' + fas.length + '|' + (pu || []).join(',') + '|' + open;
-    return memo('board|' + lg + '|' + sig, () => { const was = M.ctx.punt; M.ctx.punt = pu; try { const b = window.H2H.board(M.ctx, M.L, { keepIds: k.keep, fas, n: 30, open }); if (b) { b.keep = k.keep; b.claim = k.claim; b.punt = pu; } return b; } catch (e) { console.error(e); return null; } finally { M.ctx.punt = was; } }); }
-  const seasonBar = lg => (PICK[S(lg).pick] || PICK.std).season; // a pickup's minimum, in categories over the rest of the season
+    const sig = [...k.keep].sort().join(',') + '|' + fas.join(',').length + '|' + fas.length + '|' + (pu || []).join(',') + '|' + open + '|' + (M.fa ? M.fa.ts : 0);
+    return memo('board|' + lg + '|' + sig, () => { const was = M.ctx.punt; M.ctx.punt = pu; try { const b = window.H2H.board(M.ctx, M.L, { keepIds: k.keep, fas, n: 30, open }); if (b) { b.keep = k.keep; b.claim = k.claim; b.punt = pu; bbmBoard(b, M, fas); } return b; } catch (e) { console.error(e); return null; } finally { M.ctx.punt = was; } }); }
+  // ---- pickups start from Basketball Monster (7.52.0): Trade Monster's "Find Free Agents" with each of your players as the drop
+  // (bbmfa:<lid>, every 6 hours). Your Win% change x 99 = category matchups won out of 99 a week over the rest of the season. The
+  // board keeps its drop rules (never an injured-list spot, a keep, a recent add or a top-half player) and only sifts BBM's lists. ----
+  function bbmBoard(b, M, fas) { const F = M.fa; b.bbm = !!(F && F.by && Object.keys(F.by).length); if (!b.bbm) { b.list = []; b.you = () => null; return b; }
+    const ok = new Set(fas), mine = new Set(b.mine.map(x => x.id)), pair = {}, best = {}; const nc = M.ctx.cats.length;
+    Object.entries(F.by).forEach(([drop, rows]) => { if (!mine.has(drop) || b.keep.has(drop)) return;
+      rows.forEach(r => { if (!ok.has(r.id)) return; pair[r.id + '|' + drop] = r.d; (best[r.id] = best[r.id] || []).push({ drop, d: r.d }); }); });
+    // shortcut: with an empty roster spot the number shown is with his best drop (a plain add is at least that); the Yahoo card asks Analyze Add/Drop for the plain add
+    b.list = Object.entries(best).map(([id, ds]) => { ds.sort((x, y) => y.d - x.d); return { id, drop: b.open ? null : ds[0].drop, you: Math.round(ds[0].d * 99), gain: ds[0].d * nc, atLeast: !!b.open,
+      alt: ds[1] ? { drop: ds[1].drop, you: Math.round(ds[1].d * 99) } : null }; }).sort((x, y) => y.gain - x.gain).slice(0, 30);
+    b.you = (add, drop) => { const d = pair[add + '|' + drop]; return d == null ? null : Math.round(d * 99); }; b.ts = F.ts;
+    // shortcut: the week planner's stream costing still prices pairs Basketball Monster didn't list on the old measure; the Matchup phase replaces it
+    const s0 = b.swap; b.swap = (a, d) => { const x = pair[a + '|' + d]; const r = s0(a, d); return x == null ? r : Object.assign({}, r, { g: x * nc }); };
+    return b; }
+  const pick99 = lg => (PICK[S(lg).pick] || PICK.std).b99; // a pickup's minimum, of 99 a week
+  // this week in Basketball Monster's Matchup Monster: its win chance per category and its "free agents to consider", with games left
+  function mmWeek(lg) { const t = usToday(); return weeks(lg).filter(w => w.start <= t && w.end >= t && !w.synthetic && w.players).sort((a, b) => (b.ts || 0) - (a.ts || 0))[0] || null; }
+  const gamesLeft = (m, id) => { const p = m && m.players.find(x => x.bbm === id); return p ? p.games.filter(g => g && !g.fin && !g.zero).length : null; };
+  function weekHoles(lg, M) { const m = mmWeek(lg); if (!m || !m.bbmWin) return null; const W = m.bbmWin; const cats = (m.cats || []).filter(c => W[c] != null && !(M.ctx.punt || []).includes(c));
+    // in play: Basketball Monster gives you 20 to 80% to win it this week; behind: under 50%
+    const play = cats.filter(c => W[c] >= 0.2 && W[c] <= 0.8).sort((a, b) => W[a] - W[b]); const wt = c => W[c] < 0.5 ? 1 : 0.5; const seen = new Set();
+    const side = m.t2 && m.me && m.t2.name === m.me ? 1 : 0; // your team's list
+    const fas = m.players.filter(p => p.type === 'fa' && p.side === side && p.bbm && !seen.has(p.bbm) && seen.add(p.bbm)).map(p => { const g = gamesLeft(m, p.bbm); const cv = p.catV || {};
+      const fills = play.filter(c => (cv[c] || 0) >= 0.5); return { id: p.bbm, n: p.name, g, fills, inj: p.inj, score: (g || 0) * play.reduce((a, c) => a + wt(c) * Math.max(0, cv[c] || 0), 0) }; })
+      .filter(x => x.g && x.fills.length).sort((a, b) => b.score - a.score);
+    return { m, W, play, fas, n: seen.size }; }
   // ---- trades start from Basketball Monster (7.50.0): Trade Monster's "Find Trades" list for each of your players and its Win% change
   // for both teams, as category matchups won out of 99 (Win% x 99: 11 opponents x 9 categories, or 9 x 11). The co-pilot only checks
   // them: your gain clears the bar (+1 or +2 is inside forecast noise), they don't lose more than themMin, and Yahoo ranks the two
@@ -471,12 +496,13 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // the decision on the list's number 1 (and the tags every page shows): add now, wait until Monday, or nothing worth an add
   function boardPick(lg, A) { const B = boardFor(lg); const M = modelFor(lg); if (!B || !M || !B.list.length) return null; const y = yrFor(lg); const s = S(lg);
     { const nx = ynextOf(y); M.L.oppNext = nx && nx.oppTid ? String(nx.oppTid) : null; }
-    const bar = seasonBar(lg); const pk = Array.isArray(s.pickAdds) ? null : (s.pickAdds || {})[0]; let chosen = pk ? B.list.find(x => K(M.P[x.id].n) === K(pk)) : null;
+    const bar = pick99(lg); const pk = Array.isArray(s.pickAdds) ? null : (s.pickAdds || {})[0]; let chosen = pk ? B.list.find(x => K(M.P[x.id].n) === K(pk)) : null;
     const fd = chosen && (s.forceDrop || {})[K(M.P[chosen.id].n)]; let drop = chosen ? chosen.drop : null; if (fd) { const d = B.order.find(o => K(M.P[o.id].n) === fd); if (d) drop = d.id; }
-    const top = chosen || B.list[0]; drop = drop || top.drop; const g = chosen ? B.swap(top.id, drop).g : top.gain; const season = g * B.weeks;
-    const tm = window.H2H.timing(M.ctx, M.L, top.id, drop) || {}; const adds = A ? A.left : 1;
-    const worth = !!chosen || season >= bar; const wait = worth && (!adds || (tm.week != null && tm.week < -0.15));
-    return { id: top.id, drop: drop || null, add: M.P[top.id].n, dropName: drop ? M.P[drop].n : null, open: !drop, season, week: tm.week, next: tm.next, worth, wait, why: !adds ? 'adds' : wait ? 'week' : null, chosen: !!chosen, bar }; }
+    const top = chosen || B.list[0]; drop = drop || top.drop; const you = drop === top.drop ? top.you : B.you(top.id, drop);
+    // timing from Matchup Monster's game grid: adding now costs this week when the drop has more games left this week than the add
+    const mw = mmWeek(lg); const ga = gamesLeft(mw, top.id), gd = drop ? gamesLeft(mw, drop) : null; const adds = A ? A.left : 1;
+    const worth = !!chosen || (you != null && you >= bar); const wait = worth && (!adds || (ga != null && gd != null && gd > ga));
+    return { id: top.id, drop: drop || null, add: M.P[top.id].n, dropName: drop ? M.P[drop].n : null, open: !drop, you, season: you, ga, gd, atLeast: top.atLeast, worth, wait, why: !adds ? 'adds' : wait ? 'week' : null, chosen: !!chosen, bar }; }
   // ---- advice log: the board's pick, its top 10 and two simple alternatives, once a day per league. A raw record only (it never
   // feeds advice): tools/advice-backtest.js later checks each pick on what the players actually did, against its prediction and
   // against the alternatives: Basketball Monster's top free agent and Yahoo's most added, each with its own best drop. ----
@@ -489,22 +515,22 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const hotId = fas.map(id => ({ id, t: M.trend(n(id)) })).filter(x => x.t && (x.t.net || 0) > 0).sort((a, b) => (b.t.net || 0) - (a.t.net || 0)).map(x => x.id)[0];
     const wkEnd = y.weekStart && y.weekStart <= day && y.weekEnd >= day ? y.weekEnd : addDay(day, 6 - (new Date(day + 'T12:00:00Z').getUTCDay() + 6) % 7);
     const e = { day, week: y.week || null, weekEnd: wkEnd, punt: B.punt || null, cats: M.ctx.cats, weeks: +B.weeks.toFixed(2), sdMul: M.ctx.sdMul || 1, bar: pk.bar,
-      pick: { add: pk.add, drop: pk.dropName, gain: r4(pk.season / B.weeks), worth: pk.worth, wait: pk.wait, chosen: pk.chosen },
-      list: B.list.slice(0, 10).map(x => ({ add: n(x.id), drop: n(x.drop), gain: r4(x.gain) })), bbm: alt(bbmTop), hot: alt(hotId), roster: B.mine.map(x => n(x.id)) };
+      pick: { add: pk.add, drop: pk.dropName, you: pk.you, worth: pk.worth, wait: pk.wait, chosen: pk.chosen },
+      list: B.list.slice(0, 10).map(x => ({ add: n(x.id), drop: n(x.drop), you: x.you })), bbm: alt(bbmTop), hot: alt(hotId), roster: B.mine.map(x => n(x.id)) };
     ST[k] = { v: 1, log: old.log.concat([e]).slice(-500) }; browser.storage.local.set({ [k]: ST[k] }); }
   // ---- reads on your players. Whether a free agent does more (he's a drop) is on the pickup measure; whether he's a sell is
   // Basketball Monster's: Trade Monster has a realistic swap for him that clears your bar (tmDeals). Other teams' players are read
   // from their Basketball Monster category values only (fitOf). ----
   function readsFor(lg, punt) { const M = modelFor(lg); const B = boardFor(lg, punt); if (!M || !B) return null; const TD = tmDeals(lg, M);
     return memo('reads|' + lg + '|' + (B.punt || []).join(',') + '|' + (TD ? TD.ts + '|' + TD.bar + '|' + TD.tmin + '|' + TD.gap : ''), () => {
-      const pbar = seasonBar(lg) / B.weeks;
+      const pbar = pick99(lg);
       const fasTop = B.list.slice(0, 10).map(x => x.id);
       // the bottom third of your roster by value to you is "small impact" (unless a free agent or a trade beats him)
       const asc = B.mine.map(x => x.val).sort((a, b) => a - b); const low = asc[Math.max(0, Math.floor(asc.length / 3) - 1)];
       const by = {}; B.mine.forEach(x => { const il = M.ilIds.has(x.id); let fa = null;
-        if (!x.keep) fasTop.forEach(f => { const r = B.swap(f, x.id); if (!fa || r.g > fa.g) fa = { id: f, g: r.g }; });
+        if (!x.keep) fasTop.forEach(f => { const y = B.you(f, x.id); if (y != null && (!fa || y > fa.you)) fa = { id: f, you: y }; }); // Find Free Agents, with him as the drop
         const sell = !il && TD && TD.by[x.id] ? TD.by[x.id].ok : [];
-        by[x.id] = { val: x.val, cats: x.cats, fa, sell, il, kind: fa && fa.g >= pbar ? 'costs' : sell.length ? 'sell' : x.val > low ? 'fits' : 'small' }; });
+        by[x.id] = { val: x.val, cats: x.cats, fa, sell, il, kind: fa && fa.you >= pbar ? 'costs' : sell.length ? 'sell' : x.val > low ? 'fits' : 'small' }; });
       return { by, league: {}, pbar, weeks: B.weeks, B }; }); }
   // ---- health: is every source fresh enough to trust the advice? ----
   // ---- health: quiet when things are fine; one clear button when only you can fix it (a sign-in) ----
@@ -611,11 +637,15 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const title = { trade: 'Trade', add: 'Pickup', players: 'Player list' }[yp.kind];
     if (!M) return `<div class="card ctx"><div class="h"><span>${title}</span></div><div class="sub">${ctxRefreshing[yp.lid] || busy ? 'Fetching the latest Basketball Monster projections (the first time takes about 30 seconds)…<span class="skel" style="width:80%"></span><span class="skel" style="width:55%"></span>' : (bx && bx.err ? 'Couldn\'t get Basketball Monster projections: ' + esc(bx.err) : 'Basketball Monster projections not loaded yet. Sign in at basketballmonster.com, then press Sync.')}</div></div>`;
     // the long-term part of every verdict on Yahoo's pages uses the panel's own season measure (one mechanism)
-    M.board = boardFor(l.league); M.pickBar = seasonBar(l.league); M.bar99 = bar99(l.league); M.themMin = themMin(l.league); M.rankGap = rankGap(l.league);
+    M.board = boardFor(l.league); M.pickBar = pick99(l.league); M.bar99 = bar99(l.league); M.themMin = themMin(l.league); M.rankGap = rankGap(l.league);
     // the deal as ticked, asked live of Trade Monster (a few seconds); the card shows "Asking…" until it answers
     M.ana = (them, give, get) => { const k = [yp.lid, them, give.slice().sort(), get.slice().sort()].join('|'); if (tmAsk[k]) return tmAsk[k];
       if (!window.SYNC || !window.SYNC.bbmAnalyze || window.PHONE_V) return { err: 'Trade Monster can only be asked from Firefox on the PC' };
       tmAsk[k] = { pending: true }; window.SYNC.bbmAnalyze({ lid: l.lid, league: l.league }, M.teamName(them), give, get).catch(e => ({ err: e.message })).then(r => { tmAsk[k] = r; render(); }); return tmAsk[k]; };
+    M.anaAdd = (add, drop) => { const k = [yp.lid, 'add', add, drop || ''].join('|'); if (tmAsk[k]) return tmAsk[k];
+      if (!window.SYNC || !window.SYNC.bbmAnalyzeAdd || window.PHONE_V) return { err: 'Trade Monster can only be asked from Firefox on the PC' };
+      tmAsk[k] = { pending: true }; window.SYNC.bbmAnalyzeAdd({ lid: l.lid, league: l.league }, add, drop).catch(e => ({ err: e.message })).then(r => { tmAsk[k] = r; render(); }); return tmAsk[k]; };
+    { const mw = mmWeek(l.league); M.gl = id => gamesLeft(mw, id); }
     let body; try { if (yp.kind === 'trade') body = window.CTX.tradeCard(M, yp); else if (yp.kind === 'add') body = window.CTX.addCard(M, yp); else body = window.CTX.listCard(M, yp).html; } catch (e) { console.error(e); body = `<div class="sub">Couldn't read this page: ${esc(e.message)}</div>`; }
 
     if (Object.keys(M.yidmap).length !== Object.keys(ST.yidmap || {}).length) { ST.yidmap = M.yidmap; browser.storage.local.set({ yidmap: M.yidmap }); }
@@ -757,9 +787,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // ---- Settings: the league's rules as read from Yahoo, your build, how eager the advice is, display, sign-ins ----
   // Every rule the co-pilot follows reads its numbers from here, so "How it works" and the advice always match.
   const PICK = {
-    fewer: { min: 0.06, swap: 0.08, season: 1.5, t: 'Fewer moves', w: 'A pickup has to add at least 1.5 categories over the rest of the season.' },
-    std: { min: 0.03, swap: 0.05, season: 0.75, t: 'Standard', w: 'A pickup has to add at least 0.75 of a category over the rest of the season (about one category every month and a half).' },
-    more: { min: 0.015, swap: 0.03, season: 0.4, t: 'More moves', w: 'A pickup has to add at least 0.4 of a category over the rest of the season.' } };
+    fewer: { min: 0.06, swap: 0.08, b99: 3, t: 'Fewer moves', w: 'A pickup has to add at least +3 of 99 a week over the rest of the season in Basketball Monster\'s Find Free Agents.' },
+    std: { min: 0.03, swap: 0.05, b99: 2, t: 'Standard', w: 'A pickup has to add at least +2 of 99 a week over the rest of the season in Basketball Monster\'s Find Free Agents.' },
+    more: { min: 0.015, swap: 0.03, b99: 1, t: 'More moves', w: 'A pickup has to add at least +1 of 99 a week over the rest of the season in Basketball Monster\'s Find Free Agents.' } };
   const pickOf = lg => PICK[S(lg).pick] || PICK.std;
   const fitRule = lg => Object.assign({}, FT_RULE, S(lg).fit || {});
   const showTags = lg => S(lg).showTags !== false;
@@ -962,40 +992,55 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // expected categories over the rest of the season, replacing his best drop). The tags are the only advice: Best pickup,
   // Wait until Monday, Stream this week only. Tap a player to test him: his drop, this week, next week, the season, per game. ----
   const cn = (v, d) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d == null ? 1 : d);
-  const seasonChip = v => { const a = Math.abs(v); const k = a < 0.5 ? 0 : a < 2 ? 1 : a < 5 ? 2 : 3; return k ? (v > 0 ? ['g', ['', 'Helps a little', 'Helps clearly', 'Helps a lot'][k]] : ['r', ['', 'Costs a little', 'Costs clearly', 'Costs a lot'][k]]) : ['n', 'About even']; };
-  const catMoves = (cats, min) => { const L = (cats || []).filter(c => Math.abs(c.d) >= (min || 0.01)); const up = L.filter(c => c.d > 0).sort((a, b) => b.d - a.d).map(c => window.STRAT.name(c.c)), dn = L.filter(c => c.d < 0).sort((a, b) => a.d - b.d).map(c => window.STRAT.name(c.c)); return { up, dn }; };
   // Yahoo's waiver date ("Nov 18", no year) as a date: this year, or next year when that's more than two months back (December → January)
   const wvDate = s => { const m = String(s || '').match(/^([A-Z][a-z]{2}) (\d{1,2})$/); if (/^\d{4}-\d{2}-\d{2}/.test(String(s || ''))) return String(s).slice(0, 10); if (!m) return null;
     const mo = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(m[1]); if (mo < 0) return null; const t = usToday(); let yr = +t.slice(0, 4);
     const iso = y => `${y}-${String(mo + 1).padStart(2, '0')}-${String(+m[2]).padStart(2, '0')}`; if (iso(yr) < addDay(t, -60)) yr++; return iso(yr); };
+  // Basketball Monster's category values for a swap: his per-game values less the drop's (what he adds, what you give up)
+  const cvSwap = (M, add, drop) => { const a = ((M.P[add] || {}).ros || {}).cv || {}, b = ((M.P[drop] || {}).ros || {}).cv || {}; const cs = M.ctx.cats.filter(c => !(M.ctx.punt || []).includes(c)).map(c => ({ c, d: (a[c] || 0) - (drop ? b[c] || 0 : 0) }));
+    return { up: cs.filter(x => x.d >= 0.3).sort((x, y) => y.d - x.d).map(x => window.STRAT.name(x.c)), dn: cs.filter(x => x.d <= -0.3).sort((x, y) => x.d - y.d).map(x => window.STRAT.name(x.c)) }; };
+  // this week's holes and the free agents Matchup Monster suggests that fill them (timing only: the list below is the rest of season)
+  function holesHtml(lg, M, B) { const H = weekHoles(lg, M); if (!H) return ''; const pc = v => Math.round(v * 100) + '%'; const NM = c => window.STRAT.name(c);
+    let h = `<div class="label lbl2">This week: categories in play</div>`;
+    if (!H.play.length) return h + `<div class="sub">Matchup Monster has every category this week below 20% or above 80%: no pickup changes this week much.</div>`;
+    h += `<div class="mts">${H.play.map(c => `<span class="mt plain${H.W[c] < 0.5 ? ' minus' : ''}" title="Basketball Monster's chance you win it this week"><b>${esc(NM(c))}</b> ${pc(H.W[c])}</span>`).join('')}</div>`;
+    const top = H.fas.slice(0, 5);
+    h += top.length ? `<div class="sub" style="margin-top:4px">From Matchup Monster's ${H.n} free agents to consider, the ones strong in those categories, most games left this week first:</div>` + top.map(x => { const r = B.list.findIndex(z => z.id === x.id);
+      return `<div class="mvl"><span>${esc(x.n)}${x.inj ? ` <span class="minus">${esc(injChip(x.inj))}</span>` : ''}</span>${x.g} game${x.g === 1 ? '' : 's'} left · strong in <b>${esc(listW(x.fills.map(NM)))}</b>${r >= 0 ? ` · <i>number ${r + 1} below</i>` : ` · <i>a stream: not in the top ${B.list.length} for the rest of the season</i>`}</div>`; }).join('')
+      : `<div class="sub" style="margin-top:4px">None of Matchup Monster's ${H.n} free agents to consider is strong in those categories with games left.</div>`;
+    return h + `<div class="sub">From Basketball Monster's Matchup Monster against ${esc(H.m.opp || 'your opponent')} (${esc(fmtD(H.m.start))} to ${esc(fmtD(H.m.end))}).</div>`; }
   function boardCard(p, lg, M) {
     const B = boardFor(lg); if (!B || !M) return `<div class="card"><div class="h"><span>Free agents</span></div><div class="strnone">Your free-agent list appears once Basketball Monster's rest-of-season projections are in.</div></div>`;
     const bd = p.bd; const A = p.adds || {}; const y = yrFor(lg); const nx = p.week === 'next'; const nm = id => id ? M.P[id].n : '';
     const SL = new Map(((p.streams && p.streams.list) || []).map(x => [K(x.add), x])); const mv = (p.moves || []).find(x => bd && K(x.add) === K(bd.add));
+    const o99 = (v, al) => v == null ? '–' : (al ? '≥ ' : '') + of99(v);
     let h = `<div class="card prim fal"><div class="h"><span>Free agents</span><span class="sub">${nx ? 'next week' : `${Math.max(0, A.left || 0)} of ${A.limit || 0} adds left this week${A.spare ? ' (1 kept spare)' : ''}`}</span></div>`;
-    if (bd && bd.worth && !bd.wait) h += `<div class="hl">Add <b class="plus">${esc(bd.add)}</b>${bd.dropName ? `, drop <b>${esc(bd.dropName)}</b>` : ' into your empty roster spot'}${mv ? ` on ${esc(fmtD(mv.date))}` : ''}</div><div class="sub hls"><b class="plus">${cn(bd.season)}</b> categories over the rest of the season${bd.chosen ? ' · your pick' : ''}</div>`;
-    else if (bd && bd.worth) h += `<div class="hl"><b>${esc(bd.add)}</b> is the best pickup: wait until Monday</div><div class="sub hls">${bd.why === 'adds' ? 'No adds left this week.' : `${bd.dropName ? 'Dropping ' + esc(sur(bd.dropName)) : 'Adding him'} now costs this week (${cn(bd.week)} categories); from Monday it's ${cn(bd.season)} over the rest of the season.`}</div>`;
-    else h += `<div class="hl">No free agent clears your bar</div><div class="sub hls">The best, ${esc(nm(B.list[0].id))}, adds ${cn(B.list[0].gain * B.weeks)} categories over the rest of the season; your bar is ${cn(seasonBar(lg), 2)} (Settings → Advice).</div>`;
+    if (!B.bbm) return h + `<div class="strnone">Basketball Monster's Find Free Agents hasn't been read for this league yet. It's read every 6 hours with the sync.</div>${holesHtml(lg, M, B)}</div>`;
+    if (!B.list.length) return h + `<div class="strnone">Find Free Agents lists no available free agent for any player you'd drop (your keeps, injured-list spots and recent adds are never drops).</div>${holesHtml(lg, M, B)}</div>`;
+    if (bd && bd.worth && !bd.wait) h += `<div class="hl">Add <b class="plus">${esc(bd.add)}</b>${bd.dropName ? `, drop <b>${esc(bd.dropName)}</b>` : ' into your empty roster spot'}${mv ? ` on ${esc(fmtD(mv.date))}` : ''}</div><div class="sub hls"><b class="plus">${o99(bd.you, bd.atLeast)}</b> of 99 a week over the rest of the season${bd.chosen ? ' · your pick' : ''}</div>`;
+    else if (bd && bd.worth) h += `<div class="hl"><b>${esc(bd.add)}</b> is the best pickup: wait until Monday</div><div class="sub hls">${bd.why === 'adds' ? 'No adds left this week.' : `${esc(sur(bd.dropName))} has ${bd.gd} game${bd.gd === 1 ? '' : 's'} left this week and ${esc(sur(bd.add))} ${bd.ga}, so adding now costs games; from Monday it's ${o99(bd.you, bd.atLeast)} of 99 a week.`}</div>`;
+    else h += `<div class="hl">No free agent clears your bar</div><div class="sub hls">The best, ${esc(nm(B.list[0].id))}, adds ${o99(B.list[0].you, B.list[0].atLeast)} of 99 a week${B.list[0].drop ? ' for ' + esc(sur(nm(B.list[0].drop))) : ''}; your bar is ${of99(pick99(lg))} (Settings → Advice).</div>`;
+    if (!nx) h += holesHtml(lg, M, B);
     // position filter (Settings-free, remembered per league): guards, forwards or centres among the list, ranks kept from the full list
     const fp = ['G', 'F', 'C'].includes(S(lg).faPos) ? S(lg).faPos : 'all'; const posOK = id => { if (fp === 'all') return true; const ps = String((M.P[id] || {}).pos || '').toUpperCase().split(/[\s,\/]+/);
       return fp === 'G' ? ps.some(q => /^(PG|SG|G)$/.test(q)) : fp === 'F' ? ps.some(q => /^(SF|PF|F)$/.test(q)) : ps.includes('C'); };
-    const rows = B.list.map((x, i) => { if (!posOK(x.id)) return ''; const name = nm(x.id); const sel = bd && K(bd.add) === K(name); const drop = sel ? bd.drop : x.drop; const r = sel && bd.drop !== x.drop ? B.swap(x.id, drop) : x;
-      const season = (r.g != null ? r.g : r.gain) * B.weeks; const tm = window.H2H.timing(M.ctx, M.L, x.id, drop) || {}; const st = SL.get(K(name)); const av = availOf(y, name);
+    const mw = mmWeek(lg);
+    const rows = B.list.map((x, i) => { if (!posOK(x.id)) return ''; const name = nm(x.id); const sel = bd && K(bd.add) === K(name); const drop = sel ? bd.drop : x.drop; const you = sel ? bd.you : x.you;
+      const st = SL.get(K(name)); const av = availOf(y, name); const ga = gamesLeft(mw, x.id), gd = drop ? gamesLeft(mw, drop) : null;
       const tags = []; if (sel && bd.worth && !bd.wait) tags.push(['g', bd.chosen ? 'Your pick' : 'Best pickup']); if (sel && bd.worth && bd.wait) tags.push(['a', 'Wait until Monday']); if (st) tags.push(['a', 'Stream this week only']);
       if (av && av.st === 'W') { const wd = wvDate(av.wv); tags.push(['n', 'On waivers' + (wd ? ' until ' + fmtD(wd) : '')]); }
-      const cm = catMoves(r.cats || x.cats, 0.01); const gk = seasonChip(season);
-      const P = M.P[x.id], D = M.P[drop]; const alt = !sel && x.alt ? x.alt : null;
-      return `<details class="pr fa" data-k="fa${esc(x.id)}"><summary><div class="l1"><span class="frk">${i + 1}</span><b>${esc(name)}</b><span class="fv${tags.length && tags[0][0] === 'g' ? ' plus' : ''}">${cn(season)}</span></div>
+      const cm = cvSwap(M, x.id, drop); const P = M.P[x.id], D = M.P[drop]; const alt = !sel && x.alt ? x.alt : null;
+      return `<details class="pr fa" data-k="fa${esc(x.id)}"><summary><div class="l1"><span class="frk">${i + 1}</span><b>${esc(name)}</b><span class="fv${tags.length && tags[0][0] === 'g' ? ' plus' : ''}">${o99(you, x.atLeast)}</span></div>
         <div class="l2">${tags.length ? `<div class="ftags">${tags.map(t => `<span class="fk ${t[0]}">${esc(t[1])}</span>`).join('')}</div>` : ''}<div class="ln">${esc(teamN(P.t))}${P.inj ? ` · <span class="minus">${esc(injChip(P.inj))}</span>` : ''} · ${drop ? 'drop ' + esc(sur(nm(drop))) : 'no drop: empty spot'}</div>${cm.up.length ? `<div class="ln"><span>Helps</span> ${esc(listW(cm.up.slice(0, 4)))}</div>` : ''}${cm.dn.length ? `<div class="ln"><span>Costs</span> ${esc(listW(cm.dn.slice(0, 3)))}</div>` : ''}</div></summary>
-        <div class="ld"><div class="sub">${drop ? `Test: add ${esc(sur(name))}, drop <b>${esc(nm(drop))}</b>${sel && bd.drop !== x.drop ? ' (your choice)' : ', the drop that leaves your team best off'}.` : `Test: add ${esc(sur(name))} into your empty roster spot, nobody dropped.`}</div>
-          <div class="gains"><div><span>This week</span>${tm.week != null ? `<span class="gnum ${tm.week >= 0 ? 'plus' : 'minus'}">${cn(tm.week, 2)}</span>` : '<span class="sub">–</span>'}</div><div><span>Next week</span>${tm.next != null ? `<span class="gnum ${tm.next >= 0 ? 'plus' : 'minus'}">${cn(tm.next, 2)}</span>` : '<span class="sub">–</span>'}</div><div><span>Rest of season</span><span class="fk ${gk[0]}">${gk[1]}</span><span class="gnum ${season >= 0 ? 'plus' : 'minus'}">${cn(season)}</span></div></div>
-          <div class="sub">Expected categories won: this week against ${esc(p.opp || 'your opponent')}${M.L.oppNext ? `, next week against ${esc(M.teamName(M.L.oppNext))}` : ''}, and in total over the rest of the season against your league. This week and next are timing only: the order above is the rest of the season.</div>
-          ${st ? `<div class="sub" style="margin-top:4px"><b>As a stream:</b> drop ${esc(st.drop)} for ${st.games} game${st.games === 1 ? '' : 's'} from ${esc(fmtD(st.date))}: ${cn(st.net, 2)} categories this week after what the drop costs later.</div>` : ''}
-          ${alt ? `<div class="sub" style="margin-top:4px">Or drop ${esc(nm(alt.drop))}: ${cn(alt.g * B.weeks)} over the rest of the season.</div>` : ''}
+        <div class="ld"><div class="sub">${drop ? `Add ${esc(sur(name))}, drop <b>${esc(nm(drop))}</b>${sel && bd.drop !== x.drop ? ' (your choice)' : `: Trade Monster's best drop for him`}.` : `Add ${esc(sur(name))} into your empty roster spot, nobody dropped (shown with his best drop: a plain add is at least that).`}</div>
+          <div class="gains"><div><span>This week</span>${ga != null ? `<span class="gnum">${ga} game${ga === 1 ? '' : 's'} left${gd != null ? `, ${esc(sur(nm(drop)))} ${gd}` : ''}</span>` : '<span class="sub">–</span>'}</div><div><span>Rest of season</span><span class="gnum ${you >= 0 ? 'plus' : 'minus'}">${o99(you, x.atLeast)} of 99</span></div></div>
+          <div class="sub">Rest of season: Basketball Monster's Trade Monster ("Find Free Agents"), your projected Win% change × 99, in category matchups won out of 99 a week. This week: games left in Matchup Monster. Helps and Costs: Basketball Monster's category values, his less the drop's.</div>
+          ${st ? `<div class="sub" style="margin-top:4px"><b>As a stream:</b> drop ${esc(st.drop)} for ${st.games} game${st.games === 1 ? '' : 's'} from ${esc(fmtD(st.date))}.</div>` : ''}
+          ${alt ? `<div class="sub" style="margin-top:4px">Or drop ${esc(nm(alt.drop))}: ${of99(alt.you)} of 99.</div>` : ''}
           ${drop ? statsVs(name, nm(drop)) : ''}
           <div class="sub">${P.ros && P.ros.g != null ? `${P.ros.g} games left projected for ${esc(sur(name))}` : ''}${D && D.ros && D.ros.g != null ? `, ${D.ros.g} for ${esc(sur(nm(drop)))}` : ''}.${P.rank ? ` Basketball Monster rank ${P.rank}.` : ''}${M.hot(name) ? ` <span class="plus">${esc(M.hot(name))}</span>.` : ''}</div>
           <div class="acts">${sel && bd.chosen ? '<button class="lnk" data-unplan>Back to the top pickup</button>' : !sel ? `<button class="lnk" data-plan="${esc(name)}" data-pdrop="${esc(nm(drop))}">Plan this pickup instead</button>` : ''}${(() => { const u = yLink(lg, name); return u ? `<a class="lnk" href="${esc(u)}" target="_blank" rel="noopener">Open on Yahoo</a>` : ''; })()}</div></div></details>`; }).join('');
-    h += `<div class="sub" style="margin:8px 0 4px">Every Basketball Monster free agent, ranked by what he adds to your team over the rest of the season: expected categories won against every team in your league, in place of the player he'd replace${B.punt ? ` (punting ${esc(listW(B.punt.map(c => window.STRAT.name(c))))})` : ''}. Your top ${B.list.length}.</div>`;
+    h += `<div class="sub" style="margin:8px 0 4px">Basketball Monster's Find Free Agents for every player you could drop, best for you first: each free agent's number is with the drop that leaves you best off. Read ${esc(ago(B.ts))}. Your top ${B.list.length}.</div>`;
     h += `<div class="seg small sortbar fapos">${[['all', 'All'], ['G', 'Guards'], ['F', 'Forwards'], ['C', 'Centres']].map(([k, t]) => `<button data-fapos="${k}" class="${fp === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     h += rows || `<div class="strnone">None of your top ${B.list.length} free agents plays ${{ G: 'guard', F: 'forward', C: 'centre' }[fp]}.</div>`;
     return h + '</div>'; }
@@ -1259,9 +1304,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return `<div class="how"><p><b>Where the numbers come from.</b> Basketball Monster's rest-of-season projections (they already take in this season's games), its Analysis Monster team projections, and Yahoo's rosters, injury statuses and league settings. Nothing else, and no forecasts of the co-pilot's own.</p>
       <p><b>One measure, every page.</b> Your expected categories won a week over the rest of the season, through the end of your playoffs, against every other team in your league, on Basketball Monster's projections (games each player is expected to play, times his per-game stats). Punted categories count as a usual loss, whatever the move. Every decision is a change in that one number: Matchup, Lineup, Pickups, Trades and the cards on Yahoo's pages all read the same result, so they can't disagree. Changes are shown as categories over the rest of the season.</p>
       <ul><li><b>A player's value to you</b>: what the number loses without him. A player who holds up a category you win is worth a lot to you even if his overall rank is modest, because taking him out costs that category.</li>
-      <li><b>A pickup</b>: what the number gains when he replaces one of your players. His drop is whoever leaves your team best off (never a player in an injured-list spot, one you chose to keep, or one you added in the last two weeks). The Pickups page lists the top 30 of every Basketball Monster free agent this way, with a guard, forward and centre filter.</li>
+      <li><b>A pickup</b> comes from Basketball Monster's Trade Monster, not this measure: "Find Free Agents" with each of your players as the drop, every 6 hours. The number is your projected Win% change × 99: category matchups won out of 99 a week over the rest of the season. Each free agent shows with the drop that leaves you best off (never a player in an injured-list spot, one you chose to keep, or one you added in the last two weeks). The Pickups page lists the top 30, with a guard, forward and centre filter.</li>
       <li><b>A trade</b> comes from Basketball Monster's Trade Monster, not this measure: "Find Trades" for each of your players once a day, and "Analyze Trade" for the deal you tick on Yahoo. Both teams' Win% change is shown as category matchups won out of 99 a week. A swap shows when you gain ${of99(bar99(lg))} or more; it's realistic when they lose no more than ${Math.abs(themMin(lg))} and Yahoo ranks the two players within ${rankGap(lg)} of each other.</li></ul>
-      <p><b>Pickups</b> (${esc(PK.t)}). ${esc(PK.w)} <b>Best pickup</b> is the list's number 1 when it clears that bar. <b>Wait until Monday</b>: it clears the bar but adding now costs this week (more than 0.15 of a category against this week's opponent), or you have no adds left. <b>Stream this week only</b>: not a keeper, but worth more this week in the categories still in play than its drop costs over the next few weeks. This week and next are timing only; they never change the order.</p>
+      <p><b>Pickups</b> (${esc(PK.t)}). ${esc(PK.w)} <b>Best pickup</b> is the list's number 1 when it clears that bar. <b>Wait until Monday</b>: it clears the bar but the drop has more games left this week than the pickup in Matchup Monster, or you have no adds left. <b>This week: categories in play</b> are the ones Matchup Monster gives you a 20 to 80% chance to win; under them, its free agents to consider that are strong in those categories (Basketball Monster category value +0.5 or more), most games left first. That is timing only: it never changes the order. <b>Stream this week only</b> still comes from the week planner until the Matchup phase.</p>
       <p><b>Your build.</b> For each category, the co-pilot counts how many teams Basketball Monster projects you to beat from here. <i class="fd n"></i>Lost: under ${pc(th.dead)}% of teams. <i class="fd a"></i>Swing: up to ${pc(th.safe)}%. <i class="fd gr"></i>Winning: up to ${pc(th.locked)}%. <i class="fd g"></i>Locked: above that. Categories you punt always count as lost. The bands describe your team; the reads below come from the one measure.</p>
       <p><b>Reading your players.</b></p>
       <ul><li><i class="fd r"></i><b>${FIT.costs[1]}</b>: a free agent in the top 10 adds at least your pickup bar in his place. He's the drop on the Pickups page.</li>

@@ -444,7 +444,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const sig = [...k.keep].sort().join(',') + '|' + fas.join(',').length + '|' + fas.length + '|' + (pu || []).join(',') + '|' + open + '|' + (M.fa ? M.fa.ts : 0);
     return memo('board|' + lg + '|' + sig, () => { const was = M.ctx.punt; M.ctx.punt = pu; try { const b = window.H2H.board(M.ctx, M.L, { keepIds: k.keep, fas, n: 30, open }); if (b) { b.keep = k.keep; b.claim = k.claim; b.punt = pu; bbmBoard(b, M, fas); } return b; } catch (e) { console.error(e); return null; } finally { M.ctx.punt = was; } }); }
   // ---- pickups start from Basketball Monster (7.52.0): Trade Monster's "Find Free Agents" with each of your players as the drop
-  // (bbmfa:<lid>, every 6 hours). Your Win% change x 99 = category matchups won out of 99 a week over the rest of the season. The
+  // (bbmfa:<lid>, every 2.5 hours and after any league add/drop). Your Win% change x 99 = category matchups won out of 99 a week over the rest of the season. The
   // board keeps its drop rules (never an injured-list spot, a keep, a recent add or a top-half player) and only sifts BBM's lists. ----
   function bbmBoard(b, M, fas) { const F = M.fa; b.bbm = !!(F && F.by && Object.keys(F.by).length); if (!b.bbm) { b.list = []; b.you = () => null; return b; }
     const ok = new Set(fas), mine = new Set(b.mine.map(x => x.id)), pair = {}, best = {}; const nc = M.ctx.cats.length;
@@ -750,7 +750,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const TAB = curTab(); const yo = yahooOn(); const show = TABPARTS[TAB];
     const yL = yrFor(lg); const yLn = yL ? Object.assign({}, yL, { next: ynextOf(yL) }) : null; const onLg = yo && yo.league === lg;
     const lazy = { ilback: () => ilBackCard(p, lg), brief: () => briefHtml(pThis, lg, M), live: () => M && yL && !pNext ? window.CTX.liveCard(M, ST, yL.lid, yL, bbmView(m, pThis)) : '', next: () => { if (!M || !yLn || pNext) return ''; return window.CTX.nextCard(M, yLn, bbmView(nextOf(m), pThis)); }, league: () => leagueCard(lg, M, true), standings: () => standingsCard(lg, true), board: () => boardCard(p, lg, M),
-      strategy: () => M ? strategyCard(lg, M, { page: TAB, tid: onLg && yo.kind === 'trade' && ST.ypage && ST.ypage.mid2 ? ST.ypage.mid2 : null }) : `<div class="card">This page needs the first full sync from Basketball Monster.</div>`,
+      strategy: () => { if (!M) return `<div class="card">This page needs the first full sync from Basketball Monster.</div>`; const c = strategyCard(lg, M, { page: TAB, tid: onLg && yo.kind === 'trade' && ST.ypage && ST.ypage.mid2 ? ST.ypage.mid2 : null });
+        // Season: the build folds away (closed until you open it; the page remembers)
+        if (TAB !== 'season' || !c) return c; const pu = puntFor(lg) || [];
+        return `<details class="bfold" data-k="buildfold"><summary class="card"><b>Your build</b><span class="sub">${pu.length ? 'Punting ' + esc(andL(pu.map(NN))) : 'No punt'}</span></summary>${c}</details>`; },
       // what the co-pilot reads from the Yahoo screen you're on, shown on the page it belongs to
       ctx: () => onLg && yo.tab === TAB && ['players', 'add', 'trade'].includes(yo.kind) ? `<div id="ctxBox">${ctxBlock()}</div>` : '' };
     const liveH = show.includes('live') ? lazy.live() : ''; lazy.live = () => liveH; // the live card replaces the pre-week forecast once games have been played
@@ -1024,7 +1027,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const SL = new Map(((p.streams && p.streams.list) || []).map(x => [K(x.add), x])); const mv = (p.moves || []).find(x => bd && K(x.add) === K(bd.add));
     const o99 = (v, al) => v == null ? '–' : (al ? '≥ ' : '') + of99(v);
     let h = `<div class="card prim fal"><div class="h"><span>Free agents</span><span class="sub">${nx ? 'next week' : `${Math.max(0, A.left || 0)} of ${A.limit || 0} adds left this week${A.spare ? ' (1 kept spare)' : ''}`}</span></div>`;
-    if (!B.bbm) return h + `<div class="strnone">Basketball Monster's Find Free Agents hasn't been read for this league yet. It's read every 6 hours with the sync.</div>${nx ? "" : holesHtml(lg, M, B)}</div>`;
+    if (!B.bbm) return h + `<div class="strnone">Basketball Monster's Find Free Agents is being read for this league. The background sync reads it every 2 to 3 hours and after every add or drop in the league.</div>${nx ? "" : holesHtml(lg, M, B)}</div>`;
     if (!B.list.length) return h + `<div class="strnone">Find Free Agents lists no available free agent for any player you'd drop (your keeps, injured-list spots and recent adds are never drops).</div>${nx ? "" : holesHtml(lg, M, B)}</div>`;
     if (bd && bd.worth && !bd.wait) h += `<div class="hl">Add <b class="plus">${esc(bd.add)}</b>${bd.dropName ? `, drop <b>${esc(bd.dropName)}</b>` : ' into your empty roster spot'}${mv ? ` on ${esc(fmtD(mv.date))}` : ''}</div><div class="sub hls"><b class="plus">${o99(bd.you, bd.atLeast)}</b> of 99 a week over the rest of the season${bd.chosen ? ' · your pick' : ''}</div>`;
     else if (bd && bd.worth) h += `<div class="hl"><b>${esc(bd.add)}</b> is the best pickup: wait until Monday</div><div class="sub hls">${bd.why === 'adds' ? 'No adds left this week.' : `${esc(sur(bd.dropName))} has ${bd.gd} game${bd.gd === 1 ? '' : 's'} left this week and ${esc(sur(bd.add))} ${bd.ga}, so adding now costs games; from Monday it's ${o99(bd.you, bd.atLeast)} of 99 a week.`}</div>`;
@@ -1593,7 +1596,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   $('out').addEventListener('click', e => { const r = e.target.closest && e.target.closest('tr[data-plr]'); if (!r) return; const id = r.dataset.plr; const S = globalThis.__plOpen || (globalThis.__plOpen = new Set());
     const d = r.parentElement.querySelector('tr[data-pld="' + CSS.escape(id) + '"]'); const on = !S.has(id); if (on) S.add(id); else S.delete(id);
     r.classList.toggle('open', on); const c = r.querySelector('.caret'); if (c) c.textContent = on ? '▾' : '▸'; if (d) d.hidden = !on; });
-  browser.storage.local.get(null).then(all => { ST = all; DV++; render(); runSync(false); });
+  // opening never starts a sync: the background keeps everything current (bg.js), so the page shows the last copy straight away
+  browser.storage.local.get(null).then(all => { ST = all; DV++; render(); });
   setInterval(() => runSync(false), 5 * 60e3);
   setInterval(() => { if (window.__pendR && !(ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3)) { window.__pendR = false; render(); } }, 20e3);
   // the panel also checks injury news while it's open (the background does it when it's closed)

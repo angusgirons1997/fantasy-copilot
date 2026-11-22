@@ -629,3 +629,15 @@ body.app .w{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(1
 /* ---- Sixth Man brand (7.54.0): the header wordmark ---- */
 .top .t.brand{display:flex;align-items:center;gap:8px;font:800 22px/1 var(--wordmark);letter-spacing:.5px;text-transform:uppercase}
 .top .t.brand em{font-style:normal;color:var(--brand-text)}.top .t.brand .mark{flex:none}
+/* ---- iPhone status bar (8.0.1): the home-screen app draws under the clock and notch (black-translucent), so the page starts below
+   them and a strip in the page colour sits behind them; nothing scrolls underneath. 0 in Firefox. ---- */
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:var(--bg);z-index:100;pointer-events:none}
+.w{padding-top:calc(16px + env(safe-area-inset-top))}
+.setpane{padding-top:calc(16px + env(safe-area-inset-top))}.setpane .seth{top:calc(env(safe-area-inset-top) - 14px)}
+/* ---- status dots as little basketballs (8.0.1): every green / amber / red / orange dot keeps its colour, drawn as a ball with seams ---- */
+:root{--ball:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cmask id='m'%3E%3Ccircle cx='10' cy='10' r='10' fill='white'/%3E%3Cpath d='M0 10H20M10 0V20M3.6 2.8C7.6 6 7.6 14 3.6 17.2M16.4 2.8C12.4 6 12.4 14 16.4 17.2' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/mask%3E%3Crect width='20' height='20' mask='url(%23m)'/%3E%3C/svg%3E")}
+.dot,.ndot,.ldot,.fd:not(.gr),.dchip::after,.lg .ok,.lg .no,.vd::before,.toast i,.ynow i{-webkit-mask:var(--ball) center/contain no-repeat;mask:var(--ball) center/contain no-repeat;border-radius:0;box-shadow:none}
+.dot,.stl .dot,.ndot{width:10px;height:10px}.fd{width:11px;height:11px}.ldot{width:9px;height:9px}.dchip::after{width:9px;height:9px}.lg .ok,.lg .no{width:18px;height:18px}.vd::before,.toast i,.ynow i{width:10px;height:10px}
+/* ---- Season → Build folds away (8.0.1) ---- */
+.bfold>summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;margin-bottom:12px}.bfold>summary::-webkit-details-marker{display:none}
+.bfold>summary b{flex:1}

@@ -120,7 +120,7 @@ week (Win% x 99). The co-pilot has no trade maths of its own (`trade.js` and `H2
 
 ## Pickups from Find Free Agents (7.52.0)
 
-- **Find Free Agents** (`bbmFAs` in `sync.js`, every 6 hours, `bbmfa:<lid>`): each of your players set to Drop, its top 20 free agents
+- **Find Free Agents** (`bbmFAs` in `sync.js`, every 2.5 hours and after any league add/drop, `bbmfa:<lid>`): each of your players set to Drop, its top 20 free agents
   with your Win% change. `bbmBoard` in `season.js` rebuilds the board's `list` from it (best drop per free agent, the old drop rules
   kept: never an injured-list spot, a keep, a recent add or a top-half player) and `B.you(add, drop)` gives any listed pair, x 99.
   The bar is `pick99` (Settings → Advice: +3 / +2 / +1 of 99). Pickups, the Week brief, Lineup step 1 and the drop label all read it.
@@ -247,3 +247,10 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
   - how well the board's order holds up
 - **Tests:** browser-free tests are in `tools/test`. Panel render tests run against the add-on loaded in
   Firefox (`web-ext run`). Never commit store exports: they hold the owner's league data.
+
+## 8.0.1 fixes
+- Opening a page never starts a sync; the background (bg.js alarms) keeps the store current and the page shows the last copy at once.
+- Status dots (`.dot`, `.fd`, `.ndot`, `.ldot`, `.dchip::after`, landing ticks) are drawn as little basketballs (`--ball` mask in theme.css), same colours.
+- Season → Build sits in a fold (`details.bfold`, data-k `buildfold`), closed by default.
+- iPhone home-screen app: the page starts below the status bar (`env(safe-area-inset-top)`), with a page-coloured strip behind the clock.
+- The in-app punt is app-wide inside Sixth Man but never changes BBM's own punt settings (BBM's value ranks follow BBM's settings).

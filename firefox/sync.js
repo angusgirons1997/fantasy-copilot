@@ -501,7 +501,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const rows = []; [...tb.querySelectorAll('tr')].forEach(tr => { const a = tr.querySelector('a[href*="playerinfo"]'); const id = a && ((a.getAttribute('href') || '').match(/[?&]i=(\d+)/) || [])[1]; if (!id) return;
       const m = sq((tr.children[1] || {}).textContent).replace('−', '-').match(/^(\d*\.\d+)\s*([+-]\d*\.\d+)$/); if (m) rows.push({ id, d: +m[2] }); }); return rows; }
   async function bbmFAs(y0) { const d0 = await bbmOpen(TM, y0.league, 'Find Free Agents'); const out = {};
-    const mine = [...d0.querySelectorAll('select[name^="DD1"]')].map(s => s.getAttribute('name').slice(3)).filter(x => /^d+$/.test(x));
+    const mine = [...d0.querySelectorAll('select[name^="DD1"]')].map(s => s.getAttribute('name').slice(3)).filter(x => /^\d+$/.test(x));
     for (const id of mine) { try { const r = parseFF(await postAt(TM, d0, { ['DD1' + id]: 'Drop', DD2: '0' }, ['FINDFREEAGENTS', 'Find Free Agents'], 'Find Free Agents ' + id)); if (r) out[id] = r; } catch (e) { if (e.auth) throw e; trace('Find Free Agents ' + id, false, e.message); } }
     trace('Find Free Agents', Object.keys(out).length > 0, Object.keys(out).length + ' of ' + mine.length + ' drops'); return { ts: Date.now(), by: out }; }
   // Trade Monster's "Analyze Add/Drop" for one pickup (the Yahoo add card): your Win% before and after, x 99. No drop: a plain add.
@@ -628,7 +628,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         if (mode === 'full' || old('ystand:' + y.lid, 6) || (all['ystand:' + y.lid] || {}).week !== y.week) { try { const sd = await yStand(y.lid); if (sd) { sd.week = y.week || null; await put({ ['ystand:' + y.lid]: sd }); } } catch (e) { trace('Yahoo standings', false, e.message); } }        if (old('ytrend:' + y.lid, 3)) { try { log('trends'); const tr = await yTrend(y.lid); if (tr) await put({ ['ytrend:' + y.lid]: tr }); } catch (e) { trace('Yahoo transaction trends', false, e.message); } }
         if (old('ytrendMy:' + y.lid, 3)) { try { const tm = await yTrendMine(y.lid); if (tm) await put({ ['ytrendMy:' + y.lid]: tm }); } catch (e) { trace('Yahoo trends for your players', false, e.message); } }
         if (old('bbmstand:' + y.lid, 12)) { try { log('projected standings'); const sd = await bbmStand(y); await put({ ['bbmstand:' + y.lid]: sd }); } catch (e) { trace('Analysis Monster standings', false, e.message); } } // never stops the rest of the sync
-        if (old('bbmfa:' + y.lid, 6)) { try { log('Find Free Agents'); const fa = await bbmFAs(y); if (Object.keys(fa.by).length) await put({ ['bbmfa:' + y.lid]: fa }); } catch (e) { trace('Find Free Agents', false, e.message); } }
+        // free agents every 2.5 hours, and straight after any add or drop in the league (the newest Yahoo transaction changed)
+        { const tk = 'tx:' + y.lid, t0 = ((await ST().get(tk))[tk] || {}).rows || [], txSig = t0[0] ? t0[0].pid + '|' + t0[0].when : ''; const fa0 = all['bbmfa:' + y.lid];
+          if (old('bbmfa:' + y.lid, 2.5) || (fa0 && txSig && fa0.tx !== txSig)) { try { log('Find Free Agents'); const fa = await bbmFAs(y); fa.tx = txSig; if (Object.keys(fa.by).length) await put({ ['bbmfa:' + y.lid]: fa }); } catch (e) { trace('Find Free Agents', false, e.message); } } }
         if (old('bbmtm:' + y.lid, 24)) { try { log('Trade Monster'); const tm = await bbmTrades(y); if (Object.keys(tm.by).length) await put({ ['bbmtm:' + y.lid]: tm }); } catch (e) { trace('Trade Monster', false, e.message); } }
       }
       // the league week by week: the regular-season schedule (once) and every team's category results for each finished week

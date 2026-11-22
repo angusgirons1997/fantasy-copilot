@@ -5,7 +5,7 @@
    ever, a quicker one after that (body.quick), none with reduced motion. */
 html,body{height:100%}
 body{--k:1}body.quick{--k:.35}
-.land{position:relative;min-height:100%;display:flex;flex-direction:column;align-items:center;padding:clamp(40px,9vh,96px) 24px calc(24px + env(safe-area-inset-bottom));gap:14px;overflow:hidden}
+.land{position:relative;min-height:100%;display:flex;flex-direction:column;align-items:center;padding:calc(clamp(40px,9vh,96px) + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));gap:14px;overflow:hidden}
 .court{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.court path{fill:none;stroke:var(--ink);stroke-opacity:.08;stroke-width:2;stroke-dasharray:900;animation:draw calc(1.6s*var(--k)) cubic-bezier(.6,0,.2,1) calc(.1s*var(--k)) both}
 .ballw{position:relative;animation:float 3.2s ease-in-out calc(2.4s*var(--k)) infinite}
 .ball{transform-origin:60px 114px;animation:drop calc(1.1s*var(--k)) cubic-bezier(.3,0,.3,1) calc(.25s*var(--k)) both}
@@ -16,22 +16,22 @@ body{--k:1}body.quick{--k:.35}
 .tag{margin:0;font:600 15px/1.3 var(--wordmark);letter-spacing:3px;text-transform:uppercase;color:var(--mute);text-align:center;white-space:nowrap;animation:up calc(.6s*var(--k)) ease-out calc(2s*var(--k)) both}
 .lstat{position:relative;width:100%;max-width:360px;margin-top:14px;padding:16px;border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;animation:up calc(.6s*var(--k)) ease-out calc(2.3s*var(--k)) both}
 .lstat .hd{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.lstat .hd b{font-size:13px}.lstat .hd span{font-size:12px;color:var(--mute)}
-.bar{height:6px;border-radius:3px;background:var(--track);overflow:hidden}.bar i{display:block;height:6px;border-radius:3px;background:var(--brand-orange);transform-origin:left;animation:grow calc(1.8s*var(--k)) cubic-bezier(.4,0,.2,1) calc(2.6s*var(--k)) both}
-.bar.run i{width:40%;animation:sweep 1.4s ease-in-out infinite}
+.bar{display:none;height:6px;border-radius:3px;background:var(--track);overflow:hidden}.bar.run{display:block}.bar.run i{display:block;height:6px;border-radius:3px;background:var(--brand-orange);width:40%;animation:sweep 1.4s ease-in-out infinite}
 .lg{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;opacity:0;animation:up calc(.4s*var(--k)) ease-out both}
 .lg small{display:block;font-size:12px;color:var(--mute)}
 .lg .ok,.lg .no{flex:none;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;animation:tick calc(.3s*var(--k)) ease-out both}.lg .ok{background:var(--good)}.lg .no{background:var(--warn)}
 .lcta{position:relative;width:100%;max-width:360px;margin-top:auto;padding-top:18px;display:flex;flex-direction:column;align-items:center;gap:8px;animation:up calc(.6s*var(--k)) cubic-bezier(.2,.8,.2,1) calc(3.4s*var(--k)) both}
-.go{width:100%;min-height:56px;border:0;border-radius:28px;background:var(--brand-orange);color:var(--brand-navy);font:800 22px/1 var(--wordmark);letter-spacing:2px;text-transform:uppercase;transition:transform .15s ease,filter .15s ease}
+.go{width:100%;min-height:56px;display:flex;align-items:center;justify-content:center;padding:4px 24px 0;border:0;border-radius:28px;background:var(--brand-orange);color:var(--brand-navy);font:800 22px/1 var(--wordmark);letter-spacing:2px;text-transform:uppercase;transition:transform .15s ease,filter .15s ease}
+@supports (text-box:trim-both cap alphabetic){.go{padding-top:0;text-box:trim-both cap alphabetic}}
 .go:hover{transform:translateY(-1px);filter:brightness(1.06)}.go:active{transform:translateY(1px) scale(.99)}.go:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 .draft{min-height:44px;border:0;background:none;color:var(--mute);font-size:12px;text-decoration:underline;text-underline-offset:3px}.draft:hover{color:var(--link)}
+body.quick .lcta,body.quick .lstat{animation-delay:.25s}body.quick .lg{animation-delay:.3s!important}
 .lcta small{font-size:12px;color:var(--mute);text-align:center}
 @keyframes draw{from{stroke-dashoffset:900}to{stroke-dashoffset:0}}
 @keyframes drop{0%{transform:translateY(-320px)}55%{transform:translateY(0) scale(1.06,.9)}70%{transform:translateY(-34px) scale(.97,1.03)}85%{transform:translateY(0) scale(1.02,.97)}100%{transform:none}}
 @keyframes seam{from{stroke-dashoffset:90}to{stroke-dashoffset:0}}
 @keyframes pop{0%{opacity:0;transform:scale(.4)}70%{opacity:1;transform:scale(1.12)}100%{opacity:1;transform:scale(1)}}
 @keyframes up{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
-@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes sweep{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
 @keyframes float{0%,100%{transform:none}50%{transform:translateY(-6px)}}
 @keyframes tick{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:none}}
@@ -47,5 +47,5 @@ body{--k:1}body.quick{--k:.35}
 <h1 class="wm"><span>Sixth</span><span>Man</span></h1>
 <p class="tag">Your fantasy basketball co-pilot</p>
 <section class="lstat" aria-live="polite"><div class="hd"><b id="stT">Basketball Monster and Yahoo</b><span id="stN"></span></div><div class="bar" id="stBar"><i></i></div><div id="lgs"></div></section>
-<div class="lcta"><button class="go" id="mSeason">Check this week</button><small id="sSeason"></small><button class="draft" id="mDraft">Draft room helper</button><small id="sDraft"></small></div>
+<div class="lcta"><button class="go" id="mSeason">Let&rsquo;s play</button><small id="sSeason"></small><button class="draft" id="mDraft">Draft room helper</button><small id="sDraft"></small></div>
 </main><script src="home.js"></script></body></html>

@@ -25,7 +25,9 @@ function handle(q, r) {
   if (q.method !== 'GET') return send(405, 'no');
   if (url === '/store.json') return fs.readFile(STORE, (e, d) => e ? send(404, 'No copy yet: open Firefox on the PC with the co-pilot installed') : send(200, d, TYPE.json));
   if (url === '/phone-shim.js') return fs.readFile(SHIM, (e, d) => e ? send(500, 'shim missing') : send(200, d, TYPE.js));
-  const f = path.join(FF, url === '/' ? 'season.html' : url);
+  // the home-screen icons live beside this file; the phone opens on the Sixth Man landing page, as Firefox does
+  if (url === '/apple-touch-icon.png' || url === '/icon-512.png') return fs.readFile(path.join(__dirname, url.slice(1)), (e, d) => e ? send(404, 'not found') : send(200, d, TYPE.png));
+  const f = path.join(FF, url === '/' ? 'home.html' : url);
   if (!f.startsWith(FF + path.sep)) return send(404, 'not found');
   const ext = f.split('.').pop();
   fs.readFile(f, (e, d) => {
@@ -34,7 +36,7 @@ function handle(q, r) {
     const v = (() => { try { return JSON.parse(fs.readFileSync(path.join(FF, 'manifest.json'), 'utf8')).version; } catch (x) { return ''; } })();
     // the shim goes in before the add-on's first script; the icon is for "Add to Home Screen"
     send(200, String(d).replace('<script', `<script>window.PHONE_V=${JSON.stringify(v)}</script><script src="phone-shim.js"></script><script`)
-      .replace('</head>', '<link rel="apple-touch-icon" href="icons/icon-128.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Co-pilot"></head>'), TYPE.html);
+      .replace('</head>', '<link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png"><meta name="theme-color" content="#0E1A2B"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Sixth Man"></head>'), TYPE.html);
   });
 }
 

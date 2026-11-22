@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Sixth Man icons</title>
+<style>
+@font-face{font-family:Graduate;src:url(../firefox/fonts/graduate-latin-400-normal.woff2) format('woff2')}
+body{background:#CFC8BC;font:14px sans-serif;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;padding:24px}
+</style></head>
+<body>
+<!-- Draws the locked Sixth Man icons (ball, both seams, the Graduate 6) at every size the add-on and the phone page use.
+     Serve the repo over http (fonts don't load from file://), open this page, then window.icons() gives each PNG as a data URL.
+     icon-16..128 go in firefox/icons, apple-touch-icon and icon-512 in tools/phone. -->
+<script>
+const NAVY = '#0E1A2B', ORANGE = '#F26B1D';
+// sq: the rounded navy square (app icons); small sizes drop the seams and let the 6 fill the ball
+function draw(px, sq) {
+  const c = document.createElement('canvas'); c.width = c.height = px; const g = c.getContext('2d'); g.scale(px / 120, px / 120);
+  const small = px <= 32;
+  // iOS rounds home-screen icons itself, so the phone's icon is a full navy square
+  if (sq) { g.fillStyle = NAVY; g.beginPath(); g.roundRect(0, 0, 120, 120, sq === 'full' ? 0 : 27); g.fill(); }
+  const r = sq ? 40 : 58; g.fillStyle = ORANGE; g.beginPath(); g.arc(60, 60, r, 0, Math.PI * 2); g.fill();
+  const k = r / 54; // the logo is drawn on a 54 radius ball; scale its seams and 6 to this ball
+  g.save(); g.translate(60, 60); g.scale(k, k); g.translate(-60, -60);
+  g.strokeStyle = NAVY; g.lineCap = 'round';
+  if (!small) { g.lineWidth = px <= 64 ? 7 : 5; [[22, 35], [98, 85]].forEach(([x, cx]) => { g.beginPath(); g.moveTo(x, 24); g.bezierCurveTo(cx, 45, cx, 75, x, 96); g.stroke(); }); }
+  g.fillStyle = NAVY; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.font = (small ? 100 : 74) + 'px Graduate'; g.fillText('6', 60, small ? 96 : 85);
+  g.restore(); document.body.appendChild(c); return c.toDataURL('image/png');
+}
+window.icons = async () => { await document.fonts.load('74px Graduate');
+  const out = {}; [16, 32].forEach(p => out['icon-' + p] = draw(p, false)); [48, 96, 128].forEach(p => out['icon-' + p] = draw(p, true));
+  out['apple-touch-icon'] = draw(180, 'full'); out['icon-512'] = draw(512, true); return out; };
+</script></body></html>

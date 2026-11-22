@@ -14,7 +14,9 @@ const srv = http.createServer(handle).listen(0, '127.0.0.1', async () => {
     assert.strictEqual((await req('/store', { method: 'POST', headers: { origin: 'moz-extension://abc' }, body })).code, 200, 'the add-on can write');
     const st = JSON.parse((await req('/store.json')).body).store;
     assert.deepStrictEqual(Object.keys(st), ['activeLeague'], 'sign-in keys dropped');
-    const page = (await req('/')).body; assert(/phone-shim\.js[\s\S]*data\.js/.test(page), 'shim before the add-on scripts');
+    const page = (await req('/season.html')).body; assert(/phone-shim\.js[\s\S]*data\.js/.test(page), 'shim before the add-on scripts');
+    const home = (await req('/')).body; assert(/phone-shim\.js[\s\S]*home\.js/.test(home) && /Sixth Man/.test(home) && /#0E1A2B/.test(home), 'opens on the Sixth Man landing page, navy for Safari');
+    assert.strictEqual((await req('/apple-touch-icon.png')).code, 200, 'the home-screen icon');
     assert.strictEqual((await req('/..%2Fmanifest.json')).code, 404, 'nothing outside firefox/');
     assert.strictEqual((await req('/%2E%2E/tools/phone/server.js')).code, 404, 'nothing outside firefox/');
     assert.strictEqual((await req('/theme.css')).code, 200);

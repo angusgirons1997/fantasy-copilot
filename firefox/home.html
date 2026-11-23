@@ -37,10 +37,6 @@ body.quick .lcta,body.quick .lstat{animation-delay:.25s}body.quick .lg{animation
 @keyframes sweep{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
 @keyframes float{0%,100%{transform:none}50%{transform:translateY(-6px)}}
 @keyframes tick{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:none}}
-/* 8.0.6: where sound needs a tap first (iPhone), the intro waits for one so its sounds can play */
-body.wait .land,body.wait .land *{animation-play-state:paused!important}
-.tip{display:none}body.tap .tip{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border:0;background:none;color:var(--mute);font:800 22px/1 var(--wordmark);letter-spacing:3px;text-transform:uppercase}
-.tip i{width:22px;height:22px;border-radius:50%;background:var(--brand-orange);animation:float 1.2s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.land *,.land *::before{animation:none!important;opacity:1!important}}
 </style></head>
 <body><main class="land">
@@ -54,4 +50,4 @@ body.wait .land,body.wait .land *{animation-play-state:paused!important}
 <p class="tag">Your fantasy basketball co-pilot</p>
 <section class="lstat" aria-live="polite"><div class="hd"><b id="stT">Connecting</b><span id="stN"></span></div><div class="bar" id="stBar"><i></i></div></section>
 <div class="lcta"><button class="go" id="mSeason">Let&rsquo;s play</button><small id="sSeason"></small><button class="draft" id="mDraft">Draft room helper</button><small id="sDraft"></small></div>
-</main><button class="tip" id="tip"><i></i>Tap to tip off</button><script src="sound.js"></script><script src="home.js"></script></body></html>
+</main><script src="sound.js"></script><script src="home.js"></script></body></html>

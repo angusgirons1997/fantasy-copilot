@@ -276,6 +276,7 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
 ## 8.0.6 (released as 8.0.7: Mozilla kept a half-finished 8.0.6 upload after a network error)
 - Landing: where the page can't play sound yet (iPhone Safari always; Firefox if it blocks), the intro holds paused behind "Tap to tip off" (`body.wait` / `body.tap`, `#tip` in home.html); the tap turns sound on and starts the intro, so squeak, bounce and whistle play. Where sound is already allowed, or with reduced motion, it starts at once as before.
 - `SND.at` after a tap (`armed`) waits for Safari's `resume()` instead of dropping the sound.
+- Reverted on 23 Nov 2026 at the owner's request (home.html, home.js, sound.js back to 8.0.5): the sounds all played at once. Don't bring the tap gate back.
 
 ## 8.0.8 (design pass: Impeccable, Web Design Guidelines, Webapp Testing)
 - Late-scratch alerts (`newsCheck` in sync.js) come from today's Yahoo lineup (`yr:` with `date` = today, under 3 h old), never a saved `plan:` (it can be days old). The swap is a bench player who is healthy, off the injured list, has a game, isn't locked and is eligible for the out starter's spot; otherwise "Nobody on your bench can take his spot". Test: t_alert.

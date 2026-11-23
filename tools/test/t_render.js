@@ -38,24 +38,19 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
   const team = frag(P.team && P.team.html); const s1 = team && [...team.querySelectorAll('.step')].find(s => /Step 1/.test(tx(s)));
   if (s1) ok(has(tx(s1), add) && has(tx(s1), drop), 'Team step 1 is the same pickup and drop', tx(s1)); else ok(!rl || !/Add .* now/.test(rl), 'no Team step 1, and the Week brief isn\'t asking for an add now', rl);
   // Strategy
-  const moves = P['trades:moves'], roster = P['trades:roster'], finder = P['trades:finder'];
-  if (!moves || /Waiting for Basketball Monster's Analysis Monster/.test(moves.text)) { console.log('  - Strategy checks skipped: no Analysis Monster in this store (use Download test data)'); continue; }
-  // Best trades starts from Trade Monster (7.50.0): no pickups there (they're on Pickups), and every swap shown clears the +3 bar;
-  // the realistic ones (outside "unlikely to be accepted") also cost the other team at most 1 of 99
-  ok(!/Waiver wire/.test(moves.text), 'Best trades has no waiver section (pickups live on Pickups)');
-  { const d = frag(moves.html); const rows = [...d.querySelectorAll('.tmd')]; const n99 = (r, w) => { const m = tx(r).match(new RegExp(w + ' ([+−]?)(\\d+)')); return m ? (m[1] === '−' ? -1 : 1) * +m[2] : NaN; };
-    const you = rows.map(r => n99(r, 'You'));
-    ok(you.every(v => v >= 3), 'every Trade Monster swap shown clears +3 of 99 (' + rows.length + ')', you.join(','));
-    const real = rows.filter(r => !r.closest('details')); const them = real.map(r => n99(r, 'them'));
-    ok(them.every(v => v >= -1), 'realistic swaps cost them at most 1 of 99 (' + real.length + ')', them.join(',')); }
-  // labels on your players: the drop reads "A free agent does more"; sells are in Best moves
+  const block = P['trades:block'], roster = P['trades:roster'], finder = P['trades:finder'];
+  if (!roster || /Waiting for Basketball Monster's Analysis Monster/.test(roster.text)) { console.log('  - Strategy checks skipped: no Analysis Monster in this store (use Download test data)'); continue; }
+  ok(!P['trades:moves'], 'no Best trades page (removed in 8.2.0: the Trade block shows its swaps)');
+  // the Trade block's Trade Monster swaps: every one clears the +3 bar; the realistic ones (outside the folds) cost them at most 1 of 99
+  if (block) { const d = frag(block.html); const rows = [...d.querySelectorAll('.tmd')]; const n99 = (r, w) => { const m = tx(r).match(new RegExp(w + ' ([+−]?)(\\d+)')); return m ? (m[1] === '−' ? -1 : 1) * +m[2] : NaN; };
+    ok(rows.map(r => n99(r, 'You')).every(v => v >= 3), 'every Trade Monster swap on the block clears +3 of 99 (' + rows.length + ')');
+    const real = rows.filter(r => !r.closest('details')); ok(real.map(r => n99(r, 'them')).every(v => v >= -1), 'realistic swaps cost them at most 1 of 99 (' + real.length + ')'); }
+  // labels on your players: the drop reads "A free agent does more"
   const lab = {}; [P['trades:roster'], P.team, P.players].filter(Boolean).forEach(p => { const d = frag(p.html); d.querySelectorAll('*').forEach(el => { const t = tx(el); if (!LABELS.includes(t)) return;
     let row = el.parentElement; while (row && row !== d && !row.querySelector('b')) row = row.parentElement; const who = row && row.querySelector('b') ? tx(row.querySelector('b')) : null; if (who && !lab[who]) lab[who] = t; }); });
   // (the label means a top-10 free agent clears your pickup bar in his place: only then, and only when there is a drop)
   if (drop && clears) ok(lab[drop] === 'A free agent does more', `the drop (${drop}) reads "A free agent does more"`, 'reads: ' + (lab[drop] || 'no label found'));
   else console.log(`  - drop label not checked: ${drop ? 'no free agent clears your bar' : 'an empty roster spot, no drop'}`);
-  const sells = Object.entries(lab).filter(([, t]) => SELL.includes(t)).map(([n]) => n); const missing = sells.filter(n => !has(moves.text, n));
-  ok(!missing.length, `every sell is in Best moves (${sells.length})`, missing.join(', '));
   if (finder) { const fa = faNames.filter(n => has(finder.text, n)); ok(!fa.length, 'Finder shows rostered players only', 'free agents in Finder: ' + fa.join(', ')); }
   if (roster) ok(!roster.broken, 'Roster renders'); }
   // the Matchup hero (7.53.0): Basketball Monster's Matchup Monster as given, expected categories = the sum of its category chances

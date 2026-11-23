@@ -571,7 +571,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // a newer signed version than the one running: Firefox installs it by itself; until it has, one tap here installs it
   const vnum = v => String(v || '0').split('.').map(Number).reduce((a, x) => a * 1000 + (x || 0), 0);
   const updHtml = () => { const u = ST.updAvail; const cur = browser.runtime.getManifest().version; return u && u.version && vnum(u.version) > vnum(cur) && u.link ? `<button class="updbar" id="updNow"><b>Version ${esc(u.version)} is ready</b><span>Tap to install now · otherwise Firefox installs it by itself</span></button>` : ''; };
-  const ICON = { tick: '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--good)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg>', sync: '<svg class="spin ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/></svg>' };
+  const ICON = { sync: '<svg class="spin ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/><circle cx="12" cy="12" r="4.6" fill="currentColor" stroke="none"/><path d="M7.4 12h9.2M12 7.4v9.2M9 8.6c1.5 1.9 1.5 4.9 0 6.8M15 8.6c-1.5 1.9-1.5 4.9 0 6.8" stroke="var(--bg)" stroke-width="1"/></svg>' };
 
   // ---- Basketball Monster sign-in, saved so the co-pilot can sign back in by itself ----
   const hide = v => { const k = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => (b % 36).toString(36)).join(''); return k + '.' + btoa(unescape(encodeURIComponent(v)).split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ k.charCodeAt(i % k.length))).join('')); };
@@ -629,7 +629,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (y) y.rows.filter(r => /^IL/.test(r.slot) && !/^(O|INJ|OUT|IL|NA|SUSP)/i.test(r.inj || '')).forEach(r => rows.push(['warn', `<b>${esc(r.name)}</b> is back from injury but still on IL: he'll need a roster spot`]));
     // 3 · the best realistic swap from Trade Monster (the same list as the Trades page)
     if (M) try { const TD = tmDeals(lg, M); if (TD) { let bt = null; Object.values(TD.by).forEach(x => { const d = x.ok[0]; if (d && (!bt || Math.min(d.you, d.them) > Math.min(bt.you, bt.them))) bt = d; });
-      if (bt) rows.push(['warn', `<b>3 · Trade:</b> Trade Monster has realistic swaps for <b>${esc((M.P[bt.give] || {}).n || bt.give)}</b>, the best <b>${of99(bt.you)}</b> of 99 for you and ${of99(bt.them)} for them · <button class="lnk" data-gostab="trades:moves">See trades</button>`]);
+      if (bt) rows.push(['warn', `<b>3 · Trade:</b> Trade Monster has realistic swaps for <b>${esc((M.P[bt.give] || {}).n || bt.give)}</b>, the best <b>${of99(bt.you)}</b> of 99 for you and ${of99(bt.them)} for them · <button class="lnk" data-gostab="trades:block" data-blockadd="${esc(bt.give)}">Put him on the trade block</button>`]);
       else rows.push(['good', `<b>3 · Trade:</b> no Trade Monster swap clears ${of99(TD.bar)} of 99 with a realistic chance of a yes`]); } } catch (e) { console.error('brief trade', e); }
     const A = p.adds; rows.push(['', `${Math.max(0, A.limit - A.used)} of ${A.limit} adds left this week`]);
     return `<div class="card brief"><div class="h"><span>Today: do next</span><span class="sub">${esc(fmtD(t))}</span></div>${rows.map(r => `<div class="brow"><i class="dot d-${r[0]}"></i><div>${r[1]}</div></div>`).join('')}</div>`;
@@ -811,7 +811,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const cats = m.cats.filter(c => E.LBL[c]); const row = (k, v, note) => `<div class="kvr"><span>${k}</span><b>${v}</b>${note ? `<div class="sub">${note}</div>` : ''}</div>`;
     const miss = '<i class="muted">not found on Yahoo</i>';
     // 1. the league, from Yahoo
-    let h = `<div class="card sets" id="set-league"><div class="h"><span>League</span><span class="sub">from Yahoo</span></div>`;
+    // (8.2.0) every group is a card that shows only its heading until tapped
+    const fold = (id, title, sub) => `<details class="card sets sfold" id="set-${id}" data-k="set-${id}"><summary class="h"><span>${title}</span>${sub ? `<span class="sub">${sub}</span>` : ''}</summary>`;
+    let h = fold('league', 'League', 'from Yahoo');
     if (!sp) h += `<div class="sub">Yahoo's league settings haven't been read yet. They load with the next sync.</div>`;
     else { const po = sp.poWeeks && sp.poWeeks.length ? `${sp.poTeams || '?'} teams, weeks ${sp.poWeeks[0]}–${sp.poWeeks[sp.poWeeks.length - 1]}${sp.poEndText ? ' (ends ' + esc(sp.poEndText) + ')' : ''}` : miss;
       h += row('Scoring', sp.scoringText ? esc(sp.scoringText) : sp.scoring === 'cats' ? 'Each category counts' : sp.scoring === 'win' ? 'Most categories wins the week' : miss)
@@ -823,11 +825,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       h += `<div class="sub" style="margin-top:8px">Read ${sp.ts ? ago(sp.ts) : ''}. Yahoo's settings are checked again every week. <button class="lnk" id="yReload">Reload from Yahoo now</button></div>`; }
     h += `<details class="more" data-k="lgover"${s.addLimit != null || s.scoring ? ' open' : ''}><summary>Change what Yahoo says${s.addLimit != null || s.scoring ? ' (changed)' : ''}</summary>
       <div class="row">Weekly adds <input id="adds" type="number" min="0" max="10" placeholder="${sp && sp.addLimit ? sp.addLimit : A.limit}" value="${s.addLimit != null ? s.addLimit : ''}"> <span class="sub">empty: use Yahoo's</span></div>
-      ${(() => { const sc = scoringOf(lg); return `<div class="row" style="margin-top:8px">Scoring<select id="scoring"><option value="auto" ${!s.scoring ? 'selected' : ''}>Use Yahoo's${sc.src !== 'set' ? ' (' + (sc.mode === 'cats' ? 'each category counts' : 'most categories wins') + ')' : ''}</option><option value="cats" ${s.scoring === 'cats' ? 'selected' : ''}>Each category counts</option><option value="win" ${s.scoring === 'win' ? 'selected' : ''}>Most categories wins the week</option></select></div>`; })()}</details></div>`;
+      ${(() => { const sc = scoringOf(lg); return `<div class="row" style="margin-top:8px">Scoring<select id="scoring"><option value="auto" ${!s.scoring ? 'selected' : ''}>Use Yahoo's${sc.src !== 'set' ? ' (' + (sc.mode === 'cats' ? 'each category counts' : 'most categories wins') + ')' : ''}</option><option value="cats" ${s.scoring === 'cats' ? 'selected' : ''}>Each category counts</option><option value="win" ${s.scoring === 'win' ? 'selected' : ''}>Most categories wins the week</option></select></div>`; })()}</details></details>`;
     // 2. your build
     const cur = puntFor(lg) || []; const MM = modelFor(lg); const bb = MM && MM.ctx.puntBbm || []; const th = Object.assign({}, STR ? STR.TH0 : {}, s.th || {}); const pc = x => Math.round(x * 100);
     const l = leaguesKnown().find(x => x.league === lg); const snap = l && ST['strat:' + l.lid];
-    h += `<div class="card sets" id="set-build"><div class="h"><span>Your build</span></div>
+    h += `${fold('build', 'Your build')}
       <div class="sub">Tap categories to punt. This is the only place your punt is set: Basketball Monster's own punt settings don't change anything here.</div>
       <div class="trypick">${cats.map(c => `<button class="pchip${cur.includes(c) ? ' on' : ''}" data-punt="${c}">${esc(NM(c))}</button>`).join('')}</div>
       ${bb.length && bb.slice().sort().join() !== cur.slice().sort().join() ? `<div class="sub"><button class="lnk" id="puntCopy">Copy Basketball Monster's punt (${esc(bb.map(NM).join(', '))})</button></div>` : ''}
@@ -837,10 +839,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <div class="row bandrow"><i class="fd a"></i>Swing up to <input class="thin" id="thSafe" type="number" min="30" max="95" value="${pc(th.safe)}">%</div>
       <div class="row bandrow"><i class="fd gr"></i>Winning up to <input class="thin" id="thLock" type="number" min="50" max="100" value="${pc(th.locked)}">%</div>
       <div class="row bandrow"><i class="fd g"></i>Locked above that</div>
-      <div class="sub" style="margin-top:8px">${snap ? `Bands set ${new Date(snap.ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}. They stay put until you set them again.` : 'Bands are set at the first sync with Basketball Monster\'s Analysis Monster.'} <button class="lnk" id="bandsReset">Set again from today's numbers</button></div></div>`;
+      <div class="sub" style="margin-top:8px">${snap ? `Bands set ${new Date(snap.ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}. They stay put until you set them again.` : 'Bands are set at the first sync with Basketball Monster\'s Analysis Monster.'} <button class="lnk" id="bandsReset">Set again from today's numbers</button></div></details>`;
     // 3. how eager the advice is
     const pk = s.pick && PICK[s.pick] ? s.pick : 'std';
-    h += `<div class="card sets" id="set-advice"><div class="h"><span>Advice</span></div>
+    h += `${fold('advice', 'Advice')}
       <div class="row">Pickups<span class="seg small sortbar" style="margin:0 0 0 auto">${Object.entries(PICK).map(([k, v]) => `<button data-pick="${k}" class="${pk === k ? 'on' : ''}">${v.t}</button>`).join('')}</span></div>
       <div class="sub">${PICK[pk].w} The drop is whoever leaves your team best off. This week and next are timing only: when adding now costs this week, the advice is to wait until Monday.</div>
       <div class="row" style="margin-top:8px"><label><input type="checkbox" id="spare" ${A.spare ? 'checked' : ''}> Keep one add spare for injuries until Saturday</label></div>
@@ -848,13 +850,13 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <div class="row" style="margin-top:4px">They lose at most<span style="margin-left:auto"><input class="thin" id="themMin" type="number" step="1" max="0" value="${-themMin(lg)}"> of 99</span></div>
       <div class="row" style="margin-top:4px">Yahoo ranks within<span style="margin-left:auto"><input class="thin" id="rankGap" type="number" step="1" min="1" value="${rankGap(lg)}"> places</span></div>
       <div class="sub">Trades start from Basketball Monster's Trade Monster. Its Win% change × 99 is category matchups won out of 99. A swap is shown when it adds at least the bar for you; it's realistic when the other team loses no more than the second number and Yahoo ranks the two players within the third.</div>
-      <div class="sub" style="margin-top:8px"><button class="lnk" id="setReset">Reset advice and bands to the defaults</button></div></div>`;
+      <div class="sub" style="margin-top:8px"><button class="lnk" id="setReset">Reset advice and bands to the defaults</button></div></details>`;
     // 4. display
-    h += `<div class="card sets" id="set-display"><div class="h"><span>Display</span></div>
-      <div class="row"><label><input type="checkbox" id="showTags" ${showTags(lg) ? 'checked' : ''}> Show Basketball Monster's analyst tags (grey labels; they never change advice)</label></div></div>`;
+    h += `${fold('display', 'Display')}
+      <div class="row"><label><input type="checkbox" id="showTags" ${showTags(lg) ? 'checked' : ''}> Show Basketball Monster's analyst tags (grey labels; they never change advice)</label></div></details>`;
     // 5. sign-ins and diagnostics
-    h += `<div class="card sets" id="set-conn"><div class="h"><span>Sign-ins, track record and diagnostics</span></div>
-      <div class="row"><label><input type="checkbox" id="swap" ${s.swap ? 'checked' : ''}> I'm Team 2 on Matchup Monster</label></div>${bbmAuthHtml()}${yapiHtml()}${trackHtml(lg)}${diagHtml(lg, p)}</div>`;
+    h += `${fold('conn', 'Sign-ins, track record and diagnostics')}
+      <div class="row"><label><input type="checkbox" id="swap" ${s.swap ? 'checked' : ''}> I'm Team 2 on Matchup Monster</label></div>${bbmAuthHtml()}${yapiHtml()}${trackHtml(lg)}${diagHtml(lg, p)}</details>`;
     return h; }
   function wireSettings(lg) { const s = S(lg); const set = (f) => { f(); saveS(lg); render(); };
     const ad = $('adds'); if (ad) ad.onchange = e => set(() => { const v = String(e.target.value).trim(); s.addLimit = v === '' ? null : Math.max(0, +v || 0); });
@@ -877,7 +879,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const setPane = (lg, body) => `<section class="setpane" id="setPane" ${setOpen ? '' : 'hidden'} aria-label="Settings"><div class="seth"><div><div class="t">Settings</div>${lg ? `<div class="sub">${esc(lg)}</div>` : ''}</div><button class="lnk" id="setClose">Done</button></div>${body}</section>`;
   function showSettings(on, k) { setOpen = !!on; const sp = $('setPane'); if (sp) sp.hidden = !setOpen; document.body.classList.toggle('setopen', setOpen);
     const b = $('setBtn'); if (b) { b.classList.toggle('on', setOpen); b.setAttribute('aria-expanded', String(setOpen)); }
-    if (setOpen && k) { const d = document.querySelector('#setPane details[data-k=' + k + ']') || $('set-' + k); if (d) { if ('open' in d) d.open = true; setTimeout(() => d.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30); } } }
+    if (setOpen && k) { const d = document.querySelector('#setPane details[data-k=' + k + ']') || $('set-' + k); if (d) { for (let e = d; e; e = e.parentElement && e.parentElement.closest('details')) e.open = true; setTimeout(() => d.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30); } } }
   // the big numbers count up when a page opens (not on every refresh), so a fresh page reads as live
   function countUp(o) { if (REDUCED) return; o.querySelectorAll('.hero-pct, .cgrid .tile span').forEach(e => { const t = e.firstChild; if (!t || t.nodeType !== 3) return; const m = t.textContent.match(/^(\d+(?:\.\d+)?)(%?)$/); if (!m) return;
     const end = +m[1], dp = (m[1].split('.')[1] || '').length, t0 = performance.now(), D = 420; const step = now => { const k = Math.min(1, (now - t0) / D), e2 = 1 - Math.pow(1 - k, 3); t.textContent = (end * e2).toFixed(dp) + m[2]; if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }); }
@@ -1197,7 +1199,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return `<table class="stt2"><thead><tr><th></th>${cols.map(c => `<th>${c[0]}${c[1].g ? `<i>${c[1].g} g</i>` : ''}</th>`).join('')}</tr></thead><tbody>${cats.map(c => `<tr><td>${esc(window.STRAT.Name(c))}</td>${cols.map(x => `<td>${v(x[1].st, c)}${vol(x[1].st, c)}</td>`).join('')}</tr>`).join('')}${cols[0] && cols[0][1].m ? `<tr><td>Minutes</td>${cols.map(x => `<td>${x[1].m ? (+x[1].m).toFixed(1) : '–'}</td>`).join('')}</tr>` : ''}</tbody></table>`; }
   function strategyCard(lg, M, opt) { const V = strategyState(lg, M); if (!V) return '';
     // Trades holds the trade sub-pages; Season the occasional ones (7.46.0). Each page remembers its own sub-page.
-    const season = opt.page === 'season'; const sub = season ? [['build', 'Build'], ['how', 'How it works']] : [['moves', 'Best trades'], ['roster', 'Roster'], ['block', 'Trade block'], ['finder', 'Finder']];
+    const season = opt.page === 'season'; const sub = season ? [['build', 'Build'], ['how', 'How it works']] : [['roster', 'Roster'], ['block', 'Trade block'], ['finder', 'Finder']];
     const SB = window.STABS = window.STABS || {}; if (sub.some(x => x[0] === window.STAB)) SB[opt.page] = window.STAB; else window.STAB = SB[opt.page] || sub[0][0];
     let h = `<div class="seg trtabs stabs">${sub.map(([k, t]) => `<button data-stab="${k}" class="${window.STAB === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     if (!V.snap) return `<div class="card strat">${h}<div class="strnone">Waiting for Basketball Monster's Analysis Monster, which comes with the next sync.<span class="skel" style="width:70%"></span><span class="skel" style="width:45%"></span></div></div>`;
@@ -1208,9 +1210,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const BW = { punt: ['Punted', 'n'], dead: ['Lost', 'n'], swing: ['Swing', 'a'], safe: ['Winning', 'gr'], locked: ['Locked', 'g'] };
     // one player: a coloured read in words; the stats behind it on tap
     const playerRow = (r, o) => { o = o || {}; const words = (o.extra || []).concat(fitWords(r, V, o.grp));
-      return `<details class="pr" data-k="pr${esc(r.id)}"><summary><div class="l1">${r.mine ? dot(r.kind) : ''}<b>${esc(r.n)}</b>${r.mine ? `<span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>` : ''}${r.inj ? `<span class="chip lost">${esc(injChip(r.inj))}</span>` : ''}${tagChip(r.tag)}${o.block ? '<span class="chip plain">On the block</span>' : ''}</div>
+      return `<details class="pr" data-k="pr${esc(r.id)}"><summary><div class="l1">${r.mine ? dot(r.kind) : ''}<b>${esc(r.n)}</b>${r.mine ? `<span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>` : ''}${r.inj ? `<span class="chip lost">${esc(injChip(r.inj))}</span>` : ''}${tagChip(r.tag)}${o.block != null ? `<button class="lnk blk${o.block ? ' on' : ''}" data-block="${esc(r.id)}">${o.block ? 'On the trade block' : 'Put on the trade block'}</button>` : ''}</div>
         <div class="l2">${words.map(w => `<div class="ln">${w[0] ? `<span>${esc(w[0])}</span> ` : ''}${esc(w[1])}</div>`).join('')}${r.tg ? `<div class="ln${r.g < 0.6 * r.tg ? ' warnl' : ''}"><span>Plays</span> ${Math.min(r.g, r.tg)} of ${r.tg} games left${r.g < 0.6 * r.tg ? ` (projected to miss ${r.tg - r.g})` : ''}</div>` : ''}${o.owner ? `<div class="ln muted">${owner(r.own)}</div>` : ''}</div></summary>
-        <div class="ld">${o.block != null ? `<div class="row" style="margin-bottom:8px"><button class="lnk blk${o.block ? ' on' : ''}" data-block="${esc(r.id)}">${o.block ? 'Take off the trade block' : 'Put on the trade block'}</button></div>` : ''}${statsTable(r.p, V.cats)}<div class="sub">${r.g} games left${r.brank ? ' · Basketball Monster rank ' + r.brank : ''}${r.yrank ? ' · Yahoo rank ' + r.yrank : ''}</div>${r.notes.map(n => `<div class="sub">${esc(n.by)} (${esc(n.tag)}${n.tagNote ? ' ' + esc(n.tagNote) : ''}): “${esc(n.text)}”</div>`).join('')}</div></details>`; };
+        <div class="ld">${statsTable(r.p, V.cats)}<div class="sub">${r.g} games left${r.brank ? ' · Basketball Monster rank ' + r.brank : ''}${r.yrank ? ' · Yahoo rank ' + r.yrank : ''}</div>${r.notes.map(n => `<div class="sub">${esc(n.by)} (${esc(n.tag)}${n.tagNote ? ' ' + esc(n.tagNote) : ''}): “${esc(n.text)}”</div>`).join('')}</div></details>`; };
     if (window.STAB === 'build') {
       const B = V.band; const ord = ['locked', 'safe', 'swing', 'dead', 'punt']; const by = k => V.cats.filter(c => B[c] === k);
       const won = by('locked').concat(by('safe')), sw = by('swing'), lost = by('dead').concat(by('punt'));
@@ -1231,7 +1233,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
           <div class="onoff">${V.cats.map(c => `<button class="oo ${B[c] === 'punt' ? 'off' : 'on'}" data-setp="${esc(c)}" aria-pressed="${B[c] === 'punt' ? 'false' : 'true'}" title="${B[c] === 'punt' ? 'Punted: tap to play for it again' : 'Playing for it: tap to punt'}"><i></i>${N(c)}</button>`).join('')}</div>
           ${best ? (same ? `<div class="bbest ok"><b>This is your best available punt.</b> Your team ranks ${ordN(cur.rank)} of ${BB.n} on the categories you play for.</div>`
             : `<div class="bbest"><div><b>Best available punt:</b> ${best.P.length ? `punt ${andL(best.P.map(N))}` : 'no punt'}. Your team would rank <b>${ordN(best.rank)}</b> of ${BB.n} on the categories kept${cur ? ` (now ${ordN(cur.rank)})` : ''}.</div><button class="btn small" data-usebuild="${esc(best.P.join(','))}">Use this build</button></div>`) : ''}</div>`; }
-      h += `<button class="cta" data-findmoves>Find my best trades for this build<i>Sells, what to ask for and who to keep</i></button>`;
+      h += `<button class="cta" data-findmoves>See your roster for this build<i>Who to sell, who fits, and who to put on the trade block</i></button>`;
       h += `<div class="hlbig">You're built to win <b>${andL(won.map(N))}</b>.${sw.length ? ` <b>${andL(sw.map(N)).replace(/^./, x => x.toUpperCase())}</b> decide${sw.length > 1 ? '' : 's'} your weeks.` : ''}</div>
         <div class="sub hls">Winning ${won.length} of ${kept.length} categories you play for; a week needs ${need} of ${V.cats.length}.${lost.length ? ` Not competing in ${andL(lost.map(N))}.` : ''}</div>`;
       h += `<div class="cbd2">${V.cats.slice().sort((a, b) => ord.indexOf(B[a]) - ord.indexOf(B[b])).map(c => { const b = B[c], bn = V.bandNow ? V.bandNow[c] : b; const w = V.snap.win[c]; const me = V.rows.find(r => r.tid === M.L.me); const rk = me && me.val[c] != null ? 1 + V.rows.filter(r => r.tid !== me.tid && r.val[c] != null && r.val[c] > me.val[c]).length : null;
@@ -1257,20 +1259,20 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
           ${(() => { const rk = BB && BB.rankOf(tryP); return rk ? `<div>Your team would rank <b>${ordN(rk.rank)}</b> of ${BB.n} on the categories kept${BB.current ? ` (now ${ordN(BB.current.rank)})` : ''}.</div>` : ''; })()}
           <div class="row" style="margin-top:4px"><button class="btn small" data-usebuild="${esc(tryP.slice().sort().join(','))}">Use this build</button><button class="lnk" data-tryclear>Clear</button></div></div>`; }
       if (V.miss.length) h += `<div class="sub" style="margin-top:8px">Not in Basketball Monster's projections: ${esc(V.miss.slice(0, 10).join(', '))}${V.miss.length > 10 ? ' and others' : ''}.</div>`;
-    } else if (window.STAB === 'moves') { h += movesHtml(lg, M, V, { dot, playerRow, owner, N });
     } else if (window.STAB === 'roster') {
       const block = S(lg).block || []; const ORD = ['wasted', 'holds', 'costs', 'fits', 'small'];
       h += `<div class="legend">${Object.entries(FIT).map(([k, v]) => `<span>${dot(k)}${v[1]}</span>`).join('')}</div>`;
       const gcats = k => { const G = V.grp; const L = a => esc(andL(a.map(NN))); return k === 'wasted' ? (G.lost.length ? 'Your lost categories: ' + L(G.lost) : '') : k === 'fits' || k === 'costs' ? (G.swing.length ? 'Your swing categories: ' + L(G.swing) : '') : k === 'holds' ? (G.won.length ? 'Categories you win: ' + L(G.won) : '') : ''; };
       ORD.forEach(k => { const R = V.mine.filter(r => r.kind === k).sort((a, b) => b.lv - a.lv); if (!R.length) return;
-        h += `<div class="grh2 k-${FIT[k][0]}"><div><b>${FIT[k][1]}</b><span class="cnt">${R.length}</span></div><span class="gd">${GDESC[k]}</span>${gcats(k) ? `<span class="gc">${gcats(k)}</span>` : ''}</div>` + R.map(r => playerRow(r, { block: block.includes(r.id) })).join(''); });
+        // each group is a dropdown, closed when the page opens (8.2.0: the full list was too many names at once)
+        h += `<details class="rgrp" data-k="rg-${k}"><summary class="grh2 k-${FIT[k][0]}"><div><b>${FIT[k][1]}</b><span class="cnt">${R.length}</span><i class="garr" aria-hidden="true"></i></div><span class="gd">${GDESC[k]}</span>${gcats(k) ? `<span class="gc">${gcats(k)}</span>` : ''}</summary>` + R.map(r => playerRow(r, { block: block.includes(r.id) })).join('') + '</details>'; });
     } else if (window.STAB === 'block') {
       // 8.1.0, owner's ask: the block matches profiles, Basketball Monster's numbers only: your needed categories (Analysis Monster
       // team values) → other teams' players at his Basketball Monster rank who are strong in them, and the teams that need what he brings
       const block = (S(lg).block || []).filter(id => V.mine.some(r => r.id === id)); const LV = V.league.concat(V.mine).reduce((m, x) => (m[x.id] = x, m), {});
       const injT = id => { const st = LV[id] && LV[id].inj; return st ? `<span class="fk r">${esc(injWord(st))}</span>` : ''; };
       const myNeed = ((M.needs && M.needs(M.L.me)) || {}).need || [];
-      if (!block.length) h += `<div class="strnone">Nobody on the block yet. Open a player under Roster, or a sell under Best trades, and tap "Put on the trade block".</div>`;
+      if (!block.length) h += `<div class="strnone">Nobody on the block yet. Tap "Put on the trade block" next to a player under Roster.</div>`;
       block.forEach(id => { const r = V.mine.find(x => x.id === id); if (!r) return; const T = teamNeedsAll(lg, M, r); const F = blockFits(r, V.league, myNeed, T.map(t => t.tid));
         const str = goodAt(r.cv || {}, Object.keys(r.cv || {})).slice(0, 3);
         h += `<div class="blkc"><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b>${injT(id)}<span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>${r.brank ? `<span class="muted">Basketball Monster rank ${r.brank}</span>` : ''}<button class="lnk blk on" data-block="${esc(r.id)}">Take off the block</button></div>
@@ -1279,7 +1281,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
           <div class="h mvh"><span>Teams that need what he brings</span></div>
           ${T.length ? T.map(t => `<div class="mvl"><span>${owner(t.tid)}</span>needs <b>${esc(andL(t.cats.map(NN)))}</b></div>`).join('') : `<div class="strnone">No team's swing categories match his strengths.</div>`}
           <div class="h mvh"><span>Players who fit</span><span class="sub">ranked ${F.lo} to ${F.hi} by Basketball Monster, strong (+0.5 or more) in what you need</span></div>
-          ${F.list.length ? F.list.slice(0, 8).map(x => playerRow(x, { owner: true, extra: [['Brings', andL(x.hit.map(NN))]].concat(x.wants ? [['', 'His team needs what ' + r.n + ' brings']] : []) })).join('') : `<div class="strnone">${myNeed.length ? 'Nobody near his rank on another team is strong in ' + esc(andL(myNeed.map(NN))) + '.' : 'Set once Basketball Monster team values show a swing category.'}</div>`}</div>`; });
+          ${F.list.length ? F.list.slice(0, 8).map(x => playerRow(x, { owner: true, extra: [['Brings', andL(x.hit.map(NN))]].concat(x.wants ? [['', 'His team needs what ' + r.n + ' brings']] : []) })).join('') : `<div class="strnone">${myNeed.length ? 'Nobody near his rank on another team is strong in ' + esc(andL(myNeed.map(NN))) + '.' : 'Set once Basketball Monster team values show a swing category.'}</div>`}
+          ${tmBlock(lg, M, r, injT)}</div>`; });
     } else if (window.STAB === 'finder') {
       const f0 = S(lg).find || {}; const kind = f0.kind === 'all' ? 'all' : 'fits'; const TIER = [[1, 30, 'Stars'], [31, 75, 'Starters'], [76, 130, 'Rotation players'], [131, 9999, 'Depth']]; const TD = tmDeals(lg, M);
       // other teams' players Trade Monster pairs with one of yours, by your gain (realistic only, or any that clears your bar)
@@ -1290,40 +1293,20 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     } else if (window.STAB === 'how') h += howItWorks(lg, V);
     // the rules behind the reads: kept out of the sub-tab row, at the foot of the card
     return `<div class="card strat">${h}</div>`; }
-  // ---- Best moves, on the one measure (current roster only): 1. sells: a one-for-one trade at the player's Basketball Monster
-  // value that adds at least your trade bar; the targets are those trades and the profile is what they have in common. A player
-  // who holds up a category can't be a sell (taking him out costs that category, so no same-value trade clears the bar).
-  // 2. the waiver wire: the Pickups page's list, top three. 3. who to build around: your most valuable players to you. ----
-  function movesHtml(lg, M, V, U) { const { dot, playerRow } = U; const rd = V.rd; if (!rd) return `<div class="strnone">Best trades needs Basketball Monster's rest-of-season projections. They come with the next sync.</div>`;
-    const w = rd.weeks; const dt = new Date(V.snap.ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }); const LV = V.league.reduce((m, x) => (m[x.id] = x, m), {});
-    const TD = tmDeals(lg, M), bar = bar99(lg); const tn = tid => esc(((M.L.teams.find(t => t.tid === tid) || {}).name) || 'another team');
-    const injT = id => { const x = LV[id] || V.mine.find(r => r.id === id); const st = x && x.inj; return st ? `<span class="fk r">${esc(injWord(st))}</span>` : ''; };
-    let h = `<div class="mvhead"><b>From Basketball Monster's Trade Monster</b> · "Find Trades" for each of your players · numbers are category matchups won out of 99 per week (Win% × 99), for you and for them${TD ? ' · read ' + esc(ago(TD.ts)) : ''}</div>`;
-    if (!TD) return h + `<div class="strnone">Trade Monster hasn't been read for this league yet. It's read once a day with the full sync (about half a minute per player).</div>`;
-    if (Date.now() - TD.ts > 24 * 3600e3 || syncing) h += `<div class="warnt"><b>Provisional:</b> ${syncing ? 'a sync is running' : 'Trade Monster was read ' + esc(ago(TD.ts))}. Treat these as options to check, not recommendations, until it's read again.</div>`;
-    // 1 · sells: your players with a Trade Monster swap that clears the bar, best realistic deal first
-    const best = r => { const x = TD.by[r.id]; return x && x.ok[0] ? Math.min(x.ok[0].you, x.ok[0].them) : -99; };
-    const sells = V.mine.filter(r => { const x = TD.by[r.id]; return x && (x.ok.length || x.no.length); }).sort((a, b) => best(b) - best(a) || (TD.by[b.id].no[0] || {}).you - (TD.by[a.id].no[0] || {}).you);
-    const top4 = V.mine.filter(r => !(r.read && r.read.il)).sort((a, b) => b.lv - a.lv).slice(0, 4).map(r => r.id); const sTop = sells.filter(r => top4.includes(r.id) && TD.by[r.id].ok.length);
-    h += `<div class="h mvh"><span>1 · Sell</span><span class="sub">${sells.filter(r => TD.by[r.id].ok.length).length} with a realistic deal · bar ${of99(bar)} of 99</span></div>`;
-    if (sTop.length >= 2) h += `<div class="warnt"><b>Your punt doesn't suit your best players</b> (${esc(andL(sTop.map(r => r.n)))}): compare builds before selling. <button class="lnk" data-gostab="season:build">Try a build</button></div>`;
-    if (!sells.length) h += `<div class="strnone">No swap in Trade Monster's lists adds ${of99(bar)} of 99 or more for you. Gains of +1 or +2 are inside forecast noise, so they aren't shown.</div>`;
-    const dealRow = d => tmLine(M, d, injT);
-    sells.forEach(r => { const X = TD.by[r.id]; const str = Object.keys(r.cv || {}).filter(c => (r.cv[c] || 0) >= 0.5).sort((a, b) => r.cv[b] - r.cv[a]).slice(0, 3);
-      // teams he fits: where the realistic deals are, best deal first, then how many of the categories they need he brings
-      const teams = {}; X.ok.forEach(d => (teams[d.tid] = teams[d.tid] || []).push(d));
-      const fit = tid => { const N = M.needs && M.needs(tid); return N ? N.need.filter(c => str.includes(c)) : []; };
-      const order = Object.keys(teams).sort((a, b) => Math.min(teams[b][0].you, teams[b][0].them) - Math.min(teams[a][0].you, teams[a][0].them) || fit(b).length - fit(a).length);
-      h += `<div class="mvc"><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b>${injT(r.id)}<span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>${r.brank ? `<span class="muted">rank ${r.brank}</span>` : ''}${r.yrank ? `<span class="muted">Yahoo ${r.yrank}</span>` : ''}</div>
-        <div class="mvl"><span>Selling</span>${str.length ? `strong in <b>${esc(andL(str.map(NN)))}</b>` : 'no standout category'} · Trade Monster finds <b>${X.n}</b> swaps at his trade value</div>
-        ${order.length ? order.slice(0, 4).map(tid => { const nf = fit(tid); return `<div class="tmteam"><div class="mvl"><span>${tn(tid)}</span>${nf.length ? `needs <b>${esc(andL(nf.map(NN)))}</b>, which he brings` : 'gains from the swap'}</div>${teams[tid].slice(0, 3).map(dealRow).join('')}</div>`; }).join('') : `<div class="strnone">No realistic deal: every swap that clears the bar fails a check below.</div>`}
-        ${order.length > 4 ? `<details class="more"><summary>${order.length - 4} more team${order.length - 4 === 1 ? '' : 's'}</summary>${order.slice(4).map(tid => `<div class="tmteam"><div class="mvl"><span>${tn(tid)}</span></div>${teams[tid].slice(0, 3).map(dealRow).join('')}</div>`).join('')}</details>` : ''}
-        ${X.no.length ? `<details class="more"><summary>Good for you, unlikely to be accepted (${X.no.length})</summary>${X.no.slice(0, 10).map(dealRow).join('')}</details>` : ''}
-        <div class="mvf"><button class="lnk${(S(lg).block || []).includes(r.id) ? ' on' : ''}" data-block="${esc(r.id)}">${(S(lg).block || []).includes(r.id) ? 'On the trade block' : 'Put on the trade block'}</button></div></div>`; });
-    // 2 · build around (the waiver wire is on the Pickups page)
-    // your most valuable players by Basketball Monster's value with no Trade Monster swap that clears the bar
-    const keep = V.mine.filter(r => !(r.read && r.read.il) && !(TD.by[r.id] && (TD.by[r.id].ok.length || TD.by[r.id].no.length))).sort((a, b) => b.lv - a.lv).slice(0, 5);
-    h += `<div class="h mvh"><span>2 · Keep and build around</span><span class="sub">${keep.length} player${keep.length === 1 ? '' : 's'}</span></div>` + (keep.length ? `<div class="sub mvsubl">${keep.map(r => `${esc(r.n)}${r.brank ? ` <span class="muted">rank ${r.brank}</span>` : ''}`).join(' · ')}: your most valuable players in Basketball Monster's values, and Trade Monster finds no swap for any of them that clears ${of99(bar)} of 99.</div>` : `<div class="strnone">Nobody on your roster clearly earns his spot yet.</div>`);
+  // ---- one block player's Trade Monster swaps, as Best trades showed them before 8.2.0: the teams with a realistic deal (best deal
+  // first, then how many of the categories they need he brings), up to three deals each; then the ones good for you only ----
+  function tmBlock(lg, M, r, injT) { const TD = tmDeals(lg, M), bar = bar99(lg); const X = TD && TD.by[r.id];
+    if (!TD) return `<div class="strnone">Trade Monster hasn't been read for this league yet. It's read once a day with the full sync.</div>`;
+    const tn = tid => esc(((M.L.teams.find(t => t.tid === tid) || {}).name) || 'another team'); const dealRow = d => tmLine(M, d, injT);
+    let h = `<div class="h mvh"><span>Trade Monster's swaps</span><span class="sub">"Find Trades" · category matchups won out of 99 a week · bar ${of99(bar)} · read ${esc(ago(TD.ts))}</span></div>`;
+    if (!X || !(X.ok.length || X.no.length)) return h + `<div class="strnone">No Trade Monster swap for him adds ${of99(bar)} of 99 or more.</div>`;
+    const str = goodAt(r.cv || {}, Object.keys(r.cv || {})).slice(0, 3); const teams = {}; X.ok.forEach(d => (teams[d.tid] = teams[d.tid] || []).push(d));
+    const fit = tid => { const N = M.needs && M.needs(tid); return N ? N.need.filter(c => str.includes(c)) : []; };
+    const order = Object.keys(teams).sort((a, b) => Math.min(teams[b][0].you, teams[b][0].them) - Math.min(teams[a][0].you, teams[a][0].them) || fit(b).length - fit(a).length);
+    const team = tid => { const nf = fit(tid); return `<div class="tmteam"><div class="mvl"><span>${tn(tid)}</span>${nf.length ? `needs <b>${esc(andL(nf.map(NN)))}</b>, which he brings` : 'gains from the swap'}</div>${teams[tid].slice(0, 3).map(dealRow).join('')}</div>`; };
+    h += order.length ? order.slice(0, 4).map(team).join('') : `<div class="strnone">No realistic deal: every swap that clears the bar fails a check below.</div>`;
+    if (order.length > 4) h += `<details class="more"><summary>${order.length - 4} more team${order.length - 4 === 1 ? '' : 's'}</summary>${order.slice(4).map(team).join('')}</details>`;
+    if (X.no.length) h += `<details class="more"><summary>Good for you, unlikely to be accepted (${X.no.length})</summary>${X.no.slice(0, 10).map(dealRow).join('')}</details>`;
     return h; }
   // the rules behind every read, in plain words (the same thresholds the code uses)
   function howItWorks(lg, V) { const th = V.th; const pc = x => Math.round(x * 100); const PK = pickOf(lg);
@@ -1371,10 +1354,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   function teamNeedsAll(lg, M, r) { return M.L.teams.filter(t => t.tid !== M.L.me).map(t => { const N = teamNeeds(lg, M, t.tid); if (!N) return null; const cats = N.need.filter(c => (r.cv[c] || 0) >= 0.5); return cats.length ? { tid: t.tid, cats } : null; }).filter(Boolean).sort((a, b) => b.cats.length - a.cats.length).slice(0, 4); }
   function wireStrategy(lg, M) { const o = $('out'); const s0 = S(lg);
     o.querySelectorAll('[data-stab]').forEach(b => b.onclick = () => { window.STAB = b.dataset.stab; render(); });
-    // a link to another page's sub-page (Best trades → Build, Build → Best trades)
+    // a link to another page's sub-page (Do next → Trade block, Build → Roster); data-blockadd also puts that player on the block
     const goSub = v => { const [pg, sb] = v.split(':'); window.STAB = sb; (window.STABS = window.STABS || {})[pg] = sb; ST.uiTab = pg; browser.storage.local.set({ uiTab: pg }); render(); window.scrollTo({ top: 0, behavior: REDUCED ? 'auto' : 'smooth' }); };
-    o.querySelectorAll('[data-gostab]').forEach(b => b.onclick = () => goSub(b.dataset.gostab));
-    o.querySelectorAll('[data-findmoves]').forEach(b => b.onclick = () => { b.classList.add('busy'); b.innerHTML = '<span class="spinner" aria-hidden="true"></span>Reading your roster against Analysis Monster…'; setTimeout(() => goSub('trades:moves'), REDUCED ? 0 : 650); });
+    o.querySelectorAll('[data-gostab]').forEach(b => b.onclick = () => { const id = b.dataset.blockadd; if (id && !(s0.block || []).includes(id)) { s0.block = (s0.block || []).concat([id]); saveS(lg); } goSub(b.dataset.gostab); });
+    o.querySelectorAll('[data-findmoves]').forEach(b => b.onclick = () => { b.classList.add('busy'); b.innerHTML = '<span class="spinner" aria-hidden="true"></span>Reading your roster against Analysis Monster…'; setTimeout(() => goSub('trades:roster'), REDUCED ? 0 : 650); });
     o.querySelectorAll('[data-strev]').forEach(b => b.onclick = () => { const V = strategyState(lg, M); if (!V || !V.winNow) { b.textContent = 'Waiting for Basketball Monster…'; return; } const sk = 'strat:' + V.l.lid; ST[sk] = window.STRAT.snapshot(M, V.winNow, M.ctx.punt || []); browser.storage.local.set({ [sk]: ST[sk] }); DV++; render(); toast('Bands set from today\'s numbers', 'ok'); });
     o.querySelectorAll('[data-openset]').forEach(b => b.onclick = () => showSettings(true, b.dataset.openset));
     o.querySelectorAll('[data-setp]').forEach(b => b.onclick = () => { const c = b.dataset.setp; const cur = (puntFor(lg) || []).slice(); setPunt(lg, cur.includes(c) ? cur.filter(x => x !== c) : cur.concat([c])); });
@@ -1576,7 +1559,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (left.length) sendWeek(y, pl, left, true); }
   // ---------- sync ----------
   let syncing = false; const planFrom = {}, planNow = {};
-  function syncTick() { const sb = $('syncNow'); if (!sb) return; sb.dataset.tick = 1; sb.classList.remove('busy'); sb.classList.add('done'); sb.innerHTML = ICON.tick;
+  function syncTick() { const sb = $('syncNow'); if (!sb) return; sb.dataset.tick = 1; sb.classList.remove('busy', 'err'); sb.classList.add('done');
     clearTimeout(window.__tickT); window.__tickT = setTimeout(() => { delete sb.dataset.tick; sb.classList.remove('done'); syncBar(); }, 1600); }
   function syncBar() {
     const lg = league(); const y = leaguesKnown().find(l => l.league === lg); const st = y && ST['sync:' + y.lid]; const lk = ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3;
@@ -1587,7 +1570,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const left = syncing || lk ? `<span>${esc(pr ? 'Syncing ' + pr + '…' : 'Syncing…')}</span>` : top ? `<button class="stl" id="healthB" title="${esc(H.iss.map(i => i[1]).join('\n'))}"><i class="dot ${top[0] === 'bad' ? 'd-warn' : ''}"></i>${esc(top[1])}${H.iss.length > 1 ? ` <span class="muted">+${H.iss.length - 1}</span>` : ''}</button>` : `<span>${good ? 'Updated ' + ago(good) : 'Not synced yet'}</span>`;
     $('syncbar').innerHTML = left;
     // the sync button sits in the top bar: just the arrows (spinning while a sync runs), a green tick for a moment when one finishes
-    const sb = $('syncNow'); sb.classList.toggle('busy', !!(syncing || lk)); sb.disabled = syncing; if (!sb.dataset.tick) sb.innerHTML = ICON.sync;
+    // (8.2.0) arrows round a basketball: orange and spinning while a sync runs, red after a failed sync, green otherwise
+    const sb = $('syncNow'); const run = !!(syncing || lk), err = !run && !!(st && st.err); sb.classList.toggle('busy', run); sb.classList.toggle('err', err); sb.disabled = syncing; if (!sb.innerHTML) sb.innerHTML = ICON.sync;
+    sb.title = run ? 'Syncing…' : err ? 'The last sync failed: tap to sync again' : 'Synced: tap to sync now'; sb.setAttribute('aria-label', sb.title);
     { const hb = $('healthB'); if (hb) hb.onclick = () => showSettings(true, 'diag'); }
     sb.onclick = () => runSync(true);
   }

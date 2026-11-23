@@ -284,6 +284,14 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
   `M.needs(M.L.me)`), the teams that need what he brings (`teamNeedsAll`), and the players who fit (`blockFits`): other teams' players
   5 places above to 20 below his Basketball Monster rank who are +0.5 or more in a category you need. Best trades still reads Trade Monster.
 
+## 8.2.0 (owner's asks)
+- Best trades is gone (Trades = Roster, Trade block, Finder). Each Trade block card ends with that player's Trade Monster swaps as Best trades
+  showed them (`tmBlock`: teams with a realistic deal, up to three deals each, then "Good for you, unlikely to be accepted"). Do next's
+  trade line puts the player on the block and opens it (`data-blockadd`).
+- Roster: "Put on the trade block" sits on every player row; the read groups are dropdowns (`details.rgrp`), closed when the page opens.
+- Sync button: arrows round a basketball; orange and spinning while syncing, red when the last sync failed (`sync:<lid>.err`), green otherwise.
+- Settings: the header is sticky edge to edge and covers the status-bar area; every group is a card closed to its heading (`fold`, `details.sfold`).
+
 ## 8.0.8 (design pass: Impeccable, Web Design Guidelines, Webapp Testing)
 - Late-scratch alerts (`newsCheck` in sync.js) come from today's Yahoo lineup (`yr:` with `date` = today, under 3 h old), never a saved `plan:` (it can be days old). The swap is a bench player who is healthy, off the injured list, has a game, isn't locked and is eligible for the out starter's spot; otherwise "Nobody on your bench can take his spot". Test: t_alert.
 - "Today: do next" shows a lineup alert only on its own day.

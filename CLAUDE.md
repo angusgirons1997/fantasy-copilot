@@ -266,3 +266,9 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
 - Landing sounds live in `sound.js` (Web Audio, no files): court lines drawing = shoe squeaks, the ball's drop = two bounces (at 55% and 85% of the `drop` keyframes), bar full = a short whistle, Let's play = swish then crowd cheer (the page waits 1.7 s so it's heard). Each fires from the animation's own `animationstart`, so it stays in time at either speed. `SND.at` plays nothing until sound is allowed (most phones need a tap first) and never queues stale sounds.
 - The Matchup Monster health check allows few free agents in the last two days of a week (only players with games left are listed then).
 - 8.0.4: the Let's play cheer is a recording, `firefox/sounds/cheer.mp3` ("Short crowd cheer" by Driken5482 on Pixabay, Pixabay Content License: free in apps, no credit needed), decoded once on open and faded out at 1.65 s. The whistle is about 0.4 s. The phone server serves .mp3.
+
+## 8.0.5 lineup truth
+- Each day's Yahoo lineup (`ylu:<lid>`) is re-read by the background sync: today every sync, other days left this week every 2 hours or after a roster change. Before this, day copies were only read while the panel was open and could be a week old.
+- `actualFor` overlays the newest roster read (`yr:`) on an older day copy: injury tags and injured-list spots come from the newest read, and players no longer on the roster drop out.
+- `resolveDay`: a player Yahoo shows healthy, off the injured list and with a game that day is never kept out by Basketball Monster's zero / IL flag (`yPlays`). Yahoo out tags still bench a player.
+- Landing sounds are all recordings (`firefox/sounds/`): squeak and swish are files the owner supplied, whistle and bounce are Pixabay (Pixabay Content License). Start offsets were measured once and live in `sound.js`. No crowd cheer; Let's play is the swish only.

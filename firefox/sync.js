@@ -583,6 +583,15 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       if (!y) { if (await yahooSignedOut()) throw authErr('yahoo', 'Yahoo signed you out'); throw new Error('Could not read your Yahoo team page'); }
       st.yOk = true; st.league = y.league || st.league; await put({ ['yr:' + y.lid]: y });
       const start = y.weekStart || mondayOf(y.date || usToday()), end = y.weekEnd || addDay(start, 6);
+      // each day left this week as Yahoo has it (slots, injury tags, who has a game): today on every sync, other days every
+      // 2 hours or after a roster change. Day copies that went stale were what started injured players (8.0.5).
+      try { const k = 'ylu:' + y.lid, d0 = y.date || usToday(), up = {}; const sig = rows => (rows || []).map(r => r.name).sort().join('|'), ySig = sig(y.rows), old = all[k] || {};
+        const luRow = x => ({ name: x.name, slot: x.slot, pid: x.pid, locked: !!x.locked, hasGame: !!x.hasGame, game: x.game || '', inj: x.inj || '', elig: x.elig || [], team: x.team || '' });
+        if (y.date) up[y.date] = { ts: Date.now(), rows: y.rows.map(luRow), empty: y.empty || [] };
+        for (let d = addDay(d0, 1); d <= end; d = addDay(d, 1)) { const e = old[d]; if (e && sig(e.rows) === ySig && Date.now() - e.ts < 2 * 3600e3) continue;
+          try { const r = root.YPARSE(html(await req(`${YH}/nba/${y.lid}/${y.tid}/team?date=${d}`, null, 'Yahoo lineup ' + d))); if (r && r.date === d && r.rows.length) up[d] = { ts: Date.now(), rows: r.rows.map(luRow), empty: r.empty || [] }; }
+          catch (e) { if (e.auth) throw e; trace('Yahoo lineup ' + d, false, e.message); } }
+        if (Object.keys(up).length) { const cur = (await ST().get(k))[k] || {}; await put({ [k]: Object.assign({}, cur, up) }); } } catch (e) { if (e.auth) throw e; }
       // this week's Matchup Monster: if it fails (BBM down or showing no results), the Yahoo side of the sync still runs, and the
       // panel builds the week from BBM's projections instead
       log('this week'); let m;

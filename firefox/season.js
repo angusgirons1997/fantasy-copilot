@@ -245,9 +245,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const fresh = Date.now() - (y.ts || 0) < 6 * 3600e3;
     const info = all.map(a => { const r = rowOf(a.x.name); const st = statusOf(a.x.name); const gone = !r && a.was !== 'extra' && fresh; const noGame = !!(yInfo && r && !r.hasGame) || gone;
       const lockedIn = !!(r && r.locked && isStartSlot(r.slot)), lockedOut = !!(r && r.locked && !isStartSlot(r.slot)), ilY = !!(r && /^IL/.test(r.slot));
-      const kind = lockedIn ? 'locked' : (a.x.zero || noGame || HARD_OUT.test(st) || lockedOut || ilY) ? 'out' : a.x.protect ? 'protect' : DOUBTFUL.test(st) ? 'doubt' : 'ok';
+      // Yahoo shows him healthy, off the injured list and playing that day: that beats Basketball Monster calling him out
+      const yPlays = !!(yInfo && fresh && r && r.hasGame && !ilY && !HARD_OUT.test(st));
+      const kind = lockedIn ? 'locked' : ((a.x.zero && !yPlays) || noGame || HARD_OUT.test(st) || lockedOut || ilY) ? 'out' : a.x.protect ? 'protect' : DOUBTFUL.test(st) ? 'doubt' : 'ok';
       const el = r && r.elig && r.elig.length ? r.elig.filter(e => isStartSlot(e)) : null;
-      return Object.assign(a, { r, st, noGame, gone, ilY, kind, name: a.x.name, elig: lockedIn ? (s => s === r.slot) : el ? (s => el.includes(s)) : (s => s === a.x.slot || s === 'Util') }); });
+      return Object.assign(a, { r, st, noGame, gone, ilY, yPlays, kind, name: a.x.name, elig: lockedIn ? (s => s === r.slot) : el ? (s => el.includes(s)) : (s => s === a.x.slot || s === 'Util') }); });
     const byVal = (u, v) => (u.was === 'extra') - (v.was === 'extra') || val(v.name) - val(u.name);
     const cands = info.filter(i => i.kind === 'locked')
       .concat(info.filter(i => i.kind === 'ok' && i.was === 'start'))
@@ -256,7 +258,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const { chosen, slotOf } = fitStarters(slots, cands); const inS = new Set(chosen.map(i => i.name));
     const before = new Set(d.start.map(x => K(x.name)));
     d.start = chosen.map(i => Object.assign({}, i.x, { slot: slotOf[i.name] }));
-    d.bench = info.filter(i => !inS.has(i.name)).map(i => Object.assign({}, i.x, i.kind === 'out' ? { zero: true, injY: HARD_OUT.test(i.st) ? i.st : null, gone: i.gone, noGameY: (i.noGame && !i.gone) || i.x.noGameY || false, il: i.x.il || i.ilY, lockedOut: !!(i.r && i.r.locked) } : i.kind === 'doubt' ? { doubt: i.st } : {}));
+    d.bench = info.filter(i => !inS.has(i.name)).map(i => Object.assign({}, i.x, i.kind === 'out' ? { zero: true, injY: HARD_OUT.test(i.st) ? i.st : null, gone: i.gone, noGameY: (i.noGame && !i.gone) || i.x.noGameY || false, il: (i.x.il && !i.yPlays) || i.ilY, lockedOut: !!(i.r && i.r.locked) } : i.kind === 'doubt' ? { doubt: i.st } : {}));
     info.forEach(i => { const was = before.has(K(i.name)), now = inS.has(i.name); if (was === now) return;
       fixes.push(now ? `${i.name} starts on ${d.date}${i.was === 'extra' ? ' (Yahoo shows a game the plan didn\'t have)' : ''}: a spot was free`
         : `${i.name} sits on ${d.date}: ${i.gone ? 'not on your Yahoo roster' : HARD_OUT.test(i.st) ? 'out on Yahoo (' + i.st + ')' : i.noGame ? 'no game on Yahoo' : i.kind === 'doubt' ? 'a game-time decision (' + i.st + ') and a healthy player can take the spot' : i.ilY ? 'in an injured-list spot' : 'locked on the bench'}`); }); }
@@ -923,7 +925,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // ---- lineup management: plan vs what Yahoo actually has set, day by day ----
   let selDay = null, luAll = false, wbNote = ''; const luBusy = {}, luFail = {};
   const LU = lid => ST['ylu:' + lid] || {};
-  function actualFor(lid, date) { const e = LU(lid)[date]; return e && e.rows ? e : null; }
+  // a day's Yahoo lineup; when it was read before your latest roster read, injury tags and injured-list spots come from the latest
+  // read (they're roster-wide and change daily) and anyone no longer on your roster is left out
+  function actualFor(lid, date) { const e = LU(lid)[date]; if (!e || !e.rows) return null; const y = ST['yr:' + lid]; if (!y || !y.rows || (y.ts || 0) <= (e.ts || 0)) return e;
+    const rows = e.rows.map(r => { const c = rowIn(y.rows, r.name); if (!c) return null; const il = /^IL/.test(c.slot || '');
+      return Object.assign({}, r, { inj: c.inj || '', slot: il ? c.slot : /^IL/.test(r.slot || '') ? 'BN' : r.slot }); }).filter(Boolean);
+    return Object.assign({}, e, { rows }); }
   // fetch each open day's real Yahoo lineup (API when connected, else your Yahoo team page for that date)
   // what's kept of a Yahoo team page for one date: who's where, and whether Yahoo shows him playing that day
   const luRow = x => ({ name: x.name, slot: x.slot, pid: x.pid, locked: !!x.locked, hasGame: !!x.hasGame, game: x.game || '', inj: x.inj || '', elig: x.elig || [], team: x.team || '' });

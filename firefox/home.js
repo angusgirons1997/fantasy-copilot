@@ -9,10 +9,10 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   const court = document.querySelector('.court path'); if (court) court.addEventListener('animationstart', () => { const d = secs(court); SND.at('squeak', 0.05, 900); SND.at('squeak', d * 0.42, 1180); SND.at('squeak', d * 0.78, 1020); });
   const ball = document.querySelector('.ball'); if (ball) ball.addEventListener('animationstart', e => { if (e.target !== ball) return; const d = secs(ball); SND.at('bounce', d * 0.55, 1); SND.at('bounce', d * 0.85, 0.45); }); // the drop keyframes land at 55% and 85%
   const go = (mode, page) => browser.storage.local.set({ uiMode: mode }).then(() => { location.href = page; });
-  // Let's play: the swish and the crowd, then on to the page once they've had their moment
-  const cheer = () => SND.at('swish', 0.02) && SND.at('cheer', 0.2);
+  // Let's play: the swish, then on to the page once it's been heard
+  const swish = () => SND.at('swish', 0.02);
   // (on the very first tap sound may take a moment to wake up, so one quick retry)
-  $('mSeason').onclick = () => { SND.unlock(); const s = cheer(); const next = ok => setTimeout(() => go('season', 'season.html'), ok ? 1900 : 0); if (s) next(true); else setTimeout(() => next(cheer()), 80); };
+  $('mSeason').onclick = () => { SND.unlock(); const s = swish(); const next = ok => setTimeout(() => go('season', 'season.html'), ok ? 750 : 0); if (s) next(true); else setTimeout(() => next(swish()), 80); };
   $('mDraft').onclick = () => go('draft', 'panel.html');
   // ---- the connection check: the bar fills as the latest Yahoo and Basketball Monster copy is read; green when the background
   // sync is current (within 40 minutes), amber when it's late (on the phone: the PC may be asleep) ----

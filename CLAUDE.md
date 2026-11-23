@@ -278,6 +278,12 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
 - `SND.at` after a tap (`armed`) waits for Safari's `resume()` instead of dropping the sound.
 - Reverted on 23 Nov 2026 at the owner's request (home.html, home.js, sound.js back to 8.0.5): the sounds all played at once. Don't bring the tap gate back.
 
+## Trade block (8.1.0, owner's ask: don't swap back to Trade Monster here)
+- Trades → Trade block matches profiles, not Trade Monster's lists (those gave stars for a regular player). For each player on the block:
+  what he offers (his category values +0.5 and up), what you're looking for (your swing categories from Analysis Monster team values,
+  `M.needs(M.L.me)`), the teams that need what he brings (`teamNeedsAll`), and the players who fit (`blockFits`): other teams' players
+  5 places above to 20 below his Basketball Monster rank who are +0.5 or more in a category you need. Best trades still reads Trade Monster.
+
 ## 8.0.8 (design pass: Impeccable, Web Design Guidelines, Webapp Testing)
 - Late-scratch alerts (`newsCheck` in sync.js) come from today's Yahoo lineup (`yr:` with `date` = today, under 3 h old), never a saved `plan:` (it can be days old). The swap is a bench player who is healthy, off the injured list, has a game, isn't locked and is eligible for the out starter's spot; otherwise "Nobody on your bench can take his spot". Test: t_alert.
 - "Today: do next" shows a lineup alert only on its own day.

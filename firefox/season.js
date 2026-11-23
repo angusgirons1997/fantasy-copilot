@@ -1265,14 +1265,21 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       ORD.forEach(k => { const R = V.mine.filter(r => r.kind === k).sort((a, b) => b.lv - a.lv); if (!R.length) return;
         h += `<div class="grh2 k-${FIT[k][0]}"><div><b>${FIT[k][1]}</b><span class="cnt">${R.length}</span></div><span class="gd">${GDESC[k]}</span>${gcats(k) ? `<span class="gc">${gcats(k)}</span>` : ''}</div>` + R.map(r => playerRow(r, { block: block.includes(r.id) })).join(''); });
     } else if (window.STAB === 'block') {
-      const block = (S(lg).block || []).filter(id => V.mine.some(r => r.id === id)); const TD = tmDeals(lg, M), bar = bar99(lg); const LV = V.league.concat(V.mine).reduce((m, x) => (m[x.id] = x, m), {});
+      // 8.1.0, owner's ask: the block matches profiles, Basketball Monster's numbers only: your needed categories (Analysis Monster
+      // team values) → other teams' players at his Basketball Monster rank who are strong in them, and the teams that need what he brings
+      const block = (S(lg).block || []).filter(id => V.mine.some(r => r.id === id)); const LV = V.league.concat(V.mine).reduce((m, x) => (m[x.id] = x, m), {});
       const injT = id => { const st = LV[id] && LV[id].inj; return st ? `<span class="fk r">${esc(injWord(st))}</span>` : ''; };
+      const myNeed = ((M.needs && M.needs(M.L.me)) || {}).need || [];
       if (!block.length) h += `<div class="strnone">Nobody on the block yet. Open a player under Roster, or a sell under Best trades, and tap "Put on the trade block".</div>`;
-      block.forEach(id => { const r = V.mine.find(x => x.id === id); if (!r) return; const T = teamNeedsAll(lg, M, r); const X = TD && TD.by[id];
-        h += `<div class="blkc"><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b>${injT(id)}<span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span><button class="lnk blk on" data-block="${esc(r.id)}">Take off the block</button></div>
-          <div class="sub">Trade Monster's "Find Trades" for him: swaps at his trade value that add ${of99(bar)} of 99 or more for you, realistic first.</div>
-          ${T.length ? `<div class="sub">Teams fighting for what he's good at: ${T.map(t => `${owner(t.tid)} <span class="muted">(${andL(t.cats.map(N))})</span>`).join(', ')}.</div>` : ''}
-          ${X && (X.ok.length || X.no.length) ? X.ok.slice(0, 8).map(d => tmLine(M, d, injT, { team: owner(d.tid) })).join('') + (X.no.length ? `<details class="more"><summary>Good for you, unlikely to be accepted (${X.no.length})</summary>${X.no.slice(0, 8).map(d => tmLine(M, d, injT, { team: d.tid ? owner(d.tid) : '' })).join('')}</details>` : '') : `<div class="strnone">${TD ? `No Trade Monster swap for him adds ${of99(bar)} of 99 or more.` : "Trade Monster hasn't been read for this league yet. It's read once a day with the full sync."}</div>`}</div>`; });
+      block.forEach(id => { const r = V.mine.find(x => x.id === id); if (!r) return; const T = teamNeedsAll(lg, M, r); const F = blockFits(r, V.league, myNeed, T.map(t => t.tid));
+        const str = goodAt(r.cv || {}, Object.keys(r.cv || {})).slice(0, 3);
+        h += `<div class="blkc"><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b>${injT(id)}<span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>${r.brank ? `<span class="muted">Basketball Monster rank ${r.brank}</span>` : ''}<button class="lnk blk on" data-block="${esc(r.id)}">Take off the block</button></div>
+          <div class="mvl"><span>Offering</span>${str.length ? `strong in <b>${esc(andL(str.map(NN)))}</b>` : 'no standout category'}</div>
+          <div class="mvl"><span>Looking for</span>${myNeed.length ? `<b>${esc(andL(myNeed.map(NN)))}</b>, your swing categories` : 'no swing category to target'}</div>
+          <div class="h mvh"><span>Teams that need what he brings</span></div>
+          ${T.length ? T.map(t => `<div class="mvl"><span>${owner(t.tid)}</span>needs <b>${esc(andL(t.cats.map(NN)))}</b></div>`).join('') : `<div class="strnone">No team's swing categories match his strengths.</div>`}
+          <div class="h mvh"><span>Players who fit</span><span class="sub">ranked ${F.lo} to ${F.hi} by Basketball Monster, strong (+0.5 or more) in what you need</span></div>
+          ${F.list.length ? F.list.slice(0, 8).map(x => playerRow(x, { owner: true, extra: [['Brings', andL(x.hit.map(NN))]].concat(x.wants ? [['', 'His team needs what ' + r.n + ' brings']] : []) })).join('') : `<div class="strnone">${myNeed.length ? 'Nobody near his rank on another team is strong in ' + esc(andL(myNeed.map(NN))) + '.' : 'Set once Basketball Monster team values show a swing category.'}</div>`}</div>`; });
     } else if (window.STAB === 'finder') {
       const f0 = S(lg).find || {}; const kind = f0.kind === 'all' ? 'all' : 'fits'; const TIER = [[1, 30, 'Stars'], [31, 75, 'Starters'], [76, 130, 'Rotation players'], [131, 9999, 'Depth']]; const TD = tmDeals(lg, M);
       // other teams' players Trade Monster pairs with one of yours, by your gain (realistic only, or any that clears your bar)
@@ -1355,6 +1362,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   function resetBands(lg) { const l = leaguesKnown().find(x => x.league === lg); const M = modelFor(lg); if (!l || !M || !window.STRAT) return; const win = window.STRAT.catWin(ST['bbmstand:' + l.lid], M.ctx.cats);
     const sk = 'strat:' + l.lid; const old = ST[sk]; if (!win && !old) return; ST[sk] = window.STRAT.snapshot(M, win || old.win, M.ctx.punt || []); browser.storage.local.set({ [sk]: ST[sk] }); DV++; }
   // teams fighting for (swing band) a category the player is good at
+  // other teams' players at the block player's Basketball Monster rank or a little below (5 places above to 20 below) who are strong
+  // in your needs; most needs met first, then those on a team that needs what he brings, then their category values in your needs
+  function blockFits(r, league, need, wantTids) { const b = r.brank || 9999, lo = Math.max(1, b - 5), hi = b + 20;
+    const list = league.filter(x => x.brank && x.brank >= lo && x.brank <= hi).map(x => Object.assign({}, x, { hit: goodAt(x.cv || {}, need), wants: wantTids.includes(x.own), sum: need.reduce((s, c) => s + Math.max(0, (x.cv || {})[c] || 0), 0) }))
+      .filter(x => x.hit.length).sort((a, c) => c.hit.length - a.hit.length || c.wants - a.wants || c.sum - a.sum);
+    return { lo, hi, list }; }
   function teamNeedsAll(lg, M, r) { return M.L.teams.filter(t => t.tid !== M.L.me).map(t => { const N = teamNeeds(lg, M, t.tid); if (!N) return null; const cats = N.need.filter(c => (r.cv[c] || 0) >= 0.5); return cats.length ? { tid: t.tid, cats } : null; }).filter(Boolean).sort((a, b) => b.cats.length - a.cats.length).slice(0, 4); }
   function wireStrategy(lg, M) { const o = $('out'); const s0 = S(lg);
     o.querySelectorAll('[data-stab]').forEach(b => b.onclick = () => { window.STAB = b.dataset.stab; render(); });

@@ -707,7 +707,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       // this week's Matchup Monster copy: both rosters, and the free agents the pickups are chosen from
       const t0 = usToday(); const m = Object.keys(all).filter(k => k.startsWith('mmw:' + l.league + ':') && all[k] && all[k].start <= t0 && all[k].end >= t0).map(k => all[k]).sort((a, b) => b.ts - a.ts)[0] || all['mm:' + l.league];
       const ros = m && m.players ? m.players.filter(p => p.type !== 'fa').length : 0, fas = m && m.players ? m.players.filter(p => p.type === 'fa').length : 0;
-      ck(l.league + ': Matchup Monster', ros >= 16 && fas >= 10 && m.cats && m.cats.length >= 8, m && m.players ? ros + ' rostered, ' + fas + ' free agents' : 'missing');
+      // late in the week Matchup Monster lists only free agents with games left, so the last two days can rightly show only a few
+      const dLeft = m && m.end ? Math.round((new Date(m.end) - new Date(t0)) / 864e5) : 7;
+      ck(l.league + ': Matchup Monster', ros >= 16 && fas >= (dLeft >= 2 ? 10 : 0) && m.cats && m.cats.length >= 8, m && m.players ? ros + ' rostered, ' + fas + ' free agents' : 'missing');
       const lg = all['lgscan:' + l.lid]; ck(l.league + ': league rosters', lg && lg.teams && !lg.bad && lg.teams.filter(t => t.players.length >= 10).length >= Math.max(4, lg.teams.length - 1), lg && lg.teams ? (lg.bad ? 'players per team: ' + lg.bad : lg.teams.length + ' teams') : 'missing'); });
     ls.forEach(l => { const tx = all['tx:' + l.lid]; ck(l.league + ': Yahoo transactions', tx && tx.src === 'page', tx ? (tx.rows || []).length + ' moves' : 'missing'); });
     ck('NBA schedule', (all.nbasched && Object.keys(all.nbasched.by || {}).length >= 30) || (root.NBA_SCHED && Object.keys(root.NBA_SCHED.by).length >= 30), all.nbasched ? Object.keys(all.nbasched.by || {}).length + ' teams' : (all.nbaErr ? all.nbaErr.err : 'missing'));

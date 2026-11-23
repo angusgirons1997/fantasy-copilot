@@ -261,3 +261,7 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
 - Matchup page order: live / chances first, then "Today: do next", then next week.
 - Light syncs every 15 min in the background; the page asks for one at once if a league has no Find Free Agents list yet.
 - Ball glyphs: 24-unit mask with three seams, 12–14 px.
+
+## 8.0.3
+- Landing sounds live in `sound.js` (Web Audio, no files): court lines drawing = shoe squeaks, the ball's drop = two bounces (at 55% and 85% of the `drop` keyframes), bar full = a short whistle, Let's play = swish then crowd cheer (the page waits 1.7 s so it's heard). Each fires from the animation's own `animationstart`, so it stays in time at either speed. `SND.at` plays nothing until sound is allowed (most phones need a tap first) and never queues stale sounds.
+- The Matchup Monster health check allows few free agents in the last two days of a week (only players with games left are listed then).

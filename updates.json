@@ -169,6 +169,10 @@
         {
           "version": "8.0.8",
           "update_link": "https://github.com/angusgirons1997/fantasy-copilot/releases/download/v8.0.8/fantasy-copilot-8.0.8.xpi"
+        },
+        {
+          "version": "8.0.9",
+          "update_link": "https://github.com/angusgirons1997/fantasy-copilot/releases/download/v8.0.9/fantasy-copilot-8.0.9.xpi"
         }
       ]
     }

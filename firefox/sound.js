@@ -1,8 +1,8 @@
 // Sixth Man landing sounds (8.0.3), all made here with Web Audio: nothing to download, so they're instant.
-// squeak (court shoes), bounce (the ball), whistle (bar full), swish + cheer (Let's play).
+// squeak (court shoes), bounce (the ball), whistle (bar full), swish + cheer (Let's play). The cheer is a recording; the rest are made in code.
 // Browsers only allow sound after a tap on the page; until then SND.at() plays nothing (it never queues stale sounds).
 (function () {
-  let C = null, out = null, NB = null;
+  let C = null, out = null, NB = null, CB = null;
   try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {} // iPhone: play with the ring switch off (iOS 17+)
   const ac = () => { if (!C) { C = new (window.AudioContext || window.webkitAudioContext)(); const comp = C.createDynamicsCompressor(); out = C.createGain(); out.gain.value = 0.8; out.connect(comp); comp.connect(C.destination); } return C; };
   const rnd = (a, b) => a + Math.random() * (b - a);
@@ -21,23 +21,13 @@
       const r = C.createOscillator(); r.frequency.value = 440; const rg = C.createGain(); chain(r, rg, out); r.start(t); r.stop(env(rg, t, 0.002, 0.1 * v, 0, 0.14));
       const n = noise(), ng = C.createGain(); chain(n, filt('lowpass', 1500), ng, out); n.start(t); n.stop(env(ng, t, 0.001, 0.6 * v, 0, 0.035)); },
     // one short referee's blast: two close tones with the pea's warble
-    whistle(t) { const g = C.createGain(); g.connect(out); const end = env(g, t, 0.015, 0.13, 0.17, 0.04);
+    whistle(t) { const g = C.createGain(); g.connect(out); const end = env(g, t, 0.015, 0.13, 0.36, 0.05); // about 0.4 s
       [2950, 3110].forEach(f => { const o = C.createOscillator(), l = C.createOscillator(), d = C.createGain(); o.frequency.value = f; l.frequency.value = 28; d.gain.value = 130; l.connect(d); d.connect(o.frequency); o.connect(g); o.start(t); l.start(t); o.stop(end); l.stop(end); }); },
     // nothing but net: a bright air sweep falling in pitch, twice (ball, then the net snapping back)
     swish(t) { [[0, 1], [0.06, 0.55]].forEach(([dt, a]) => { const n = noise(), bp = filt('bandpass', 6500, 1); bp.frequency.setValueAtTime(6500, t + dt); bp.frequency.exponentialRampToValueAtTime(2000, t + dt + 0.28);
       const g = C.createGain(); chain(n, bp, filt('highpass', 1200), g, out); n.start(t + dt); n.stop(env(g, t + dt, 0.03, 0.5 * a, 0.05, 0.22)); }); },
-    // a crowd going up: applause (thousands of tiny claps), voices rising on an "ah" and the arena's roar underneath
-    cheer(t, len) { len = len || 1.6; const sr = C.sampleRate;
-      const ab = C.createBuffer(1, Math.ceil(sr * len), sr), x = ab.getChannelData(0), cl = Math.round(sr * 0.006);
-      for (let k = 0, n = Math.round(2600 * len); k < n; k++) { const p = Math.pow(Math.random(), 0.8) * (len - 0.05), at = Math.floor(p * sr), amp = rnd(0.2, 1) * Math.min(1, p / 0.25);
-        for (let i = 0; i < cl && at + i < x.length; i++) x[at + i] += (Math.random() * 2 - 1) * amp * Math.exp(-i / (cl / 4)); }
-      const ap = C.createBufferSource(); ap.buffer = ab; const ag = C.createGain(); chain(ap, filt('bandpass', 1800, 0.7), ag, out); ap.start(t); env(ag, t, 0.2, 0.35, len - 0.6, 0.38);
-      const vb = C.createGain(), vo = C.createGain(); [[750, 6], [1150, 7], [2500, 8]].forEach(([f, q]) => chain(vb, filt('bandpass', f, q), vo)); vo.connect(out); env(vo, t, 0.25, 1, len - 0.7, 0.42);
-      for (let i = 0; i < 26; i++) { const f = rnd(170, 430), on = t + rnd(0, 0.35), d = rnd(0.9, len - 0.15); const o = C.createOscillator(); o.type = 'sawtooth';
-        o.frequency.setValueAtTime(f, on); o.frequency.linearRampToValueAtTime(f * rnd(1.15, 1.35), on + rnd(0.25, 0.5)); o.frequency.linearRampToValueAtTime(f * rnd(1, 1.2), on + d);
-        const vi = C.createOscillator(), vd = C.createGain(); vi.frequency.value = rnd(5, 7); vd.gain.value = f * 0.02; vi.connect(vd); vd.connect(o.frequency);
-        const og = C.createGain(); chain(o, og, vb); const end = env(og, on, 0.08, rnd(0.02, 0.04), Math.max(0.1, d - 0.3), 0.2); o.start(on); vi.start(on); o.stop(end); vi.stop(end); }
-      const r = noise(), rg = C.createGain(); chain(r, filt('bandpass', 700, 0.6), rg, out); r.start(t); r.stop(env(rg, t, 0.35, 0.2, len - 0.75, 0.4)); }
+    // the crowd: a real recording (sounds/cheer.mp3, "Short crowd cheer" by Driken5482, Pixabay Content License), faded out at the end
+    cheer(t) { if (!CB) return; const s = C.createBufferSource(); s.buffer = CB; const g = C.createGain(); g.gain.setValueAtTime(0.9, t); g.gain.setValueAtTime(0.9, t + 1.35); g.gain.linearRampToValueAtTime(0.0001, t + 1.65); chain(s, g, out); s.start(t); s.stop(t + 1.7); }
   };
   window.SND = {
     on: () => !!C && C.state === 'running',
@@ -46,5 +36,7 @@
     // play a sound in `dt` seconds, only if sound is already allowed
     at(name, dt, ...a) { try { if (!C || C.state !== 'running') return false; S[name](C.currentTime + Math.max(0.01, dt || 0), ...a); return true; } catch (e) { return false; } }
   };
-  try { ac(); if (C.state !== 'running') C.resume().catch(() => {}); } catch (e) {} // where a page may start sound by itself, it does
+  try { ac(); if (C.state !== 'running') C.resume().catch(() => {}); } catch (e) {}
+  // the cheer is decoded once on open, so Let's play has it ready
+  try { fetch('sounds/cheer.mp3').then(r => r.arrayBuffer()).then(b => new Promise((ok, no) => C.decodeAudioData(b, ok, no))).then(b => { CB = b; }, () => {}); } catch (e) {} // where a page may start sound by itself, it does
 })();

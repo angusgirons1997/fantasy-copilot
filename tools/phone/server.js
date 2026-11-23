@@ -6,7 +6,7 @@
 const http = require('http'), fs = require('fs'), path = require('path');
 const PORT = 8770, FF = path.join(__dirname, '..', '..', 'firefox'), SHIM = path.join(__dirname, 'shim.js');
 const DIR = path.join(process.env.LOCALAPPDATA || require('os').homedir(), 'fantasy-copilot'), STORE = path.join(DIR, 'phone-store.json');
-const TYPE = { html: 'text/html; charset=utf-8', js: 'text/javascript', css: 'text/css', json: 'application/json', png: 'image/png', svg: 'image/svg+xml', woff2: 'font/woff2' };
+const TYPE = { html: 'text/html; charset=utf-8', js: 'text/javascript', css: 'text/css', json: 'application/json', png: 'image/png', svg: 'image/svg+xml', woff2: 'font/woff2', mp3: 'audio/mpeg' };
 const SECRET = /auth|pass|token|secret|cookie|cred/i; // same rule as the panel's test-data download
 
 function handle(q, r) {

@@ -625,7 +625,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     else if (d && d.open && (d.start.length + d.bench.length)) { const c = dayCheck(d, y ? actualFor(y.lid, t) : null); rows.push(c.known ? (c.changes ? ['warn', `<b>2 · Lineup:</b> <b>${c.changes} change${c.changes > 1 ? 's' : ''}</b> to make today`] : ['good', '<b>2 · Lineup:</b> set correctly for today']) : ['', '<b>2 · Lineup:</b> checking today\'s lineup on Yahoo…']); }
     else rows.push(['good', '<b>2 · Lineup:</b> nobody plays today']);
     if (M && d && !due.length) d.start.forEach(x => { const inj = injFor(y, M, x.name); if (inj && /^(Q|D|GTD|O|OUT|DTD)/i.test(inj)) rows.push(['bad', `<b>${esc(x.name)}</b> is listed <b>${esc(injWord(inj))}</b> and starts today: check before tip-off`]); });
-    (ST.alerts || []).filter(a => a.league === lg && Date.now() - a.ts < 12 * 3600e3).forEach(a => rows.push(['bad', esc(a.msg)]));
+    (ST.alerts || []).filter(a => a.league === lg && Date.now() - a.ts < 12 * 3600e3 && (!/^\d{4}-\d\d-\d\d\|/.test(a.key || '') || a.key.startsWith(t + '|'))) // a lineup alert is for its own day only.forEach(a => rows.push(['bad', esc(a.msg)]));
     if (y) y.rows.filter(r => /^IL/.test(r.slot) && !/^(O|INJ|OUT|IL|NA|SUSP)/i.test(r.inj || '')).forEach(r => rows.push(['warn', `<b>${esc(r.name)}</b> is back from injury but still on IL: he'll need a roster spot`]));
     // 3 · the best realistic swap from Trade Monster (the same list as the Trades page)
     if (M) try { const TD = tmDeals(lg, M); if (TD) { let bt = null; Object.values(TD.by).forEach(x => { const d = x.ok[0]; if (d && (!bt || Math.min(d.you, d.them) > Math.min(bt.you, bt.them))) bt = d; });

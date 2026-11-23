@@ -276,3 +276,9 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
 ## 8.0.6 (released as 8.0.7: Mozilla kept a half-finished 8.0.6 upload after a network error)
 - Landing: where the page can't play sound yet (iPhone Safari always; Firefox if it blocks), the intro holds paused behind "Tap to tip off" (`body.wait` / `body.tap`, `#tip` in home.html); the tap turns sound on and starts the intro, so squeak, bounce and whistle play. Where sound is already allowed, or with reduced motion, it starts at once as before.
 - `SND.at` after a tap (`armed`) waits for Safari's `resume()` instead of dropping the sound.
+
+## 8.0.8 (design pass: Impeccable, Web Design Guidelines, Webapp Testing)
+- Late-scratch alerts (`newsCheck` in sync.js) come from today's Yahoo lineup (`yr:` with `date` = today, under 3 h old), never a saved `plan:` (it can be days old). The swap is a bench player who is healthy, off the injured list, has a game, isn't locked and is eligible for the out starter's spot; otherwise "Nobody on your bench can take his spot". Test: t_alert.
+- "Today: do next" shows a lineup alert only on its own day.
+- Lineup day badges sit on the chip's corner (`.dchip::after` top/right −5px) so they no longer cover the day name; `color-scheme: light dark` on `:root`.
+- Left for the owner: the sync button (30×32) and Build punt chips (26 px tall) are under the 44 px touch size.

@@ -637,7 +637,10 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 /* ---- status dots as little basketballs (8.0.1): every green / amber / red / orange dot keeps its colour, drawn as a ball with seams ---- */
 :root{--ball:url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20shape-rendering%3D%27geometricPrecision%27%3E%3Cmask%20id%3D%27m%27%3E%3Ccircle%20cx%3D%2712%27%20cy%3D%2712%27%20r%3D%2712%27%20fill%3D%27white%27%2F%3E%3Cpath%20d%3D%27M0%2012H24M5%202.6C9.6%206.6%209.6%2017.4%205%2021.4M19%202.6C14.4%206.6%2014.4%2017.4%2019%2021.4%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%272.2%27%2F%3E%3C%2Fmask%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20mask%3D%27url(%23m)%27%2F%3E%3C%2Fsvg%3E")}
 .dot,.ndot,.ldot,.fd:not(.gr),.dchip::after,.lg .ok,.lg .no,.vd::before,.toast i,.ynow i{-webkit-mask:var(--ball) center/contain no-repeat;mask:var(--ball) center/contain no-repeat;border-radius:0;box-shadow:none}
-.dot,.stl .dot,.ndot,.fd,.vd::before,.toast i,.ynow i{width:14px;height:14px}.ldot,.dchip::after{width:12px;height:12px}.dchip::after{top:4px;right:4px}.ndot{top:1px}
+.dot,.stl .dot,.ndot,.fd,.vd::before,.toast i,.ynow i{width:14px;height:14px}.ldot,.dchip::after{width:12px;height:12px}.dchip::after{top:-5px;right:-5px}.ndot{top:1px}
 /* ---- Season → Build folds away (8.0.1) ---- */
 .bfold>summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;margin-bottom:12px}.bfold>summary::-webkit-details-marker{display:none}
 .bfold>summary b{flex:1}
+
+/* 8.0.8: native scrollbars and form controls follow the light or dark theme */
+:root{color-scheme:light dark}

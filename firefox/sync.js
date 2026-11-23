@@ -696,12 +696,15 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     // Yahoo's own injury status for your roster today (often first), merged with BBM news
     const yflags = {}; Object.keys(all).filter(k => k.startsWith('yr:') && all[k] && all[k].rows && Date.now() - all[k].ts < 3 * 3600e3).forEach(k => all[k].rows.forEach(r => { if (/^(O|INJ|SUSP|OUT)$/i.test(r.inj || '')) yflags[nk(r.name)] = { status: 'OUT', detail: r.inj === 'SUSP' ? 'suspended' : 'Yahoo: ' + r.inj }; }));
     news = news || { items: [] };
-    Object.keys(all).filter(k => k.startsWith('plan:') && all[k] && all[k].days).forEach(k => { const pl = all[k]; const d = pl.days.find(x => x.date === today); if (!d || !d.open) return;
-      const fresh = news.items.filter(n => Date.now() - n.ts < 6 * 3600e3 && ALERT_RE.test(n.status || ''));
-      d.start.forEach(name => { const n = NM.pick(fresh, name) || (yflags[nk(name)] && Object.assign({ name }, yflags[nk(name)])); if (!n) return; const key = today + '|' + nk(name) + '|' + (/OUT|SUSP/.test(n.status) ? 'out' : n.status); if (sent[key]) return;
-        const swap = (d.bench || []).filter(b => !fresh.some(x => NM.same(x.name, b)))[0];
-        const msg = name + ' is ' + n.status.toLowerCase() + (n.detail ? ' (' + n.detail + ')' : '') + '. ' + (swap ? 'Start ' + swap + ' instead.' : 'Nobody on your bench plays today: consider a pickup.');
-        sent[key] = Date.now(); out.push({ key, league: pl.league, title: pl.league + ': lineup change', msg, ts: Date.now() }); }); });
+    // 8.0.8: from today's Yahoo lineup itself (a saved plan can be days old); the swap is a bench player who is healthy, off the
+    // injured list, has a game today and can play the out starter's spot
+    const fresh = news.items.filter(n => Date.now() - n.ts < 6 * 3600e3 && ALERT_RE.test(n.status || ''));
+    const outOf = name => NM.pick(fresh, name) || (yflags[nk(name)] && Object.assign({ name }, yflags[nk(name)]));
+    Object.keys(all).filter(k => k.startsWith('yr:')).map(k => all[k]).filter(y => y && y.rows && y.date === today && Date.now() - y.ts < 3 * 3600e3).forEach(y => {
+      y.rows.filter(s => s.slot && s.slot !== 'BN' && !/^IL/.test(s.slot) && s.hasGame && !s.locked).forEach(s => { const name = s.name; const n = outOf(name); if (!n) return; const key = today + '|' + nk(name) + '|' + (/OUT|SUSP/.test(n.status) ? 'out' : n.status); if (sent[key]) return;
+        const swap = (y.rows.find(b => b.slot === 'BN' && b.hasGame && !b.locked && !/^(O|INJ|SUSP|OUT|NA)/i.test(b.inj || '') && !outOf(b.name) && (b.elig || []).includes(s.slot)) || {}).name;
+        const msg = name + ' is ' + n.status.toLowerCase() + (n.detail ? ' (' + n.detail + ')' : '') + '. ' + (swap ? 'Start ' + swap + ' instead.' : 'Nobody on your bench can take his spot today: consider a pickup.');
+        sent[key] = Date.now(); out.push({ key, league: y.league, title: y.league + ': lineup change', msg, ts: Date.now() }); }); });
     if (out.length) { const recent = (all.alerts || []).filter(a => Date.now() - a.ts < 36 * 3600e3).concat(out).slice(-20); await put({ alerted: sent, alerts: recent }); out.forEach(a => { try { root.NOTIFY && root.NOTIFY(a.key, a.title, a.msg); } catch (e) {} }); }
     return out;
   }

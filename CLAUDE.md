@@ -272,3 +272,7 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
 - `actualFor` overlays the newest roster read (`yr:`) on an older day copy: injury tags and injured-list spots come from the newest read, and players no longer on the roster drop out.
 - `resolveDay`: a player Yahoo shows healthy, off the injured list and with a game that day is never kept out by Basketball Monster's zero / IL flag (`yPlays`). Yahoo out tags still bench a player.
 - Landing sounds are all recordings (`firefox/sounds/`): squeak and swish are files the owner supplied, whistle and bounce are Pixabay (Pixabay Content License). Start offsets were measured once and live in `sound.js`. No crowd cheer; Let's play is the swish only.
+
+## 8.0.6
+- Landing: where the page can't play sound yet (iPhone Safari always; Firefox if it blocks), the intro holds paused behind "Tap to tip off" (`body.wait` / `body.tap`, `#tip` in home.html); the tap turns sound on and starts the intro, so squeak, bounce and whistle play. Where sound is already allowed, or with reduced motion, it starts at once as before.
+- `SND.at` after a tap (`armed`) waits for Safari's `resume()` instead of dropping the sound.

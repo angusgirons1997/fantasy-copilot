@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Sixth Man",
-  "version": "8.0.5",
+  "version": "8.0.6",
   "description": "Sixth Man, your fantasy basketball co-pilot: plans each Yahoo head-to-head week from Basketball Monster, syncs in the background and sets your lineups. Draft: reads Yahoo draft picks live.",
   "permissions": [
     "storage",

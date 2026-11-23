@@ -6,6 +6,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // the bar full = whistle, Let's play = swish then the crowd. Sound needs a tap first on most phones; a tap anywhere turns it on. ----
   const SND = window.SND || { on: () => false, unlock() {}, at() {} }; const secs = el => parseFloat(getComputedStyle(el).animationDuration) || 0;
   ['touchend', 'pointerdown'].forEach(ev => addEventListener(ev, () => SND.unlock(), { capture: true, passive: true }));
+  // the intro holds (paused, nothing shown) until sound is on: at once where the page may play sound, else after "Tap to tip off"
+  let started; const start = new Promise(ok => { started = ok; }); const B = document.body;
+  const begin = () => { B.classList.remove('wait', 'tap'); started(); };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || SND.on()) started();
+  else { B.classList.add('wait'); setTimeout(() => { if (SND.on()) begin(); else B.classList.add('tap'); }, 150); }
+  $('tip').onclick = () => { SND.unlock(); begin(); };
   const court = document.querySelector('.court path'); if (court) court.addEventListener('animationstart', () => { const d = secs(court); SND.at('squeak', 0.05, 900); SND.at('squeak', d * 0.42, 1180); SND.at('squeak', d * 0.78, 1020); });
   const ball = document.querySelector('.ball'); if (ball) ball.addEventListener('animationstart', e => { if (e.target !== ball) return; const d = secs(ball); SND.at('bounce', d * 0.55, 1); SND.at('bounce', d * 0.85, 0.45); }); // the drop keyframes land at 55% and 85%
   const go = (mode, page) => browser.storage.local.set({ uiMode: mode }).then(() => { location.href = page; });
@@ -24,11 +30,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const ls = Object.keys(all).filter(x => x.startsWith('yr:')).map(x => all[x]).filter(y => y && y.league);
     const sy = ls.map(y => all['sync:' + y.lid]).filter(Boolean); const last = sy.length ? Math.max(...sy.map(s => s.ts || 0)) : 0;
     const live = pc && last && Date.now() - last < 40 * 60e3 && sy.every(s => s.ok);
-    setTimeout(() => { set(1); bar.classList.add(live ? 'live' : 'stale');
+    start.then(() => setTimeout(() => { set(1); bar.classList.add(live ? 'live' : 'stale');
       setTimeout(() => {
         $('stT').innerHTML = `<i class="dot ${live ? 'd-good' : 'd-warn'}"></i>${live ? 'Live' : !pc ? "Can't reach the PC" : 'Catching up'}`;
         $('stN').textContent = !pc ? 'showing the last copy' : last ? 'updated ' + ago(last) : 'not synced yet';
-        SND.at('whistle', 0); }, 600); }, document.body.classList.contains('quick') ? 350 : 1600); // the whistle as the bar lands full
+        SND.at('whistle', 0); }, 600); }, document.body.classList.contains('quick') ? 350 : 1600)); // the whistle as the bar lands full
     if (all.mdfLive && all.mdfLive.ts) $('sDraft').textContent = 'Last draft room seen ' + ago(all.mdfLive.ts);
   }).catch(() => {});
 })();

@@ -569,7 +569,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // a newer signed version than the one running: Firefox installs it by itself; until it has, one tap here installs it
   const vnum = v => String(v || '0').split('.').map(Number).reduce((a, x) => a * 1000 + (x || 0), 0);
   const updHtml = () => { const u = ST.updAvail; const cur = browser.runtime.getManifest().version; return u && u.version && vnum(u.version) > vnum(cur) && u.link ? `<button class="updbar" id="updNow"><b>Version ${esc(u.version)} is ready</b><span>Tap to install now · otherwise Firefox installs it by itself</span></button>` : ''; };
-  const ICON = { sync: '<svg class="spin ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/></svg>' };
+  const ICON = { tick: '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--good)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg>', sync: '<svg class="spin ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/></svg>' };
 
   // ---- Basketball Monster sign-in, saved so the co-pilot can sign back in by itself ----
   const hide = v => { const k = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => (b % 36).toString(36)).join(''); return k + '.' + btoa(unescape(encodeURIComponent(v)).split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ k.charCodeAt(i % k.length))).join('')); };
@@ -664,7 +664,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // ---- one-page app: five pages on a bottom bar. The panel never jumps by itself: the page matching the Yahoo screen
   // you're on just gets a dot, and that page shows what the co-pilot reads from it at the top ----
   const TABS = [['week', 'Matchup', '<path d="M3 5h18v16H3z"/><path d="M3 10h18M8 3v4M16 3v4"/>'], ['team', 'Lineup', '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><path d="M16 4.6a3 3 0 0 1 0 6.4M18 14.8c1.8.7 2.9 2.4 3.2 5.2"/>'], ['players', 'Pickups', '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>'], ['trades', 'Trades', '<path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5"/>'], ['season', 'Season', '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 6h3a3 3 0 0 1-3 4M7 6H4a3 3 0 0 0 3 4"/>']];
-  const TABPARTS = { week: ['brief', 'live', 'hero', 'next'], team: ['ilback', 'week'], players: ['ctx', 'board'], trades: ['ctx', 'strategy'], season: ['standings', 'league', 'strategy'] };
+  const TABPARTS = { week: ['live', 'hero', 'brief', 'next'], team: ['ilback', 'week'], players: ['ctx', 'board'], trades: ['ctx', 'strategy'], season: ['standings', 'league', 'strategy'] };
   const OLDTAB = { strategy: 'trades', league: 'season' }; // pages before 7.46.0
   const curTab = () => { const t = OLDTAB[ST.uiTab] || ST.uiTab; return TABS.some(x => x[0] === t) ? t : 'week'; };
   // the Yahoo screen you're on (only while it's recent): which league, which page of the co-pilot it belongs to, what to call it
@@ -1556,6 +1556,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (left.length) sendWeek(y, pl, left, true); }
   // ---------- sync ----------
   let syncing = false; const planFrom = {}, planNow = {};
+  function syncTick() { const sb = $('syncNow'); if (!sb) return; sb.dataset.tick = 1; sb.classList.remove('busy'); sb.classList.add('done'); sb.innerHTML = ICON.tick;
+    clearTimeout(window.__tickT); window.__tickT = setTimeout(() => { delete sb.dataset.tick; sb.classList.remove('done'); syncBar(); }, 1600); }
   function syncBar() {
     const lg = league(); const y = leaguesKnown().find(l => l.league === lg); const st = y && ST['sync:' + y.lid]; const lk = ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3;
     const pr = ST.syncProgress && Date.now() - ST.syncProgress.ts < 3 * 60e3 ? ST.syncProgress.msg : '';
@@ -1563,9 +1565,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     // one status line: what's happening, or the most important thing that's late (amber: it fixes itself; details in Settings)
     const H = healthNow[lg] || { iss: [] }; const top = H.iss.find(i => i[0] === 'bad') || H.iss.find(i => i[0] === 'warn') || H.iss[0];
     const left = syncing || lk ? `<span>${esc(pr ? 'Syncing ' + pr + '…' : 'Syncing…')}</span>` : top ? `<button class="stl" id="healthB" title="${esc(H.iss.map(i => i[1]).join('\n'))}"><i class="dot ${top[0] === 'bad' ? 'd-warn' : ''}"></i>${esc(top[1])}${H.iss.length > 1 ? ` <span class="muted">+${H.iss.length - 1}</span>` : ''}</button>` : `<span>${good ? 'Updated ' + ago(good) : 'Not synced yet'}</span>`;
-    $('syncbar').innerHTML = `${left}<button class="lnk${syncing || lk ? ' busy' : ''}" id="syncNow" ${syncing ? 'disabled' : ''}>${ICON.sync} Sync</button>`;
+    $('syncbar').innerHTML = left;
+    // the sync button sits in the top bar: just the arrows (spinning while a sync runs), a green tick for a moment when one finishes
+    const sb = $('syncNow'); sb.classList.toggle('busy', !!(syncing || lk)); sb.disabled = syncing; if (!sb.dataset.tick) sb.innerHTML = ICON.sync;
     { const hb = $('healthB'); if (hb) hb.onclick = () => showSettings(true, 'diag'); }
-    $('syncNow').onclick = () => runSync(true);
+    sb.onclick = () => runSync(true);
   }
   // syncs run in the background only (never two at once); the panel asks for one and follows its progress
   async function runSync(force, now) {
@@ -1573,7 +1577,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     let asked = false; try { const r = await browser.runtime.sendMessage({ target: 'bg', cmd: force ? 'syncNow' : 'syncDue', now: !!now }); asked = !!(r && r.ok); } catch (e) {}
     if (!asked && window.SYNC) { syncing = true; syncBar(); try { await window.SYNC.auto(force, m => { ST.syncProgress = { msg: m, ts: Date.now() }; syncBar(); }, { by: 'panel', lightMin: 15, now: !!now }); } catch (e) { console.error(e); } }
     else if (force) { const t0 = Date.now(); await new Promise(z => { const iv = setInterval(() => { const lk = ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3; if ((!lk && Date.now() - t0 > 4000) || Date.now() - t0 > 8 * 60e3) { clearInterval(iv); z(); } }, 1000); }); }
-    syncing = false; ST = await browser.storage.local.get(null); DV++; render(); if (force) toast('Synced with Yahoo and Basketball Monster', 'ok');
+    syncing = false; ST = await browser.storage.local.get(null); DV++; render(); if (force) { toast('Synced with Yahoo and Basketball Monster', 'ok'); syncTick(); }
   }
   function render() {
     const ls = leaguesKnown(); const lg = league();
@@ -1597,7 +1601,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const d = r.parentElement.querySelector('tr[data-pld="' + CSS.escape(id) + '"]'); const on = !S.has(id); if (on) S.add(id); else S.delete(id);
     r.classList.toggle('open', on); const c = r.querySelector('.caret'); if (c) c.textContent = on ? '▾' : '▸'; if (d) d.hidden = !on; });
   // opening never starts a sync: the background keeps everything current (bg.js), so the page shows the last copy straight away
-  browser.storage.local.get(null).then(all => { ST = all; DV++; render(); });
+  browser.storage.local.get(null).then(all => { ST = all; DV++; render(); if (leaguesKnown().some(l => !ST['bbmfa:' + l.lid])) runSync(false, true); });
   setInterval(() => runSync(false), 5 * 60e3);
   setInterval(() => { if (window.__pendR && !(ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3)) { window.__pendR = false; render(); } }, 20e3);
   // the panel also checks injury news while it's open (the background does it when it's closed)
@@ -1610,7 +1614,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     if (ch.ydate && ch.ydate.newValue) { ST.ydate = ch.ydate.newValue; if (Object.keys(ch).length === 1) { render(); return; } }
     let data = false;
     Object.entries(ch).forEach(([k, v]) => { ST[k] = v.newValue; if (!/^(trseen:|ydate|syncProgress|syncLock|yWeek|yCmd|yLock|plan:|selfcheck:|nextDue|diag|selftest|bxTrace:|bbmnewsTrace|keepTs|tidyTs)/.test(k)) { DV++; data = true; }
-      if (k === 'yWeek') { re = true; const w = v.newValue; if (w && w.done && !(v.oldValue && v.oldValue.done && v.oldValue.id === w.id)) setTimeout(() => afterWeek(w), 300); } if (k === 'syncLock' || k === 'syncProgress') syncBar(); if (k === 'health' || k === 'bbmAuth') re = true; if (/^(ymine$|leagueList$|mm:|mmw:|yr:|mmLast|tx:|ysetp:|bbmnews$|ylu:|ylive:|ystand:|lgweek:|ysched:|ytrend:|ytrendMy:|bbmstand:|bbmtm:|yavail:|alerts$|bx:|sset:|ypage$)/.test(k)) re = true; });
+      if (k === 'yWeek') { re = true; const w = v.newValue; if (w && w.done && !(v.oldValue && v.oldValue.done && v.oldValue.id === w.id)) setTimeout(() => afterWeek(w), 300); } if (k === 'syncLock' || k === 'syncProgress') syncBar(); if (k === 'syncLock' && v.oldValue && !v.newValue && !syncing) syncTick(); if (k === 'health' || k === 'bbmAuth') re = true; if (/^(ymine$|leagueList$|mm:|mmw:|yr:|mmLast|tx:|ysetp:|bbmnews$|ylu:|ylive:|ystand:|lgweek:|ysched:|ytrend:|ytrendMy:|bbmstand:|bbmtm:|yavail:|alerts$|bx:|sset:|ypage$)/.test(k)) re = true; });
     // while the background sync is writing, the panel waits and redraws once when it finishes (not after every write)
     const bgSync = syncing || (ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3); const urgent = Object.keys(ch).some(k => /^(yWeek|health|ypage|yavail:|ylu:|sset:|bbmAuth)/.test(k));
     if (data && bgSync && !urgent) { if (Date.now() - (window.__lastR || 0) > 20e3) window.__lastR = Date.now(); else { window.__pendR = true; re = false; } }

@@ -19,7 +19,7 @@
   setTimeout(checkUpdate, 20e3); setInterval(checkUpdate, 60 * 60e3);
   let lastStep = 0;
   const step = m => { if (Date.now() - lastStep > 1500) { lastStep = Date.now(); L.set({ syncProgress: { msg: m, ts: Date.now() } }); } };
-  const run = (force, opt) => window.SYNC.auto(!!force, step, Object.assign({ by: 'background', lightMin: 25 }, opt || {}))
+  const run = (force, opt) => window.SYNC.auto(!!force, step, Object.assign({ by: 'background', lightMin: 15 }, opt || {}))
     .catch(e => console.error('co-pilot sync', e)).finally(() => L.set({ syncProgress: null }));
   // cheap check (two small keys) before doing anything
   async function watch() { const o = await L.get(['nextDue', 'syncLock']); if (o.syncLock && Date.now() - o.syncLock.ts < 4 * 60e3) return; if (!o.nextDue || Date.now() >= o.nextDue) run(false); }
@@ -41,7 +41,7 @@
   browser.runtime.onMessage.addListener(m => {
     if (!m) return;
     if (m.cmd === 'syncNow') return run(true).then(() => ({ ok: true }));
-    if (m.cmd === 'syncDue') return run(false, { lightMin: 15, by: 'panel' }).then(() => ({ ok: true }));
+    if (m.cmd === 'syncDue') return run(false, { lightMin: 15, by: 'panel', now: !!m.now }).then(() => ({ ok: true }));
     if (m.cmd === 'update') return browser.runtime.requestUpdateCheck().then(r => r && r.status, () => null);
     if (m.cmd === 'bbmLogin') return window.SYNC.bbmLogin().then(r => r);
   });

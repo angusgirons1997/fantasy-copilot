@@ -254,3 +254,10 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
 - Season → Build sits in a fold (`details.bfold`, data-k `buildfold`), closed by default.
 - iPhone home-screen app: the page starts below the status bar (`env(safe-area-inset-top)`), with a page-coloured strip behind the clock.
 - The in-app punt is app-wide inside Sixth Man but never changes BBM's own punt settings (BBM's value ranks follow BBM's settings).
+
+## 8.0.2
+- Landing: one connection bar (green "Live" when the newest sync is under 40 min old and every league's last sync worked; amber otherwise), then a whistle and crowd cheer made with Web Audio in home.js (no sound files). Browsers block sound before a tap, so then it plays on the first tap.
+- Sync button is in the top bar (`#syncNow` in season.html): arrows only, spinning while a sync runs, a green tick for 1.6 s when one finishes (`syncTick`).
+- Matchup page order: live / chances first, then "Today: do next", then next week.
+- Light syncs every 15 min in the background; the page asks for one at once if a league has no Find Free Agents list yet.
+- Ball glyphs: 24-unit mask with three seams, 12–14 px.

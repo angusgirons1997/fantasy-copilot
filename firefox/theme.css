@@ -632,12 +632,12 @@ body.app .w{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(1
 /* ---- iPhone status bar (8.0.1): the home-screen app draws under the clock and notch (black-translucent), so the page starts below
    them and a strip in the page colour sits behind them; nothing scrolls underneath. 0 in Firefox. ---- */
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:var(--bg);z-index:100;pointer-events:none}
-.w{padding-top:calc(16px + env(safe-area-inset-top))}
-.setpane{padding-top:calc(16px + env(safe-area-inset-top))}.setpane .seth{top:calc(env(safe-area-inset-top) - 14px)}
+.w{padding-top:calc(16px + env(safe-area-inset-top) * 1.25)}
+.setpane{padding-top:calc(16px + env(safe-area-inset-top) * 1.25)}.setpane .seth{top:calc(env(safe-area-inset-top) - 14px)}
 /* ---- status dots as little basketballs (8.0.1): every green / amber / red / orange dot keeps its colour, drawn as a ball with seams ---- */
-:root{--ball:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cmask id='m'%3E%3Ccircle cx='10' cy='10' r='10' fill='white'/%3E%3Cpath d='M0 10H20M10 0V20M3.6 2.8C7.6 6 7.6 14 3.6 17.2M16.4 2.8C12.4 6 12.4 14 16.4 17.2' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/mask%3E%3Crect width='20' height='20' mask='url(%23m)'/%3E%3C/svg%3E")}
+:root{--ball:url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20shape-rendering%3D%27geometricPrecision%27%3E%3Cmask%20id%3D%27m%27%3E%3Ccircle%20cx%3D%2712%27%20cy%3D%2712%27%20r%3D%2712%27%20fill%3D%27white%27%2F%3E%3Cpath%20d%3D%27M0%2012H24M5%202.6C9.6%206.6%209.6%2017.4%205%2021.4M19%202.6C14.4%206.6%2014.4%2017.4%2019%2021.4%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%272.2%27%2F%3E%3C%2Fmask%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20mask%3D%27url(%23m)%27%2F%3E%3C%2Fsvg%3E")}
 .dot,.ndot,.ldot,.fd:not(.gr),.dchip::after,.lg .ok,.lg .no,.vd::before,.toast i,.ynow i{-webkit-mask:var(--ball) center/contain no-repeat;mask:var(--ball) center/contain no-repeat;border-radius:0;box-shadow:none}
-.dot,.stl .dot,.ndot{width:10px;height:10px}.fd{width:11px;height:11px}.ldot{width:9px;height:9px}.dchip::after{width:9px;height:9px}.lg .ok,.lg .no{width:18px;height:18px}.vd::before,.toast i,.ynow i{width:10px;height:10px}
+.dot,.stl .dot,.ndot,.fd,.vd::before,.toast i,.ynow i{width:14px;height:14px}.ldot,.dchip::after{width:12px;height:12px}.dchip::after{top:4px;right:4px}.ndot{top:1px}
 /* ---- Season → Build folds away (8.0.1) ---- */
 .bfold>summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;margin-bottom:12px}.bfold>summary::-webkit-details-marker{display:none}
 .bfold>summary b{flex:1}

@@ -350,3 +350,31 @@ Built after two devil's-advocate reviews with the owner (24 Nov; the logic-revie
 - Pickups: over the limit, no add advice ("Fix your roster first"); an open spot that needs an injured player moved to the IL
   says so ("after moving X to the injured list").
 - Launch intro: the full sequence plays every time (the quick repeat version is gone). Trades and Season sub-tabs: equal widths.
+## 8.6.0 (one verdict per player, Who to drop; owner's logic review 25 Nov)
+- Owner's process rule: one yardstick. A player's worth to you is Basketball Monster's Win% change when he's replaced by his best
+  realistic option (Find Free Agents for a free agent, Trade Monster for a trade). Labels explain that number; they are never a
+  second verdict. No add-on value model decides a label. Before building new advice logic: logic-review on the design, then the
+  contradiction checks in `t_render` on both leagues' real data (local only: store exports never go to GitHub).
+- Roster labels (`readsFor`): `best` = his best free agent in Find Free Agents, from the free agents Pickups offers (`B.pool`: not
+  your recent drops or players taken). "A free agent does more" (costs) = best clears the pickup bar, he isn't held (IL, keep,
+  recent add, top half) and no realistic trade does more. A sell = Trade Monster's realistic swap over the trade bar, worth at
+  least the free agent. Everything else is "Keep", ordered by what his best free agent would cost you. "Fits your build", "Small
+  impact" (the add-on's own value, bottom third) and "Doesn't help you" (never assigned) are gone. Every player shows
+  "Free agent X in his place: +N of 99 (your pickup bar +B)".
+- Anchor: measured against his own best free agent (was BBM's top free agent overall), never on a drop candidate, shown as a
+  reason line (no separate chip on a keep). A sell that's an anchor still becomes the "Anchor" group. The Matchup page's trade
+  line now runs the anchor test with the player coming back.
+- Try a build: the "of your top six fit" count is gone (it was the add-on's own model; BBM has no Find Free Agents for a build you
+  haven't picked). Category counts and team rank stay.
+- Who to drop (`dropOrder`, `dropCard`, Pickups, above the free agents): every player of yours, least missed first. Each is
+  measured against the same free agents (those Find Free Agents tested against every one of your players), averaged, so the
+  free agent cancels out: a dropped player usually isn't replaced. Held players are listed with the reason, never chosen for you.
+  Without a shared free agent: BBM's rest-of-season value. Over Yahoo's limit the Lineup page's card shows first (same function).
+- Over-the-limit card: the headline names the cause ("X (Questionable) can't stay on the injured list and your 14 other spots
+  are full"), not a count that looks fine; "Drop only: an add-and-drop leaves you just as over". No free agent row claims an
+  empty spot while over.
+- Pickups: the "categories in play" block is one line; each row shows "This week: N games · fills …"; the explanation shows
+  once above the list; Matchup Monster's week-only picks that aren't in the season list are rows marked "This week only";
+  a pickup exactly at the bar is tagged "At your bar".
+- Tests: t_ilback2 (Questionable on the IL), t_render (no drop candidate with an anchor line, every drop candidate clears the
+  bar, the card's drop = Who to drop's least-missed free choice, no empty-spot row while over).

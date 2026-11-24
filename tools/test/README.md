@@ -9,9 +9,13 @@ Browser-free checks (run from the repo root):
 
 - `node tools/test/t_cal.js` checks that the forecast check recovers a known spread error on synthetic results.
 - `node tools/test/t_ilback2.js firefox/season.js` checks the injured-list card on the real Boomers vs Brits roster of 24 Nov (8.5.0):
-  players counted against spots, Yahoo's injured-list marks and counter, drops on Find Free Agents, injured players included.
+  players counted against spots, Yahoo's injured-list marks and counter, drops on Find Free Agents, injured players included,
+  and (8.6.0) a Questionable player in a plain injured-list spot.
 - `node tools/test/t_render.js <copilot-test-data.json>` renders every page and sub-page of the season panel offline (jsdom,
-  no network) in four roster variants. It checks for page errors and runs the release consistency check. Get the export from
+  no network) in four roster variants. It checks for page errors and runs the release consistency check. Since 8.6.0 it also
+  checks for contradictions on your players: no drop candidate with an anchor line, every drop candidate clears the pickup bar,
+  and over the limit the card drops Who to drop's least-missed free choice with no free agent row claiming an empty spot. Run it
+  on both leagues before a release (the phone store at %LOCALAPPDATA%antasy-copilotphone-store.json works; set activeLeague for the other one). Get the export from
   Settings → Diagnostics → Download test data. `render.js` is the harness behind it (`--dump dir` saves each page's HTML).
 - `node tools/test/t_lineup.js <export>` checks lineup setting end to end on a real roster, offline, at the export's own time:
   - nobody out starts

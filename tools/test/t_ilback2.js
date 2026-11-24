@@ -9,7 +9,7 @@ let Y; const ST = { 'ysetp:99377': { slots: ['PG', 'SG', 'G', 'G', 'SF', 'PF', '
 // Find Free Agents on 24 Nov: what dropping each player for the best free agent costs you (of 99 a week); SGA and Duren are top-half keeps
 const COST = { 'Stephon Castle': -1, 'Kelly Oubre Jr.': 0, 'Norman Powell': 0, 'Rui Hachimura': 0, 'Devin Vassell': 0, 'Nic Claxton': 1, 'Aday Mara': 1, 'Matisse Thybulle': 2, 'Paolo Banchero': 2, "Kel'el Ware": 2, 'Paul Reed': 3, 'Caleb Wilson': 5, 'Moussa Diabaté': 6, 'Nickeil Alexander-Walker': 7, 'Amen Thompson': 7, 'Franz Wagner': 9 };
 const dropOrder = () => Y.rows.filter(r => COST[r.name] != null).map(r => ({ id: r.name, name: r.name, il: /^IL/.test(r.slot), cost: COST[r.name] })).sort((a, b) => a.cost - b.cost);
-const f = new Function('esc', 'ago', 'yrFor', 'usToday', 'fmtD', 'ST', 'NAMES', 'modelFor', 'dropOrder', code + '; return [ilBackCard, ilBlocked, rosterCheck];')(esc, ago, () => Y, usToday, fmtD, ST, NAMES, () => ({}), dropOrder);
+const f = new Function('esc', 'ago', 'yrFor', 'usToday', 'fmtD', 'ST', 'NAMES', 'modelFor', 'dropOrder', 'injChip', code + '; return [ilBackCard, ilBlocked, rosterCheck];')(esc, ago, () => Y, usToday, fmtD, ST, NAMES, () => ({}), dropOrder, x => ({ Q: 'Questionable', O: 'Out' })[x] || x);
 const [card, blocked, check] = f; const strip = h => h.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
 let bad = 0; const ok = (c, m, h) => { console.log((c ? '✓ ' : '✗ ') + m + (c || !h ? '' : '\n    ' + strip(h).slice(0, 700))); if (!c) bad++; };
 const G = ['PG', 'SG', 'G', 'Util', 'BN'], F = ['SF', 'PF', 'F', 'Util', 'BN'], C = ['C', 'Util', 'BN'];
@@ -24,7 +24,7 @@ const p = { nowDays: [] };
 Y = { ts: Date.now(), lid: '99377', tid: '9', rows: base().map(r => r.name === 'Norman Powell' ? Object.assign(r, { slot: 'BN' }) : r), il: { used: 3, max: 3 }, illegal: 'You are over the max roster size. (Error #160)' };
 let h = card(p, 'BvB'), s = strip(h);
 ok(/18 players and room for 17 \(14 spots outside the injured list and 3 on it\), so one player has to go/.test(s), 'screenshot: counts players against spots', h);
-ok(/drop Stephon Castle: the cheapest player on your roster to lose/.test(s) && !/Mara.*into/.test(s) && !/Duren/.test(s), 'screenshot: names the cheapest drop, no Mara swap, no guess about Duren', h);
+ok(/drop Stephon Castle: the player your team would miss least/.test(s) && !/Mara.*into/.test(s) && !/Duren/.test(s), 'screenshot: names the cheapest drop, no Mara swap, no guess about Duren', h);
 ok(blocked(Y), 'screenshot: blocked');
 // 2. same roster with 4 spots and one free: Mara (O, Yahoo lets him on the IL) moves in, nobody is dropped
 Y.il = { used: 3, max: 4 }; Y.illegal = null; s = strip(card(p, 'BvB'));
@@ -47,4 +47,9 @@ s = strip(card(p, 'BvB')); ok(/counts the co-pilot read look fine/.test(s) && !/
 Y.illegal = null; ok(card(p, 'BvB') === '' && !blocked(Y), 'legal roster: no card');
 // 8. the count itself
 const rc = check(Object.assign({}, Y, { il: { used: 4, max: 3 } })); ok(rc.ilCap === 3 && rc.activeCap === 14, "Yahoo's IL counter wins over the weekly settings");
+// 9. Mad dogs on 25 Nov: a Questionable player in a plain IL spot (Yahoo only allows him on IL+), the other spots full, nobody
+// else who can go on the IL: the headline names him, not a count that looks fine (18 players, room for 18)
+Y = { ts: Date.now(), lid: '99377', tid: '9', rows: base().map(r => r.name === 'Jalen Duren' ? Object.assign(r, { inj: 'Q' }) : r.name === 'Aday Mara' ? row('Aday Mara', 'BN', C) : r), il: { used: 4, max: 4 }, illegal: null };
+s = strip(card(p, 'BvB')); ok(/Jalen Duren \(Questionable\) can't stay on the injured list and your 14 other spots are full, so one player has to go/.test(s) && !/room for 18/.test(s), 'Questionable on the IL: the headline names the cause', s);
+ok(/Jalen Duren is only Questionable now, which Yahoo doesn't allow in an injured-list spot/.test(s) && /drop Stephon Castle/.test(s) && /Drop only/.test(s), 'Questionable on the IL: off it, drop the least missed, drop only', s);
 console.log(bad ? bad + ' FAILED' : 'all passed'); process.exit(bad ? 1 : 0);

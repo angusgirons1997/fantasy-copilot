@@ -558,14 +558,14 @@ details.pr .l2 .ln{color:var(--ink)}details.pr .l2 .ln span{color:var(--mute);fo
 details.pr{display:block}
 .toast{width:max-content}
 /* the free-agent list (Players): rank, name and tags, the rest-of-season number on the right */
-details.pr.fa .l1{flex-wrap:nowrap}details.pr.fa .l1 b{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-details.pr.fa .l1 .fk{flex:none}
-.fa .frk{flex:none;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font:600 12px var(--disp);background:var(--track);color:var(--ink2)}
-.fa .fv{margin-left:auto;flex:none;font:700 13px var(--disp)}
-details.pr.fa .l2,details.pr.fa .ld{margin-left:24px}
-details.pr.fa[open] .frk{background:var(--accent);color:#fff}
+details.pr:is(.fa,.dr) .l1{flex-wrap:nowrap}details.pr:is(.fa,.dr) .l1 b{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+details.pr:is(.fa,.dr) .l1 .fk{flex:none}
+:is(.fa,.dr) .frk{flex:none;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font:600 12px var(--disp);background:var(--track);color:var(--ink2)}
+:is(.fa,.dr) .fv{margin-left:auto;flex:none;font:700 13px var(--disp)}
+details.pr:is(.fa,.dr) .l2,details.pr:is(.fa,.dr) .ld{margin-left:24px}
+details.pr:is(.fa,.dr)[open] .frk{background:var(--accent);color:#fff}
 .fal .hl{margin-top:2px}
-.fa .ftags{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 4px}
+:is(.fa,.dr) .ftags{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 4px}
 
 /* links inside advice text: same ink as the sentence, underlined, readable in both themes */
 .brief a{color:inherit;text-decoration:underline;text-underline-offset:2px}

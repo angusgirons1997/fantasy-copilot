@@ -4,7 +4,9 @@
 // For each variant (normal, a player in an injured-list spot, an injured player in the lineup, a recent add):
 //   every page and sub-page renders with no page errors and no "Something went wrong"
 //   Players #1 and its drop = the Week brief's best pickup = Team step 1 (when shown) = Best moves' first pickup
-//   that drop reads "A free agent does more"; every sell (surplus or wasted value) is in Best moves
+//   that drop reads "A free agent does more" (or a sell, when a trade is worth more)
+//   contradictions (owner's review 25 Nov): no drop candidate with an anchor line; every drop candidate's free agent clears the bar;
+//   over Yahoo's limit the card's drop is Who to drop's least-missed free choice and no free agent row claims an empty spot
 //   Finder shows rostered players only (none of the Players page's free agents)
 'use strict';
 const fs = require('fs'); const { JSDOM } = require('jsdom'); const { render, variant } = require('./render');
@@ -14,7 +16,7 @@ let bad = 0; const ok = (c, m, more) => { console.log((c ? '✓ ' : '✗ ') + m 
 const frag = html => JSDOM.fragment('<div>' + (html || '') + '</div>').firstChild; const tx = el => (el ? el.textContent : '').replace(/\s+/g, ' ').trim();
 const nk = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z ]/g, '').trim();
 const has = (t, name) => nk(t).includes(nk(name));
-const SELL = ['Surplus in won categories', 'Value in lost categories']; const LABELS = ['Fits your build', 'A free agent does more', 'Small impact', "Doesn't help you"].concat(SELL);
+const SELL = ['Surplus in won categories', 'Value in lost categories']; const LABELS = ['A free agent does more', 'Keep', 'Anchor'].concat(SELL);
 
 (async () => { for (const v of ['normal', 'il', 'injured', 'recent']) { console.log(`\n=== ${v}`);
   const r = await render(variant(base, v), { now: rep.at }); const P = r.pages;
@@ -49,8 +51,17 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
   const lab = {}; [P['trades:roster'], P.team, P.players].filter(Boolean).forEach(p => { const d = frag(p.html); d.querySelectorAll('*').forEach(el => { const t = tx(el); if (!LABELS.includes(t)) return;
     let row = el.parentElement; while (row && row !== d && !row.querySelector('b')) row = row.parentElement; const who = row && row.querySelector('b') ? tx(row.querySelector('b')) : null; if (who && !lab[who]) lab[who] = t; }); });
   // (the label means a top-10 free agent clears your pickup bar in his place: only then, and only when there is a drop)
-  if (drop && clears) ok(lab[drop] === 'A free agent does more', `the drop (${drop}) reads "A free agent does more"`, 'reads: ' + (lab[drop] || 'no label found'));
+  if (drop && clears) ok(['A free agent does more'].concat(SELL).includes(lab[drop]), `the drop (${drop}) reads "A free agent does more"`, 'reads: ' + (lab[drop] || 'no label found'));
   else console.log(`  - drop label not checked: ${drop ? 'no free agent clears your bar' : 'an empty roster spot, no drop'}`);
+  // contradictions on your players (owner's review 25 Nov)
+  if (roster) { const d = frag(roster.html); const rows = [...d.querySelectorAll('details.pr')].filter(r => /A free agent does more/.test(tx(r.querySelector('.l1'))));
+    ok(rows.every(r => !/Anchor without him/.test(tx(r))), 'no drop candidate is also an anchor (' + rows.length + ')', rows.map(tx).join(' | '));
+    ok(rows.every(r => { const m = tx(r).match(/in his place: ([+−]?)(\d+) of 99 \(your pickup bar \+(\d+)\)/); return m && (m[1] === '−' ? -m[2] : +m[2]) >= +m[3]; }), "every drop candidate's free agent clears the pickup bar", rows.map(tx).join(' | ')); }
+  { const fix = pl.querySelector('.card.ilb'); const dc = pl.querySelector('.card.dropc'); const step = fix && [...fix.querySelectorAll('.ilsteps li')].map(tx).find(x => /^Now: drop /.test(x));
+    if (step && dc) { const free = [...dc.querySelectorAll('details.drw')].find(r => !/Recent add|Your keep|Top half|Injured list/.test(tx(r.querySelector('.ftags')))); const nm = free && tx(free.querySelector('.l1 b'));
+      ok(nm && has(step, nm), 'over the limit: the card drops the least-missed free choice (' + nm + ')', step);
+      ok(![...pl.querySelectorAll('details.pr.fa .l2')].some(r => /empty spot/.test(tx(r))), 'over the limit: no free agent row claims an empty spot'); }
+    else console.log('  - over-the-limit checks skipped: the roster fits'); }
   if (finder) { const fa = faNames.filter(n => has(finder.text, n)); ok(!fa.length, 'Finder shows rostered players only', 'free agents in Finder: ' + fa.join(', ')); }
   if (roster) ok(!roster.broken, 'Roster renders'); }
   // the Matchup hero (7.53.0): Basketball Monster's Matchup Monster as given, expected categories = the sum of its category chances

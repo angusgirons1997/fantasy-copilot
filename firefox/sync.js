@@ -475,6 +475,96 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const mine = [...d0.querySelectorAll('select[name^="DD1"]')].map(s => s.getAttribute('name').slice(3)).filter(x => /^\d+$/.test(x)).slice(0, max || 16);
     for (const id of mine) { try { const r = parseTM(await postAt(TM, d0, { ['DD1' + id]: 'Trade', DD2: '0' }, ['FINDTRADES', 'Find Trades'], 'Trade Monster ' + id)); if (r) out[r.give] = r.rows; } catch (e) { if (e.auth) throw e; trace('Trade Monster ' + id, false, e.message); } }
     trace('Trade Monster', Object.keys(out).length > 0, Object.keys(out).length + ' of ' + mine.length + ' players'); return { ts: Date.now(), by: out }; }
+  // ---- multi-player deals (8.4.0), 2-for-1 to 3-for-3. Every number shown is Trade Monster's Analyze Trade; the add-on only picks
+  // which deals to ask about (owner's review, 24 Nov: no good deal hidden, no absurd one shown). ----
+  // A player's worth to any manager: Basketball Monster's value (no punt) above the league's last starter (teams x starting spots:
+  // a player below that rarely starts, so he adds next to nothing to the team that gets him), times his share of games left. Stars
+  // come out far above role players without any made-up curve, and three bench players never add up to a star.
+  // lineup(roster): judged as that manager would, on their best lineup (their top `slots` players by worth): (out, inn) gives what
+  // losing `out` costs their lineup and what adding `inn` then gives back. Two newcomers push out two of their starters, not one.
+  function worthOf(ros, starters, slots) { const L = Object.entries(ros || {}).filter(([, p]) => p && p.lv != null && (p.g || 0) > 0).sort((a, b) => b[1].lv - a[1].lv);
+    const gMax = Math.max(1, ...L.map(([, p]) => p.g)), repl = (L[Math.min(L.length - 1, Math.max(0, (starters || 120) - 1))] || [0, { lv: 0 }])[1].lv;
+    const w = {}, byRank = []; L.forEach(([id, p], i) => { w[id] = Math.max(0, p.lv - repl) * Math.min(1, p.g / gMax); byRank[i + 1] = Math.max(0, p.lv - repl); });
+    const top = (ids, wf) => ids.map(id => wf ? wf(id) : w[id] || 0).sort((a, b) => b - a).slice(0, slots || 10).reduce((a, x) => a + x, 0);
+    const lineup = (roster, wf) => (out, inn) => { const r = (roster || []).filter(id => !out.includes(id)); const before = top(roster || [], wf), mid = top(r, wf); return [before - mid, top(r.concat(inn), wf) - mid]; };
+    return { of: id => w[id] || 0, rank: r => byRank[Math.min(byRank.length - 1, Math.max(1, r || 999))] || 0, lineup }; }
+  // would the other manager take it seriously? They must get back at least `min` (a setting, 80% by default) of the worth they give.
+  // Deals where you give more aren't cut here: Trade Monster's score already shows when that costs you. '' = passes.
+  // `lu` is a lineup function (worthOf().lineup) or, without their roster, a plain worth per player.
+  function fair(give, get, lu, min) { const s = ids => ids.reduce((a, id) => a + lu(id), 0); const [out, back] = lu.length === 2 ? lu(get, give) : [s(get), s(give)];
+    return out > 0 && back < (min || 0.8) * out ? `they'd get back ${Math.round(back / out * 100)}% of what they give` : ''; }
+  // the shortlist, per team. Estimates (category matchups out of 99, only for choosing what to score):
+  //   e(g)  = what losing your player g costs, when the best free agent takes his spot (Find Free Agents: minus its best swap)
+  //   a(t)  = what their player t adds, from Trade Monster's one-for-ones: t1(g,t) + e(g), averaged over your players it pairs him with
+  //   deal  = sum a(get) - sum e(give); getting more players than you give also costs e of your cheapest drop for each extra one
+  //   (with free agents filling open spots, the free agent's own worth cancels out, so uneven deals are on the same footing).
+  // Per team: up to `per` deals of any shape (best estimate first, no two with the same players coming back), plus `up` upgrade deals
+  // for their players worth more than any of yours, which Trade Monster never pairs one-for-one (2-3 of yours that pass the value rule,
+  // the ones that cost you least).
+  function multiCands(tm, fa, mine, theirs, W, opt) { const worth = W.of; opt = opt || {}; const per = opt.per || 5, up = opt.up == null ? 2 : opt.up, min = opt.min || 0.8;
+    const e = g => { const r = (fa && fa.by && fa.by[g]) || []; return r.length ? -Math.max(...r.map(x => x.d)) * 99 : 0; };
+    const A = {}; Object.entries(tm.by || {}).forEach(([g, rows]) => rows.forEach(r => { if (!r.team || r.t1 == null) return; const t = (A[r.team] = A[r.team] || {}); (t[r.id] = t[r.id] || []).push(r.t1 * 0.99 + e(g)); }));
+    const subsets = (a, k) => k === 0 ? [[]] : a.flatMap((x, i) => subsets(a.slice(i + 1), k - 1).map(s => [x].concat(s)));
+    const mineL = (mine || Object.keys(tm.by || {})).filter(Boolean); const gs = [1, 2, 3].flatMap(k => subsets(mineL, k));
+    const drops = keep => mineL.filter(g => !keep.includes(g)).sort((x, y) => e(x) - e(y)); // your cheapest drops first
+    const out = [];
+    Object.keys(Object.assign({}, A, theirs || {})).forEach(team => { const a = {}; Object.entries(A[team] || {}).forEach(([t, v]) => a[t] = v.reduce((x, y) => x + y, 0) / v.length);
+      const wT = (theirs || {})[team] ? W.lineup(theirs[team]) : worth; // judged as the other manager would: against their own lineup
+      const T = Object.keys(a).sort((x, y) => a[y] - a[x]).slice(0, 8); const ts = [1, 2, 3].flatMap(k => subsets(T, k)); const C = [];
+      gs.forEach(G => ts.forEach(Tt => { if (G.length === 1 && Tt.length === 1) return; if (fair(G, Tt, wT, min)) return;
+        const extra = Math.max(0, Tt.length - G.length); const est = Tt.reduce((s, t) => s + a[t], 0) - G.reduce((s, g) => s + e(g), 0) - drops(G).slice(0, extra).reduce((s, g) => s + e(g), 0);
+        if (est > 0) C.push({ team, give: G, get: Tt, est }); }));
+      const seen = new Set(); C.sort((x, y) => y.est - x.est).filter(c => { const k = c.get.slice().sort().join(); return !seen.has(k) && seen.add(k); }).slice(0, per).forEach(c => out.push(c));
+      // upgrades: their players worth more than your best, not paired by Trade Monster
+      const best = Math.max(0, ...mineL.map(worth)); const stars = ((theirs || {})[team] || []).filter(t => !a[t] && worth(t) > best).sort((x, y) => worth(y) - worth(x)).slice(0, up);
+      stars.forEach(t => { const G = gs.filter(G => G.length >= 2 && !fair(G, [t], wT, min)).sort((x, y) => x.reduce((s, g) => s + e(g), 0) - y.reduce((s, g) => s + e(g), 0))[0];
+        if (G) out.push({ team, give: G, get: [t], est: null, upgrade: true }); }); });
+    return out; }
+  async function bbmMulti(y0, tm, fa, ctx) { const teams = [...new Set(Object.values(tm.by || {}).flat().map(r => r.team).filter(Boolean))];
+    // open Analyze Trade once per team: both rosters as Basketball Monster has them today
+    const open = {}; let fails = 0, tried = 0, lastErr = '';
+    for (const t of teams) { try { open[t] = await analyzeOpen(y0, t); } catch (e) { if (e.auth) throw e; lastErr = e.message; trace('Analyze Trade ' + t, false, e.message); } }
+    const any = Object.values(open)[0]; if (!any) return { ts: Date.now(), tmTs: tm.ts, deals: [], cands: 0, tried: 0, fails: teams.length, err: lastErr || 'Trade Monster gave no answers', min: ctx.min };
+    const mine = any.mine, theirs = Object.fromEntries(Object.entries(open).map(([t, o]) => [t, o.theirs])); const sig = t => open[t] ? mine.slice().sort() + '/' + open[t].theirs.slice().sort() : '';
+    const C = multiCands(tm, fa, mine, theirs, ctx.W, { min: ctx.min }).filter(c => open[c.team]);
+    const key = c => c.team + '|' + c.give.slice().sort() + '|' + c.get.slice().sort() + '|' + sig(c.team);
+    // keep an earlier score while both rosters are unchanged (up to 3 days): the day's asks go to new deals
+    const prev = ctx.prev && ctx.prev.deals && Date.now() - ctx.prev.ts < 3 * 864e5 ? ctx.prev : null; const want = new Set(C.map(key));
+    const keep = prev ? prev.deals.filter(d => d.key && want.has(d.key)) : []; const kept = new Set(keep.map(d => d.key));
+    const bestFA = (() => { let b = null; Object.values((fa && fa.by) || {}).forEach(r => r.forEach(x => { if (!b || x.d > b.d) b = x; })); return b && b.id; })();
+    const deals = keep.slice(), checks = Object.assign({ add: null, drop: null }, prev && prev.checks);
+    for (const c of C.filter(c => !kept.has(key(c)))) { const d0 = open[c.team]; tried++; try {
+        // roster spots: give more and you add the best free agent; get more and you drop your least valuable; they do the same
+        const xs = { add: null, drop: null, theirDrop: null }; const extra = c.get.length - c.give.length;
+        if (extra < 0 && bestFA && checks.add !== false) xs.add = bestFA;
+        if (extra > 0 && checks.drop !== false) xs.drop = mine.filter(g => !c.give.includes(g)).sort((x, y) => ctx.W.of(x) - ctx.W.of(y))[0] || null;
+        if (extra < 0 && checks.drop !== false) xs.theirDrop = d0.theirs.filter(t => !c.get.includes(t)).sort((x, y) => ctx.W.of(x) - ctx.W.of(y))[0] || null;
+        let r = await analyzeOn(d0, c.give, c.get, xs); if (!r) { fails++; continue; } if (r.miss) continue;
+        // the first time an add or a drop is used, ask again without it: the same Win% means Trade Monster ignored it, so stop using it
+        for (const k of ['add', 'drop']) { const on = k === 'add' ? xs.add : (xs.drop || xs.theirDrop); if (!on || checks[k] != null) continue;
+          const x0 = Object.assign({}, xs, k === 'add' ? { add: null } : { drop: null, theirDrop: null }); const r0 = await analyzeOn(d0, c.give, c.get, x0);
+          if (r0 && !r0.miss) { checks[k] = r0.raw !== r.raw; if (!checks[k]) { r = r0; Object.assign(xs, k === 'add' ? { add: null } : { drop: null, theirDrop: null }); } } }
+        deals.push({ key: key(c), team: c.team, give: c.give, get: c.get, you: r.you, them: r.them, add: xs.add, drop: xs.drop, theirDrop: xs.theirDrop, upgrade: !!c.upgrade, ts: Date.now() });
+      } catch (e) { if (e.auth) throw e; fails++; lastErr = e.message; trace('Analyze Trade ' + c.give.length + '-for-' + c.get.length, false, e.message); } }
+    trace('Multi-player trades', !fails || deals.length > 0, `${deals.length - keep.length} of ${tried} scored, ${keep.length} kept from earlier${fails ? ', ' + fails + ' failed: ' + lastErr : ''}`);
+    return { ts: Date.now(), tmTs: tm.ts, deals, checks, cands: C.length, tried, fails, err: tried && fails >= tried ? lastErr || 'Trade Monster gave no answers' : null, min: ctx.min }; }
+  // Analyze Trade for one team, opened once: the page with their roster showing, then any number of deals asked from it
+  async function analyzeOpen(y0, team) { let d = await bbmOpen(TM, y0.league, 'Analyze Trade');
+    const me = sq((d.querySelector('select[name="DD1"] option[selected]') || {}).textContent);
+    const o = [...d.querySelectorAll('select[name="DD2"] option')].find(o => tn(o.textContent) === tn(team)); if (!me || !o) throw new Error('Trade Monster has no team called "' + team + '"');
+    d = await postAt(TM, d, { __EVENTTARGET: 'DD2', DD2: o.getAttribute('value') }, null, 'Analyze Trade team');
+    return { d, me, team, y0, mine: [...d.querySelectorAll('select[name^="DD1"]')].map(s => s.getAttribute('name').slice(3)).filter(x => /^\d+$/.test(x)), theirs: [...d.querySelectorAll('select[name^="DD2"]')].map(s => s.getAttribute('name').slice(3)).filter(x => /^\d+$/.test(x)) }; }
+  async function analyzeOn(o, give, get, xs, again) { const d = o.d; const has = (n, v) => !!d.querySelector(`select[name="${n}"] option[value="${v}"]`);
+    const over = {}, miss = []; give.forEach(id => has('DD1' + id, 'Trade') ? over['DD1' + id] = 'Trade' : miss.push(id)); get.forEach(id => has('DD2' + id, 'Trade') ? over['DD2' + id] = 'Trade' : miss.push(id));
+    if (miss.length) return { miss };
+    if (xs.add) { if (has('DD0' + xs.add, 'To Team 1')) over['DD0' + xs.add] = 'To Team 1'; else xs.add = null; }
+    if (xs.drop) { if (has('DD1' + xs.drop, 'Drop')) over['DD1' + xs.drop] = 'Drop'; else xs.drop = null; }
+    if (xs.theirDrop) { if (has('DD2' + xs.theirDrop, 'Drop')) over['DD2' + xs.theirDrop] = 'Drop'; else xs.theirDrop = null; }
+    let r; try { r = parseAnalyze(await postAt(TM, d, over, ['AnalyzeChangesButton', 'Analyze Trade'], 'Analyze Trade'));
+    } catch (e) { if (e.auth || again) throw e; o.d = (await analyzeOpen(o.y0, o.team)).d; return analyzeOn(o, give, get, xs, true); } // the page may not take a second ask: open it again
+    const tk = Object.keys((r && r.before) || {}).find(k => tn(k) === tn(o.team));
+    if (!r || r.before[o.me] == null || r.after[o.me] == null || tk == null) { if (again) return null; o.d = (await analyzeOpen(o.y0, o.team)).d; return analyzeOn(o, give, get, xs, true); }
+    return { you: Math.round((r.after[o.me] - r.before[o.me]) * 99), them: Math.round((r.after[tk] - r.before[tk]) * 99), raw: r.after[o.me] + '/' + r.after[tk] }; }
   // Trade Monster's "Analyze Trade" for one deal (the Yahoo trade card): both teams' Win% before and after, as category matchups
   // out of 99 (x 99), and Basketball Monster's own category gains (its "Gains" row: what you get less what you give, in its values)
   const sq = s => String(s || '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
@@ -486,15 +576,17 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const gains = {}; const ts = tableAfter(d, 'Trade Summary'); if (ts) { const { hd, rows } = rowsOf(ts); const g = rows.find(r => r.includes('Gains'));
       if (g) hd.forEach((h, i) => { const m = h.match(/^(p|3|r|a|s|b|fg%|ft%|2d|fg|ft|to)V$/); if (m && g[i] !== '' && !isNaN(parseFloat(g[i]))) gains[m[1]] = parseFloat(g[i]); }); }
     return { before, after, gains }; }
+  const tn = s => sq(s).replace(/\s*\(\d+\)$/, ''); // a team name, without the standing BBM may add
   async function bbmAnalyze(y0, them, give, get) { let d = await bbmOpen(TM, y0.league, 'Analyze Trade');
     const me = sq((d.querySelector('select[name="DD1"] option[selected]') || {}).textContent);
-    const o = [...d.querySelectorAll('select[name="DD2"] option')].find(o => sq(o.textContent) === sq(them)); if (!me || !o) throw new Error('Trade Monster has no team called "' + them + '"');
+    const o = [...d.querySelectorAll('select[name="DD2"] option')].find(o => tn(o.textContent) === tn(them)); if (!me || !o) throw new Error('Trade Monster has no team called "' + them + '"');
     d = await postAt(TM, d, { __EVENTTARGET: 'DD2', DD2: o.getAttribute('value') }, null, 'Analyze Trade team');
     const over = {}, miss = []; give.forEach(id => d.querySelector('select[name="DD1' + id + '"]') ? over['DD1' + id] = 'Trade' : miss.push(id)); get.forEach(id => d.querySelector('select[name="DD2' + id + '"]') ? over['DD2' + id] = 'Trade' : miss.push(id));
     if (miss.length) return { miss };
     const r = parseAnalyze(await postAt(TM, d, over, ['AnalyzeChangesButton', 'Analyze Trade'], 'Analyze Trade'));
-    if (!r || r.before[me] == null || r.after[me] == null || r.before[sq(them)] == null) throw new Error("Trade Monster's answer looks different (Basketball Monster may be updating)");
-    return { ts: Date.now(), you: Math.round((r.after[me] - r.before[me]) * 99), them: Math.round((r.after[sq(them)] - r.before[sq(them)]) * 99), gains: r.gains }; }
+    const tk = Object.keys((r && r.before) || {}).find(k => tn(k) === tn(them));
+    if (!r || r.before[me] == null || r.after[me] == null || tk == null) throw new Error("Trade Monster's answer looks different (Basketball Monster may be updating)");
+    return { ts: Date.now(), you: Math.round((r.after[me] - r.before[me]) * 99), them: Math.round((r.after[tk] - r.before[tk]) * 99), gains: r.gains }; }
   // Trade Monster's "Find Free Agents" with one of your players set to Drop: its top free agents for that drop, each with your
   // projected Win% after the swap (the change x 99 = category matchups won out of 99 a week, rest of season)
   function parseFF(d) { const h = [...d.querySelectorAll('.q-heading')].find(e => /^Drop:/.test(sq(e.textContent))); const tb = h && tableAfter(d, sq(h.textContent)); if (!tb) return null;
@@ -641,6 +733,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         { const tk = 'tx:' + y.lid, t0 = ((await ST().get(tk))[tk] || {}).rows || [], txSig = t0[0] ? t0[0].pid + '|' + t0[0].when : ''; const fa0 = all['bbmfa:' + y.lid];
           if (old('bbmfa:' + y.lid, 2.5) || (fa0 && txSig && fa0.tx !== txSig)) { try { log('Find Free Agents'); const fa = await bbmFAs(y); fa.tx = txSig; if (Object.keys(fa.by).length) await put({ ['bbmfa:' + y.lid]: fa }); } catch (e) { trace('Find Free Agents', false, e.message); } } }
         if (old('bbmtm:' + y.lid, 24)) { try { log('Trade Monster'); const tm = await bbmTrades(y); if (Object.keys(tm.by).length) await put({ ['bbmtm:' + y.lid]: tm }); } catch (e) { trace('Trade Monster', false, e.message); } }
+        // multi-player deals: once a day, after Find Trades (one Analyze Trade page per team, about 7 deals each)
+        if (old('bbmtm2:' + y.lid, 24)) { const g = k => all[k] || null; const tm = (await ST().get('bbmtm:' + y.lid))['bbmtm:' + y.lid], fa = (await ST().get('bbmfa:' + y.lid))['bbmfa:' + y.lid];
+          if (tm && tm.by) { try { log('Trade Monster multi-player deals'); const ss = g('sset:' + y.league) || g('sset:' + y0.league) || {};
+            const starters = (((g('lgscan:' + y.lid) || {}).teams || []).length || 12) * (((g('ysetp:' + y.lid) || {}).slots || []).length || 10);
+            const W = worthOf(((g('bx:' + y.lid) || {}).views || {}).ros, starters, ((g('ysetp:' + y.lid) || {}).slots || []).length || 10);
+            await put({ ['bbmtm2:' + y.lid]: await bbmMulti(y, tm, fa, { W, min: ss.fairMin != null ? +ss.fairMin : 0.8, prev: g('bbmtm2:' + y.lid) }) }); } catch (e) { trace('Multi-player trades', false, e.message); } } }
       }
       // the league week by week: the regular-season schedule (once) and every team's category results for each finished week
       if (y.week) { try {
@@ -785,5 +883,5 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       return { mode, res }; }
     finally { lockBy = null; await put({ syncLock: null }); }
   }
-  root.SYNC = { usToday, tickPlan, unhide, parseTM, parseAnalyze, bbmAnalyze, parseFF, bbmFAs, bbmAnalyzeAdd, parseAM, parseRanks, teamPage, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
+  root.SYNC = { usToday, tickPlan, unhide, parseTM, parseAnalyze, bbmAnalyze, multiCands, fair, worthOf, bbmMulti, parseFF, bbmFAs, bbmAnalyzeAdd, parseAM, parseRanks, teamPage, yAvail, parseStatus, parsePairs, parseTrend, parseSettings, bbmLogin, req, parseTx, parseLive, parseStand, txWhen, syncAll, syncLeague, serialize, mondayOf, nbaSchedule, auto, leagues, bbmNews, bx, FRESH, newsCheck };
 })(typeof window !== 'undefined' ? window : globalThis);

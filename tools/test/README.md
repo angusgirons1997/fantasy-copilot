@@ -28,6 +28,9 @@ Browser-free checks (run from the repo root):
   as healthy.
 - `node tools/test/t_anchor.js` checks the remove-him test (8.3.0): the player holding up a category is an anchor with the band drop
   named, a player the best free agent covers isn't, and no anchor sits in a sell group.
+- `node tools/test/t_multi.js` checks multi-player deals (8.4.0): the lineup fairness rule (Coward + Suggs for Luka is cut), the
+  shortlist, daily scoring against a fake Trade Monster (one page per team, the add/drop self-check, kept scores, a failure)
+  and the Finder.
 - `node tools/test/t_season_end.js` rehearses the end of the season on a made-up league (`fixtures/fake_league.js`, built by
   `season_end.js`): the trade deadline, the first playoff week, knocked out, the last day and the day after the season. No page
   errors or nonsense, no trade advice after the deadline, no week, lineup or pickup advice once your matchups are over.

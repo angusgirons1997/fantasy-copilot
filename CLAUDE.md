@@ -311,3 +311,27 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
 - "Today: do next" shows a lineup alert only on its own day.
 - Lineup day badges sit on the chip's corner (`.dchip::after` top/right −5px) so they no longer cover the day name; `color-scheme: light dark` on `:root`.
 - Left for the owner: the sync button (30×32) and Build punt chips (26 px tall) are under the 44 px touch size.
+
+## 8.4.0 (multi-player trades back, on Trade Monster)
+
+Built after two devil's-advocate reviews with the owner (24 Nov; the logic-review skill). Goal: no good deal hidden, no absurd one shown.
+
+- Every number shown is Trade Monster's Analyze Trade. The add-on only picks which deals to ask about (`sync.js`):
+  - `worthOf`: a player's worth is Basketball Monster's value (lv, no punt) above the league's last starter (teams x starting
+    spots), times his share of games left. `lineup(roster)` judges a deal on that team's best lineup (top starting-spots players),
+    so newcomers who wouldn't start add nothing and two newcomers push out two starters.
+  - `fair`: the other team's lineup must get back at least the owner's setting (default 80%, Settings) of what it loses. Deals
+    where the owner gives more are not cut here: Trade Monster's score shows if that costs him.
+  - `multiCands`: estimates (only for choosing) from Find Free Agents (cost of losing each of your players) and Find Trades'
+    one-for-ones (what each of theirs adds). Per team: the 5 best deals of any shape (no two bringing back the same players)
+    and 2 "upgrades" for their players worth more than any of yours (Trade Monster never pairs those).
+  - `bbmMulti`: one Analyze Trade page per team (both rosters read from it), each deal asked from it, the page reopened once if a
+    second ask fails. Uneven deals: give more and the best free agent is added; get more and your least valuable player is
+    dropped; they drop their least valuable when they get more. The first time an add or drop is used it's asked again
+    without it: the same Win% means Trade Monster ignored it, so it's switched off and the Finder says the spot isn't counted.
+    Scores are kept up to 3 days while both rosters are unchanged, so each day's asks go to new deals.
+- Finder: deals over the trade bar. Realistic also hides deals where they lose more than the limit, or where the same lineup
+  test on Yahoo ranks (what the other manager sees) fails; Any shows those with the note "Yahoo's ranks make this look uneven". A failed day says "Couldn't score deals" rather than "none".
+- Not verified live before release (Basketball Monster not signed in on the in-app browser): whether one page takes several
+  asks, and whether Analyze Trade counts a free-agent add or a drop. The code checks both at run time.
+- Yahoo trade page numbers: green above 0, red below, grey 0, nothing when Trade Monster has no one-for-one.

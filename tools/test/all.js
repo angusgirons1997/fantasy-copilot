@@ -14,6 +14,7 @@ const steps = [
   ['t_alert', 'node', ['tools/test/t_alert.js']],
   ['t_season_end', 'node', ['tools/test/t_season_end.js']],
   ['t_anchor', 'node', ['tools/test/t_anchor.js']],
+  ['t_multi', 'node', ['tools/test/t_multi.js']],
 ];
 let bad = 0;
 for (const [name, cmd, args] of steps) {

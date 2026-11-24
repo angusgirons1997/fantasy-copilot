@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Sixth Man</title>
 <link rel="stylesheet" href="theme.css"><style>
-/* the Sixth Man landing page (7.54.0): replaces the Draft / In season menu. The full animation plays on the first open
-   ever, a quicker one after that (body.quick), none with reduced motion. */
+/* the Sixth Man landing page (7.54.0): replaces the Draft / In season menu. The full animation plays on every open
+   (8.4.1: the quicker repeat version is gone, the owner wants the sequence every time), none with reduced motion. */
 html,body{height:100%}
-body{--k:1}body.quick{--k:.35}
+body{--k:1}
 .land{position:relative;min-height:100%;display:flex;flex-direction:column;align-items:center;padding:calc(clamp(40px,9vh,96px) + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));gap:14px;overflow:hidden}
 .court{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.court path{fill:none;stroke:var(--ink);stroke-opacity:.08;stroke-width:2;stroke-dasharray:900;animation:draw calc(1.6s*var(--k)) cubic-bezier(.6,0,.2,1) calc(.1s*var(--k)) both}
 .ballw{position:relative;animation:float 3.2s ease-in-out calc(2.4s*var(--k)) infinite}
@@ -27,7 +27,7 @@ body{--k:1}body.quick{--k:.35}
 @supports (text-box:trim-both cap alphabetic){.go{padding-top:0;text-box:trim-both cap alphabetic}}
 .go:hover{transform:translateY(-1px);filter:brightness(1.06)}.go:active{transform:translateY(1px) scale(.99)}.go:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 .draft{min-height:44px;border:0;background:none;color:var(--mute);font-size:12px;text-decoration:underline;text-underline-offset:3px}.draft:hover{color:var(--link)}
-body.quick .lcta,body.quick .lstat{animation-delay:.25s}body.quick .lg{animation-delay:.3s!important}
+
 .lcta small{font-size:12px;color:var(--mute);text-align:center}
 @keyframes draw{from{stroke-dashoffset:900}to{stroke-dashoffset:0}}
 @keyframes drop{0%{transform:translateY(-320px)}55%{transform:translateY(0) scale(1.06,.9)}70%{transform:translateY(-34px) scale(.97,1.03)}85%{transform:translateY(0) scale(1.02,.97)}100%{transform:none}}

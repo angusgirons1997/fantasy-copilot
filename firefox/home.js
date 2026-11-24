@@ -20,7 +20,6 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   requestAnimationFrame(() => set(0.35));
   const onPhone = /^https?:/.test(location.protocol);
   browser.storage.local.get(null).then(all => { const pc = !onPhone || Object.keys(all).length > 0; // the phone's copy comes from the PC: none means the PC can't be reached
-    if (all.landingSeen) document.body.classList.add('quick'); else browser.storage.local.set({ landingSeen: Date.now() });
     const ls = Object.keys(all).filter(x => x.startsWith('yr:')).map(x => all[x]).filter(y => y && y.league);
     const sy = ls.map(y => all['sync:' + y.lid]).filter(Boolean); const last = sy.length ? Math.max(...sy.map(s => s.ts || 0)) : 0;
     const live = pc && last && Date.now() - last < 40 * 60e3 && sy.every(s => s.ok);
@@ -28,7 +27,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       setTimeout(() => {
         $('stT').innerHTML = `<i class="dot ${live ? 'd-good' : 'd-warn'}"></i>${live ? 'Live' : !pc ? "Can't reach the PC" : 'Catching up'}`;
         $('stN').textContent = !pc ? 'showing the last copy' : last ? 'updated ' + ago(last) : 'not synced yet';
-        SND.at('whistle', 0); }, 600); }, document.body.classList.contains('quick') ? 350 : 1600); // the whistle as the bar lands full
+        SND.at('whistle', 0); }, 600); }, 1600); // the whistle as the bar lands full
     if (all.mdfLive && all.mdfLive.ts) $('sDraft').textContent = 'Last draft room seen ' + ago(all.mdfLive.ts);
   }).catch(() => {});
 })();

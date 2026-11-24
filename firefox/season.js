@@ -284,7 +284,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const A = addsInfo(m, y, H, limit, spare); A.weekend = weekend && s.spare !== false; const rm = recentMoves(y, H);
     const yNewer = y && y.ts > m.ts;
     const t0 = performance.now(); const p0src = { w: RL.waiverDays ? 'drops' : null };
-    const ilUsed = y ? y.rows.filter(r => /^IL/.test(r.slot)).length : 0; const ilEligible = y ? y.rows.filter(r => /^(O|INJ|IL|NA|OUT|SUSP)$/i.test(r.inj || '') && !/^IL/.test(r.slot)).map(r => r.name) : [];
+    const RC = rosterCheck(y); const ilUsed = RC ? RC.nIL - RC.back.length : 0; const ilEligible = RC ? RC.movable.map(r => r.name) : []; if (RC) RL.ilSlots = RC.ilCap; // Yahoo's own IL count and marks (8.5.0)
     const tx = y && ST['tx:' + y.lid]; const waiverUntil = {};
     if (RL.waiverDays && tx && tx.rows) tx.rows.filter(r => r.drop).forEach(r => { const d = txDate(r); if (!d) return; const until = addDay(d, RL.waiverDays + 1); if (until > usToday()) r.players.forEach(n => waiverUntil[n] = until); });
     // Yahoo's Transaction Trends page shows the real waiver date for the most-added free agents: it wins over the estimate from drops
@@ -435,16 +435,43 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // team in your league, from Basketball Monster's rest-of-season projections. A player's value to you is what that number loses
   // without him; a pickup is what it gains when he replaces one of your players; a trade is what it gains after the swap. ----
   function boardKeep(lg, M) { const y = yrFor(lg); const s = S(lg); const rm = recentMoves(y, ST['hist:' + lg] || { log: [] }); const ids = ns => (ns || []).map(n => M.find(n)).filter(Boolean);
-    // a player in the top half of everyone rostered in the league is never a drop: another team would claim him, so he's traded instead
-    const N = M.L.teams.reduce((a, t) => a + t.ids.length, 0); const all = Object.values(M.P).filter(q => q.ros && q.ros.lv != null && (q.ros.g || 0) > 0).sort((a, b) => b.ros.lv - a.ros.lv); const top = new Set(all.slice(0, Math.round(N / 2)).map(q => q.id));
+    // a player in the top half of everyone rostered in the league is never a drop: another team would claim him, so he's traded instead.
+    // 8.5.0: on Basketball Monster's value over the rest of the season (per game above the last rostered player, times his share of
+    // games left), so a player out for weeks can fall out of the top half
+    const N = M.L.teams.reduce((a, t) => a + t.ids.length, 0); const all0 = Object.values(M.P).filter(q => q.ros && q.ros.lv != null && (q.ros.g || 0) > 0).sort((a, b) => b.ros.lv - a.ros.lv);
+    const gMax = Math.max(1, ...all0.map(q => q.ros.g)), repl = (all0[Math.min(all0.length - 1, N)] || { ros: { lv: 0 } }).ros.lv; const rv = q => (q.ros.lv - repl) * Math.min(1, q.ros.g / gMax);
+    const all = all0.slice().sort((a, b) => rv(b) - rv(a)); const top = new Set(all.slice(0, Math.round(N / 2)).map(q => q.id));
     const mine = (M.L.teams.find(t => t.tid === M.L.me) || { ids: [] }).ids; const claim = mine.filter(id => top.has(id));
-    return { keep: new Set([...(M.ilIds || [])].concat(ids(s.protect), ids(rm.adds), claim)), claim: new Set(claim), block: new Set(ids(rm.drops)), taken: takenSet(y) }; }
+    // injured-list players are drops only when that frees a spot: all IL spots taken and an injured player of yours waiting for one
+    const rc = rosterCheck(y); const ilDrop = !!rc && rc.ilOpen === 0 && rc.movable.length > 0 && !rc.drops; const hold = new Set(ids(s.protect).concat(ids(rm.adds), claim));
+    return { keep: new Set([...(ilDrop ? [] : (M.ilIds || []))].concat([...hold])), hold, ilDrop, claim: new Set(claim), block: new Set(ids(rm.drops)), taken: takenSet(y) }; }
+  // ---- who to drop (8.5.0): every player of yours, injured or not, cheapest to lose first on Basketball Monster's Find Free Agents
+  // (what dropping him for the best free agent does to your Win%, so the same numbers as Pickups). Never a protected player, a
+  // recent add or a top-half player. Without Find Free Agents yet: Basketball Monster's value over the rest of the season.
+  function dropOrder(lg, M) { const k = boardKeep(lg, M); const F = (M.fa && M.fa.by) || {}; const me = (M.L.teams.find(t => t.tid === M.L.me) || { ids: [] }).ids;
+    const cost = id => { const r = F[id]; if (r && r.length) return -Math.max(...r.map(x => x.d)) * 99; const x = (M.P[id] || {}).ros; return x && x.lv != null ? 100 + x.lv * (x.g || 0) : 999; };
+    return me.filter(id => !k.hold.has(id)).map(id => ({ id, name: (M.P[id] || {}).n || id, il: !!(M.ilIds && M.ilIds.has(id)), cost: cost(id) })).sort((a, b) => a.cost - b.cost); }
   // empty roster spots outside the injured list: Yahoo's roster size (starting spots + bench) less the players not on the injured
   // list; else the empty non-injured-list spots Yahoo's team page shows. A pickup into one needs no drop.
-  function openSpots(lg) { const y = yrFor(lg); if (!y || !y.rows || !y.rows.length) return 0; const sp = ST['ysetp:' + y.lid] || {};
-    const nonIL = y.rows.filter(r => !/^IL/.test(r.slot || '')).length;
-    if (sp.slots && sp.slots.length && sp.bench != null) return Math.max(0, sp.slots.length + sp.bench - nonIL);
-    return (y.empty || []).filter(x => !/^IL/.test(x)).length; }
+  // ---- your roster against Yahoo's limits (8.5.0, owner's review 24 Nov): one count for the injured-list card, Pickups and the
+  // planner. Spots outside the injured list: the league settings (starting spots + bench). Injured-list spots: Yahoo's own counter
+  // on your team page ("used 3 of 4 IL positions", read every few minutes), over the weekly settings read, so a league change shows
+  // at once. Who may go on the injured list: Yahoo's own mark (IL in his position choices on your team page), not a status guess.
+  // A player already on the IL who's healthy again (no injury status Yahoo allows there) has to come off it.
+  function rosterCheck(y) { if (!y || !y.rows || !y.rows.length) return null; const sp = ST['ysetp:' + y.lid] || {};
+    const isIL = r => /^IL/.test(r.slot || ''); const st = r => String(r.inj || '').trim().toUpperCase();
+    const okIL = r => /^(INJ|O|OUT|IL|NA|SUSP)$/.test(st(r)) || (/\+/.test(r.slot) && /^(GTD|DTD|D|Q)$/.test(st(r)));
+    const activeCap = sp.slots && sp.slots.length && sp.bench != null ? sp.slots.length + sp.bench : null;
+    const ilCap = y.il && y.il.max != null ? y.il.max : (sp.ilSlots || 0);
+    const il = y.rows.filter(isIL), active = y.rows.filter(r => !isIL(r)); const back = il.filter(r => !okIL(r));
+    const movable = active.filter(r => !r.locked && (r.elig || []).some(e => /^IL/.test(e))); // Yahoo lets him go on the IL now
+    const ilLeft = il.length - back.length, nAct = active.length + back.length; const ilOpen = Math.max(0, ilCap - ilLeft);
+    const moves = movable.slice(0, ilOpen); const after = nAct - moves.length; // first fill open IL spots with injured players
+    const drops = activeCap == null ? 0 : Math.max(0, after - activeCap); const open = activeCap == null ? (y.empty || []).filter(x => !/^IL/.test(x)).length : Math.max(0, activeCap - after);
+    const need = activeCap == null ? 0 : Math.max(0, nAct - activeCap); // over the limit as things stand: IL moves (then drops) needed now
+    return { activeCap, ilCap, nActive: active.length, nIL: il.length, total: y.rows.length, back, movable, moves, need, fix: moves.slice(0, need), ilOpen, drops, open, freeNow: activeCap == null ? open : Math.max(0, activeCap - nAct), illegal: !!y.illegal }; }
+  // spots a pickup can use without a drop (after moving injured players into open IL spots); none while the roster is over the limit
+  function openSpots(lg) { const rc = rosterCheck(yrFor(lg)); return rc && !rc.drops ? rc.open : 0; }
   function boardFor(lg, punt) { const M = modelFor(lg); if (!M || !window.H2H || !window.H2H.board) return null; const k = boardKeep(lg, M);
     const fas = M.L.fas.filter(id => !k.block.has(id) && !k.taken.has(K(M.P[id].n)));
     const pu = punt === undefined ? M.ctx.punt : (punt && punt.length ? punt : null); const open = openSpots(lg);
@@ -519,7 +546,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const mw = mmWeek(lg); const ga = gamesLeft(mw, top.id), gd = drop ? gamesLeft(mw, drop) : null; const adds = A ? A.left : 1;
     // the final week has no Monday to wait for: add now or not at all
     const last = seasonState(lg).last; const worth = (!last || adds > 0) && (!!chosen || (you != null && you >= bar)); const wait = worth && !last && (!adds || (ga != null && gd != null && gd > ga));
-    return { id: top.id, drop: drop || null, add: M.P[top.id].n, dropName: drop ? M.P[drop].n : null, open: !drop, you, season: you, ga, gd, atLeast: top.atLeast, worth, wait, why: !adds ? 'adds' : wait ? 'week' : null, chosen: !!chosen, bar }; }
+    // 8.5.0: over Yahoo's limit, no add is possible until the roster fits (the injured-list card names the drop); an IL drop or an
+    // open spot that needs an injured player moved first says so
+    const rc = rosterCheck(y); const ilDrop = !!(drop && M.ilIds && M.ilIds.has(drop)); const ilMove = rc && (ilDrop || (!drop && rc.freeNow <= 0)) ? ((ilDrop ? rc.movable[0] : rc.moves[0]) || {}).name || null : null;
+    if (rc && rc.drops) return { id: top.id, drop: null, add: M.P[top.id].n, dropName: null, open: false, you, season: you, worth: false, wait: false, over: rc.drops, overTxt: `${rc.total} players and room for ${rc.activeCap + rc.ilCap}` };
+    return { id: top.id, drop: drop || null, add: M.P[top.id].n, dropName: drop ? M.P[drop].n : null, ilDrop, ilMove, open: !drop, you, season: you, ga, gd, atLeast: top.atLeast, worth, wait, why: !adds ? 'adds' : wait ? 'week' : null, chosen: !!chosen, bar }; }
   // ---- advice log: the board's pick, its top 10 and two simple alternatives, once a day per league. A raw record only (it never
   // feeds advice): tools/advice-backtest.js later checks each pick on what the players actually did, against its prediction and
   // against the alternatives: Basketball Monster's top free agent and Yahoo's most added, each with its own best drop. ----
@@ -627,6 +658,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     // in order: 1 the roster move (if one is due), 2 the lineup for the roster you then have
     const d = (p.nowDays || p.days).find(x => x.date === t); const due = p.moves.filter(x => x.date <= t), nxt = p.moves.filter(x => x.date > t);
     if (due.length) due.forEach(x => { const u = yLink(lg, x.add); rows.push(['warn', `<b>1 · Roster:</b> add <b>${esc(x.add)}</b>${x.drop ? ', drop <b>' + esc(x.drop.replace(/\.$/, '')) + '</b>' : x.il ? ' (' + esc(x.il) + ' to IL first)' : ''}${u ? ` · <a href="${esc(u)}" target="_blank" rel="noopener">open on Yahoo</a>` : ''}`]); });
+    else if (p.bd && p.bd.over) rows.push(['bad', `<b>1 · Roster:</b> over Yahoo's limit (${esc(p.bd.overTxt)}): drop ${p.bd.over > 1 ? p.bd.over + ' players' : 'a player'} before anything else. The Lineup page names who.`]);
     else rows.push(['good', `<b>1 · Roster:</b> no pickup today${nxt.length ? `. Next: <b>${esc(nxt[0].add)}</b> on ${esc(fmtD(nxt[0].date))}` : p.bd && p.bd.worth && p.bd.wait ? `. Best pickup <b>${esc(p.bd.add)}</b> (${p.bd.dropName ? 'for ' + esc(p.bd.dropName) : 'into your empty spot'}): wait until Monday` : ''}`]);
     if (due.length) rows.push(['', '<b>2 · Lineup:</b> set it after the pickup (it\'s re-planned once Yahoo shows the change)']);
     else if (d && d.open && (d.start.length + d.bench.length)) { const c = dayCheck(d, y ? actualFor(y.lid, t) : null); rows.push(c.known ? (c.changes ? ['warn', `<b>2 · Lineup:</b> <b>${c.changes} change${c.changes > 1 ? 's' : ''}</b> to make today`] : ['good', '<b>2 · Lineup:</b> set correctly for today']) : ['', '<b>2 · Lineup:</b> checking today\'s lineup on Yahoo…']); }
@@ -1061,7 +1093,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     let h = `<div class="card prim fal"><div class="h"><span>Free agents</span><span class="sub">${nx ? 'next week' : `${Math.max(0, A.left || 0)} of ${A.limit || 0} adds left this week${A.spare ? ' (1 kept spare)' : ''}`}</span></div>`;
     if (!B.bbm) return h + `<div class="strnone">Basketball Monster's Find Free Agents is being read for this league. The background sync reads it every 2 to 3 hours and after every add or drop in the league.</div>${nx ? "" : holesHtml(lg, M, B)}</div>`;
     if (!B.list.length) return h + `<div class="strnone">Find Free Agents lists no available free agent for any player you'd drop (your keeps, injured-list spots and recent adds are never drops).</div>${nx ? "" : holesHtml(lg, M, B)}</div>`;
-    if (bd && bd.worth && !bd.wait) h += `<div class="hl">Add <b class="plus">${esc(bd.add)}</b>${bd.dropName ? `, drop <b>${esc(bd.dropName)}</b>` : ' into your empty roster spot'}${mv ? ` on ${esc(fmtD(mv.date))}` : ''}</div><div class="sub hls"><b class="plus">${o99(bd.you, bd.atLeast)}</b> of 99 a week over the rest of the season${bd.chosen ? ' · your pick' : ''}</div>`;
+    if (bd && bd.over) h += `<div class="hl">Fix your roster first</div><div class="sub hls">You have ${esc(bd.overTxt)}: Yahoo won't take any pickup until ${bd.over > 1 ? bd.over + ' players are' : 'one player is'} dropped. The Lineup page's "Roster over the limit" card names who.</div>`;
+    else if (bd && bd.worth && !bd.wait) h += `<div class="hl">Add <b class="plus">${esc(bd.add)}</b>${bd.dropName ? `, drop <b>${esc(bd.dropName)}</b>${bd.ilDrop && bd.ilMove ? ` (injured list), then move <b>${esc(bd.ilMove)}</b> into his spot` : ''}` : bd.ilMove ? ` after moving <b>${esc(bd.ilMove)}</b> to the injured list (no drop needed)` : ' into your empty roster spot'}${mv ? ` on ${esc(fmtD(mv.date))}` : ''}</div><div class="sub hls"><b class="plus">${o99(bd.you, bd.atLeast)}</b> of 99 a week over the rest of the season${bd.chosen ? ' · your pick' : ''}</div>`;
     else if (bd && bd.worth) h += `<div class="hl"><b>${esc(bd.add)}</b> is the best pickup: wait until Monday</div><div class="sub hls">${bd.why === 'adds' ? 'No adds left this week.' : `${esc(sur(bd.dropName))} has ${bd.gd} game${bd.gd === 1 ? '' : 's'} left this week and ${esc(sur(bd.add))} ${bd.ga}, so adding now costs games; from Monday it's ${o99(bd.you, bd.atLeast)} of 99 a week.`}</div>`;
     else h += `<div class="hl">No free agent clears your bar</div><div class="sub hls">The best, ${esc(nm(B.list[0].id))}, adds ${o99(B.list[0].you, B.list[0].atLeast)} of 99 a week${B.list[0].drop ? ' for ' + esc(sur(nm(B.list[0].drop))) : ''}; your bar is ${of99(pick99(lg))} (Settings → Advice).</div>`;
     if (!nx) h += holesHtml(lg, M, B);
@@ -1452,65 +1485,51 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // ---- a player back from injury still in an IL spot: Yahoo blocks every lineup change until he's moved off it. Says whether
   // Yahoo refuses every lineup change while a player who isn't eligible for an IL spot sits in one (Error #160)
   function ilBlocked(y) { if (!y || !y.rows || Date.now() - y.ts > 36 * 3600e3) return false; if (y.illegal) return true;
-    const st = r => String(r.inj || '').trim().toUpperCase();
-    return y.rows.some(r => /^IL/.test(r.slot) && !(/^(INJ|O|OUT|IL|NA|SUSP)$/.test(st(r)) || (/\+/.test(r.slot) && /^(GTD|DTD|D|Q)$/.test(st(r))))); }
-  // a swap fixes it (an injured player of yours takes his IL spot), there's an open spot, or someone has to be dropped (and who) ----
+    const rc = rosterCheck(y); return !!rc && (rc.back.length > 0 || rc.need > 0); }
+  // the card counts (8.5.0, owner's review 24 Nov): players against spots, from rosterCheck. In order: healthy players come off the
+  // IL; injured players fill open IL spots; anyone still over the limit is dropped, cheapest to lose first on Basketball Monster's
+  // Find Free Agents, injured or not (an IL player only when an injured player of yours can then take his spot) ----
   function ilBackCard(p, lg) { const y = yrFor(lg); if (!y || !y.rows || Date.now() - y.ts > 36 * 3600e3) return '';
-    const st = r => String(r.inj || '').trim().toUpperCase();
-    const okIn = (slot, r) => /^(INJ|O|OUT|IL|NA|SUSP)$/.test(st(r)) || (/\+/.test(slot) && /^(GTD|DTD|D|Q)$/.test(st(r)));
-    const same = (a, b) => NAMES.same(a, b);
-    // 1. must move: healthy but still in an IL spot (Yahoo's own "over the max roster size" warning is the final word; when the
-    //    statuses don't single anyone out, the IL player with the mildest status is the one Yahoo now counts as active)
-    let back = y.rows.filter(r => /^IL/.test(r.slot) && !okIn(r.slot, r));
-    const SEV = r => { const x = st(r); return !x ? 0 : /^(Q|GTD|DTD|P)$/.test(x) ? 1 : /^D$/.test(x) ? 2 : /^(O|OUT)$/.test(x) ? 3 : 4; };
-    if (!back.length && y.illegal) { const ils = y.rows.filter(r => /^IL/.test(r.slot)).sort((a, b) => SEV(a) - SEV(b)); if (ils.length) back = [ils[0]]; }
-    // 2. the plan starts him: on an IL spot (allowed to stay there) but projected to play, so using him means bringing him back
+    const rc = rosterCheck(y); if (!rc) return ''; const M = modelFor(lg); const same = (a, b) => NAMES.same(a, b);
+    const st = r => String(r.inj || '').trim().toUpperCase(); const nm = r => esc(r.name); const and = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '';
+    // the plan starts him: on an IL spot (allowed there) but no longer listed out, so using him means bringing him back
     const t = usToday(); const pdays = ((p && (p.nowDays || p.days)) || []).filter(d => d.open !== false && d.date >= t);
     const firstStart = n => { const d = pdays.find(d => (d.start || []).some(x => same(x.name, n))); return d ? d.date : null; };
-    // (only once Yahoo no longer lists him as out: an out player is exactly who an IL spot is for, so he stays there)
-    const ready = y.rows.filter(r => /^IL/.test(r.slot) && !back.includes(r) && !/^(O|OUT|INJ|IL|NA|SUSP)$/.test(st(r)) && firstStart(r.name));
-    if (!back.length && !ready.length) return '';
-    const nm = r => esc(r.name); const and = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '';
-    const val = n => (p && p.rosVal || []).find(x => same(x.name, n)) || null;
-    // open roster spots = non-IL roster spots in the league settings minus players not on the IL. An empty starting slot in
-    // the lineup is NOT a free roster spot (a full roster can still show an empty SG), so the lineup's gaps don't count.
-    const sp = ST['ysetp:' + y.lid] || {}; const R0 = {};
-    const cap = sp.slots && sp.slots.length && sp.bench != null ? sp.slots.length + sp.bench : R0.spots || null;
-    const onRoster = y.rows.filter(r => !/^IL/.test(r.slot)).length;
-    const openSpots = cap ? Math.max(0, cap - onRoster) : 0;
-    const swap = y.rows.filter(r => !/^IL/.test(r.slot) && okIn('IL', r)); // injured players of yours who could take his IL spot
-    // who'd go if a drop is needed: your least valuable healthy players not on the IL (plan values for the rest of the season)
-    const pool = (p && p.rosVal || []).filter(x => !x.out && !x.keep && y.rows.some(r => same(r.name, x.name) && !/^IL/.test(r.slot)));
+    const ready = y.rows.filter(r => /^IL/.test(r.slot) && !rc.back.includes(r) && !/^(O|OUT|INJ|IL|NA|SUSP)$/.test(st(r)) && firstStart(r.name));
+    const unexplained = rc.illegal && !rc.back.length && !rc.need;
+    if (!rc.back.length && !rc.need && !ready.length && !unexplained) return '';
+    const D = M ? dropOrder(lg, M) : []; const rowOf = d => y.rows.find(r => same(r.name, d.name)); const used = [];
+    const movable = rc.movable.filter(r => !rc.fix.includes(r)); // injured players still waiting for an IL spot after the open ones are filled
+    // the next drop: an active player, or an IL player when an injured player of yours can take his spot
+    const nextDrop = () => { const d = D.find(x => !used.includes(x) && rowOf(x) && (!x.il || movable.length)); if (d) used.push(d); return d || null; };
     const L = y.lid && y.tid ? `https://basketball.fantasysports.yahoo.com/nba/${y.lid}/${y.tid}` : null;
-    let h = `<div class="card ilb"><div class="h"><span>Back from injury</span></div>`;
-    if (back.length) { const sure = back.every(r => !okIn(r.slot, r));
-      h += `${ilBlocked(y) ? `<div class="vd bad">Yahoo is blocking lineup changes until this is fixed</div>` : ''}<div class="vd warn">${and(back.map(nm))} ${sure ? (back.length > 1 ? 'are' : 'is') + ' healthy but still in an injured-list spot' : `(${esc(st(back[0]) || 'no status')}) is most likely the one Yahoo now counts as active`}</div><div class="sub hls">Yahoo won't accept any lineup change, including the co-pilot's, until ${back.length > 1 ? 'they move' : 'he moves'} off it.</div>`; }
-    // one plan for everyone coming off the IL: injured swaps first, then genuinely open roster spots, then a named drop
-    // (players who must move now are handled before players the plan only starts later in the week)
-    const dropped = []; const left = () => pool.filter(x => !dropped.some(d => same(d.name, x.name)));
-    let open = openSpots; const swaps = swap.slice(); const steps = []; let drops = 0;
-    const dayOf = d => d === t ? 'Today' : fmtD(d);
-    back.forEach(r => {
-      if (swaps.length) { const s = swaps.shift(); steps.push(`<b>Now:</b> move <b>${nm(s)}</b> (${esc(st(s))}) into the injured-list spot and <b>${nm(r)}</b> to the bench. No drop needed.`); return; }
-      if (open > 0) { open--; steps.push(`<b>Now:</b> move <b>${nm(r)}</b> to the bench. You have an open roster spot, so no drop is needed.`); return; }
-      const v = val(r.name); const d = left().concat(v ? [v] : []).sort((x, y) => x.season - y.season)[0]; drops++;
-      if (!d) { steps.push(`<b>Now:</b> your roster is full. Drop your least valuable healthy player, then move <b>${nm(r)}</b> to the bench.`); return; }
-      if (same(d.name, r.name)) { steps.push(`<b>Now:</b> your roster is full and <b>${nm(r)}</b> is worth less to your team than anyone else on it, so drop <b>${nm(r)}</b> himself.`); return; }
-      dropped.push(d); steps.push(`<b>Now:</b> your roster is full. Drop <b>${esc(d.name)}</b>: the lowest rest-of-season value on your roster for your build${d.gp != null ? ` (${d.gp} games projected from next week)` : ''}. Then move <b>${nm(r)}</b> from the injured list to the bench.`); });
-    ready.forEach(r => { const when = firstStart(r.name);
-      const lead = `<b>${esc(dayOf(when))}:</b> `;
-      if (swaps.length) { const s = swaps.shift(); steps.push(lead + `move <b>${nm(s)}</b> into the injured-list spot and <b>${nm(r)}</b> to the bench. No drop needed.`); return; }
+    const capTxt = rc.activeCap != null ? `${rc.activeCap} spots outside the injured list and ${rc.ilCap} on it` : `${rc.ilCap} injured-list spots`;
+    let h = `<div class="card ilb"><div class="h"><span>${rc.drops ? 'Roster over the limit' : 'Back from injury'}</span></div>`;
+    if (ilBlocked(y)) h += `<div class="vd bad">Yahoo is blocking lineup changes until this is fixed</div>`;
+    const steps = [];
+    rc.back.forEach(r => steps.push(`<b>Now:</b> <b>${nm(r)}</b> is healthy but still in an injured-list spot: move him to the bench.`));
+    rc.fix.forEach(r => steps.push(`<b>Now:</b> move <b>${nm(r)}</b> (${esc(st(r) || 'injured')}) into an open injured-list spot.`));
+    for (let i = 0; i < rc.drops; i++) { const d = nextDrop();
+      if (!d) { steps.push(`<b>Now:</b> drop one more player: everyone left is protected (your keeps, recent adds or a top-half player), so choose on Yahoo.`); continue; }
+      if (d.il) { const mv = movable.shift(); steps.push(`<b>Now:</b> drop <b>${esc(d.name)}</b> (injured list), then move <b>${nm(mv)}</b> (${esc(st(mv))}) into his injured-list spot.`); }
+      else steps.push(`<b>Now:</b> drop <b>${esc(d.name)}</b>${st(rowOf(d)) ? ` (${esc(st(rowOf(d)))})` : ''}: the cheapest player on your roster to lose on Basketball Monster's Find Free Agents.`); }
+    // ready: brought back when the plan starts him, if he's worth more than the player who'd make room
+    let open = rc.open; const spare = rc.moves.filter(r => !rc.fix.includes(r)); const dayOf = d => d === t ? 'Today' : fmtD(d); const costOf = n => { const x = D.find(d => same(d.name, n)); return x ? x.cost : null; };
+    ready.forEach(r => { const lead = `<b>${esc(dayOf(firstStart(r.name)))}:</b> `;
       if (open > 0) { open--; steps.push(lead + `move <b>${nm(r)}</b> to the bench. You have an open roster spot.`); return; }
-      const v = val(r.name), w = left()[0];
-      if (v && w && v.perWk <= w.perWk) { steps.push(`Leave <b>${nm(r)}</b> on the injured list for now: he's worth less to you than <b>${esc(w.name)}</b>, the player you'd have to drop. Don't start him until that changes.`); return; }
-      drops++; if (!w) { steps.push(lead + `drop your least valuable healthy player and move <b>${nm(r)}</b> to the bench.`); return; }
-      dropped.push(w); steps.push(lead + `drop <b>${esc(w.name)}</b> and move <b>${nm(r)}</b> to the bench (your roster has no spare spot).`); });
-    if (ready.length && steps.length > back.length) { const rs = ready.filter(r => steps.some(x => x.includes('<b>' + nm(r) + '</b> to the bench'))); if (rs.length) h += `<div class="vd warn">${and(rs.map(nm))} ${rs.length > 1 ? 'are' : 'is'} on your injured list but the plan starts ${rs.length > 1 ? 'them' : 'him'} from ${esc(fmtD(firstStart(rs[0].name)))}</div>`; }
-    h += `<div class="sub hls">${drops ? `${cap ? `${onRoster} of your ${cap} roster spots outside the injured list are filled, so ` : 'Your roster is full, so '}${drops > 1 ? drops + ' players have' : 'one player has'} to be dropped.` : 'No one needs to be dropped.'}</div>`;
-    if (!steps.length) return '';
-    h += `<ol class="ilsteps">${steps.map(x => `<li>${x}</li>`).join('')}</ol>`;
+      if (spare.length) { const s = spare.shift(); movable.splice(movable.indexOf(s), 1); steps.push(lead + `move <b>${nm(s)}</b> into the injured-list spot and <b>${nm(r)}</b> to the bench. No drop needed.`); return; }
+      const w = D.find(x => !used.includes(x) && !x.il && rowOf(x)); const c = costOf(r.name);
+      if (w && c != null && c <= w.cost) { steps.push(`Leave <b>${nm(r)}</b> on the injured list for now: he's cheaper to lose than <b>${esc(w.name)}</b>, the player you'd have to drop.`); return; }
+      if (w) used.push(w); steps.push(lead + (w ? `drop <b>${esc(w.name)}</b> and move <b>${nm(r)}</b> to the bench (your roster has no spare spot).` : `drop a player and move <b>${nm(r)}</b> to the bench.`)); });
+    if (rc.drops) h += `<div class="vd warn">You have ${rc.total} players and room for ${rc.activeCap + rc.ilCap} (${capTxt}), so ${rc.drops > 1 ? rc.drops + ' players have' : 'one player has'} to go</div>`;
+    else if (rc.need) h += `<div class="vd warn">You have ${rc.nActive + rc.back.length} players outside the injured list and room for ${rc.activeCap}: an open injured-list spot fixes it</div>`;
+    else if (rc.back.length) h += `<div class="vd warn">${and(rc.back.map(nm))} ${rc.back.length > 1 ? 'are' : 'is'} healthy but still in an injured-list spot</div>`;
+    else if (ready.length) h += `<div class="vd warn">${and(ready.map(nm))} ${ready.length > 1 ? 'are' : 'is'} on your injured list but the plan starts ${ready.length > 1 ? 'them' : 'him'}</div>`;
+    if (unexplained) h += `<div class="sub hls">Yahoo says your roster is over the limit, but the counts the co-pilot read look fine (${rc.total} players; ${capTxt}). Your league may have just changed its roster spots: open your team on Yahoo to see which spot it means.</div>`;
+    else h += `<div class="sub hls">${rc.drops ? `Yahoo won't accept a lineup change or a pickup until the roster fits.` : 'No one needs to be dropped.'}</div>`;
+    if (steps.length) h += `<ol class="ilsteps">${steps.map(x => `<li>${x}</li>`).join('')}</ol>`;
     if (L) h += `<div class="acts"><a class="btn small" href="${esc(L)}" target="_blank" rel="noopener">Open your team on Yahoo</a></div>`;
-    return h + `<div class="sub" style="margin-top:8px">Roster and statuses from your Yahoo team page ${esc(ago(y.ts))}.</div></div>`; }
+    return h + `<div class="sub" style="margin-top:8px">Roster, statuses and injured-list spots from your Yahoo team page ${esc(ago(y.ts))}.</div></div>`; }
   function lineupCard(p, lg) { const MI = modelFor(lg); const y = yrFor(lg);
     // injury tag on a player's row: Yahoo's first (it's what decides who starts), else Basketball Monster's
     const injOf = n => injFor(y, MI, n);

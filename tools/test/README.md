@@ -8,7 +8,8 @@ Browser-free checks (run from the repo root):
   (no tokens or league links) and fix the reader until this passes.
 
 - `node tools/test/t_cal.js` checks that the forecast check recovers a known spread error on synthetic results.
-- `node tools/test/t_ilback2.js firefox/season.js` exercises the back-from-injury card.
+- `node tools/test/t_ilback2.js firefox/season.js` checks the injured-list card on the real Boomers vs Brits roster of 24 Nov (8.5.0):
+  players counted against spots, Yahoo's injured-list marks and counter, drops on Find Free Agents, injured players included.
 - `node tools/test/t_render.js <copilot-test-data.json>` renders every page and sub-page of the season panel offline (jsdom,
   no network) in four roster variants. It checks for page errors and runs the release consistency check. Get the export from
   Settings → Diagnostics → Download test data. `render.js` is the harness behind it (`--dump dir` saves each page's HTML).

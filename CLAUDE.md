@@ -335,3 +335,18 @@ Built after two devil's-advocate reviews with the owner (24 Nov; the logic-revie
 - Not verified live before release (Basketball Monster not signed in on the in-app browser): whether one page takes several
   asks, and whether Analyze Trade counts a free-agent add or a drop. The code checks both at run time.
 - Yahoo trade page numbers: green above 0, red below, grey 0, nothing when Trade Monster has no one-for-one.
+
+## 8.5.0 (roster limits, drops, pickups; owner's logic review 24 Nov)
+
+- `rosterCheck(y)` (`season.js`) is the one count for the injured-list card, Pickups, Do next and the planner. Spots outside the
+  injured list: league settings (starting spots + bench). Injured-list spots: Yahoo's counter on the team page (`y.il.max`), which
+  wins over the weekly settings, so a league change shows at once. Who may go on the IL: Yahoo's own mark (IL in his position
+  choices on the team page). A player already on the IL who has no injury status Yahoo allows there must come off it.
+- Card: healthy players off the IL, injured players into open IL spots (only as many as the roster needs), then drops, named.
+  It never guesses who Yahoo means; when Yahoo's warning doesn't match the counts it says so.
+- Drops (`dropOrder`): every player, injured or not, cheapest to lose first on Find Free Agents (the same numbers as Pickups).
+  Never a protected player, a recent add or a top-half player (top half now on value over the rest of the season, games left
+  counted). An IL player is a drop only when an injured player of yours can then take his spot.
+- Pickups: over the limit, no add advice ("Fix your roster first"); an open spot that needs an injured player moved to the IL
+  says so ("after moving X to the injured list").
+- Launch intro: the full sequence plays every time (the quick repeat version is gone). Trades and Season sub-tabs: equal widths.

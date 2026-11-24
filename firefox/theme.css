@@ -505,6 +505,7 @@ details.pr>summary{display:block}
 .chip.plain{background:var(--track);color:var(--ink2)}
 .seg.stabs button{padding-left:8px;padding-right:8px}
 .seg.stabs{flex-wrap:wrap;overflow:visible}.seg.stabs button{flex:1 1 auto}
+.seg.trtabs.stabs button{flex:1 1 0;min-width:0} /* Trades and Season sub-tabs: equal widths, so the labels sit evenly across the bar (owner, 24 Nov) */
 .stn .lbl2{flex-wrap:wrap;gap:2px 8px}
 /* v10: numbers back on Week and Players */
 .cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}

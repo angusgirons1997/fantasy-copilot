@@ -230,8 +230,9 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
 - **Projection scorecard:** from Saturday before each Monday, sync saves BBM `next` per-game projections and
   Yahoo "Next 7 Days" projections for rostered players (`pjlog:<lid>:<monday>`). After the Sunday, BBM player
   rankings for that date range give the actuals (`pjact:<monday>`, restoring the owner's page settings).
-  `CTX.projScore` compares BBM, Yahoo and their average. Agreed rule: switch to the average only if, after four
-  weeks, it is clearly better (≥2% lower error) in two thirds of categories.
+  `CTX.projScore` compares BBM, Yahoo and their average. Owner's rule (2026-11-24): BBM stays the
+  projection base all season. The comparison is tracked only; it never switches the base by itself. A pattern in the
+  disparity may be built into the logic later, ONLY when the owner agrees to it.
 - **Advice backtest:** the forecast check tests probabilities, not whether the advice wins. Once a day, when the season
   panel renders, `logAdvice` in `season.js` keeps `advlog:<lid>`. It's a raw record only and never feeds advice. It holds:
   - the board's pick with its predicted gain, and the top 10
@@ -291,6 +292,19 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
 - Roster: "Put on the trade block" sits on every player row; the read groups are dropdowns (`details.rgrp`), closed when the page opens.
 - Sync button: arrows round a basketball; orange and spinning while syncing, red when the last sync failed (`sync:<lid>.err`), green otherwise.
 - Settings: the header is sticky edge to edge and covers the status-bar area; every group is a card closed to its heading (`fold`, `details.sfold`).
+
+## 8.3.0 (owner's trade strategy: anchors and surplus)
+- Owner's rule: surplus is the lead in a category, not the player. Selling is for over-indexed output; never sell the player who holds a
+  won or contested category up.
+- Bands: lost is beating under 25% of teams (0–2 of 11; was 15%). Swing 25–75%, safe 75–90%, locked above (`STRAT.TH0`, engine default).
+- Remove-him test (`anchorDrops(lg, M, give, get)` in season.js): today's Analysis Monster totals (`bbmstand.tot`); his BBM rest-of-season
+  output (`ros.st × g`) out, what comes back in (a trade's players, or BBM's best free agent by rest-of-season value when nothing does),
+  scaled in proportion to the roster's raw output. Teams beaten are re-counted. A category dropping a band (won→contested,
+  contested→lost) is an anchor drop; locked→safe isn't.
+  Plain removal with nothing coming back made every player an anchor, which is why the free agent fills the spot.
+- A sell read (holds/wasted) that's an anchor becomes "Anchor" (green). Other players with drops carry an Anchor tag and an "Anchor:
+  without him …" line. Each Trade block swap and Yahoo's trade page warn: "after this swap/trade <cat> drops from won to contested
+  (you'd beat 7 teams, not 10)". Do next's trade line skips anchors. Test: t_anchor (made-up league).
 
 ## 8.0.8 (design pass: Impeccable, Web Design Guidelines, Webapp Testing)
 - Late-scratch alerts (`newsCheck` in sync.js) come from today's Yahoo lineup (`yr:` with `date` = today, under 3 h old), never a saved `plan:` (it can be days old). The swap is a bench player who is healthy, off the injured list, has a game, isn't locked and is eligible for the out starter's spot; otherwise "Nobody on your bench can take his spot". Test: t_alert.

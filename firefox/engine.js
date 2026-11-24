@@ -418,7 +418,7 @@
       roster = top.R; best = top.o;
     }
     // ---------- streams: this week only, for the categories still in play ----------
-    // A category is in play when it's in the swing band (the same cut-offs as the strategy: 15% to 75% by default) for this
+    // A category is in play when it's in the swing band (the same cut-offs as the strategy: 25% to 75% by default) for this
     // week's matchup. A stream is credited only for what it adds in play; whatever it costs in other categories counts against it.
     // Drops come from your three least valuable players for the rest of the season, plus anyone Yahoo managers are dropping in
     // numbers (unless he's in the top half of your roster). What a drop costs later (up to four weeks, as the planner counts it) is
@@ -427,7 +427,7 @@
     if (opts.streams) { const SO = opts.streams; const ncat = ctx.cats.length; const catsOf = v => ctx.obj === 'cats' ? v * ncat : v / (ctx.Lw || 0.27);
       const punted = c => (ctx.punt || []).includes(c); const MIN = SO.min == null ? 0.15 : SO.min;
       const pOf = c => best0.cp[c].p;
-      const BL = Object.assign({ dead: 0.15, safe: 0.75 }, SO.bands || {}); // the strategy's swing band, one definition everywhere
+      const BL = Object.assign({ dead: 0.25, safe: 0.75 }, SO.bands || {}); // the strategy's swing band, one definition everywhere
       const inPlay = ctx.cats.filter(c => !punted(c) && pOf(c) >= BL.dead && pOf(c) < BL.safe);
       const banked = ctx.cats.filter(c => !punted(c) && !inPlay.includes(c) && pOf(c) >= 0.5), gone = ctx.cats.filter(c => !punted(c) && !inPlay.includes(c) && pOf(c) < 0.5);
       const list = []; let R = roster0, B = best0; const usedAdd = new Set(), usedDrop = new Set(); let considered = 0;

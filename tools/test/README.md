@@ -26,6 +26,12 @@ Browser-free checks (run from the repo root):
   Mad dogs numbers, and an 11-category, 10-team, top-4 league).
 - `node tools/test/t_inj.js <export>` checks that a stale Basketball Monster injury status never shows on a player Yahoo lists
   as healthy.
+- `node tools/test/t_anchor.js` checks the remove-him test (8.3.0): the player holding up a category is an anchor with the band drop
+  named, a player the best free agent covers isn't, and no anchor sits in a sell group.
+- `node tools/test/t_season_end.js` rehearses the end of the season on a made-up league (`fixtures/fake_league.js`, built by
+  `season_end.js`): the trade deadline, the first playoff week, knocked out, the last day and the day after the season. No page
+  errors or nonsense, no trade advice after the deadline, no week, lineup or pickup advice once your matchups are over.
+  `season_end.js` can also move a real export forward by hand (keep the output out of the repo).
 - `node tools/test/t_tags.js` tests Basketball Monster analyst-tag parsing. It needs `npm i jsdom`.
 - `node tools/test/mkfake.js <store.json> [out.json]` adds synthetic finished weeks, forecasts and projection logs to a store
   export, for `node tools/backtest.js out.json`.

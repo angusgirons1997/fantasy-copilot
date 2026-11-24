@@ -2,7 +2,7 @@
 //  · bands: your projected share of teams beaten in each category (Analysis Monster), cut at your thresholds, set once
 //  · analyst tags: read for display only. They judge general fantasy value, not your build, so they never drive anything.
 (function (root) {
-  const TH0 = { dead: 0.15, safe: 0.75, locked: 0.9 };            // below dead: dead; up to safe: swing; up to locked: safe; above: locked
+  const TH0 = { dead: 0.25, safe: 0.75, locked: 0.9 };            // 8.3.0: lost is beating under a quarter of teams (0–2 of 11); below dead: dead; up to safe: swing; up to locked: safe; above: locked
   // full category names: the panel never shows abbreviations
   const NAME = { p: 'points', 3: '3-pointers', r: 'rebounds', a: 'assists', s: 'steals', b: 'blocks', 'fg%': 'field goal %', 'ft%': 'free throw %', to: 'turnovers', '2d': 'double-doubles', fg: 'field goals made', ft: 'free throws made' };
   const name = c => NAME[c] || c; const Name = c => { const n = name(c); return n.charAt(0).toUpperCase() + n.slice(1); };

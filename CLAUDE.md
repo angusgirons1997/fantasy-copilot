@@ -279,7 +279,7 @@ is NumberFlow 0.6.2, readable and unchanged apart from what its README lists; ke
 - `SND.at` after a tap (`armed`) waits for Safari's `resume()` instead of dropping the sound.
 - Reverted on 23 Nov 2026 at the owner's request (home.html, home.js, sound.js back to 8.0.5): the sounds all played at once. Don't bring the tap gate back.
 
-## Trade block (8.1.0, owner's ask: don't swap back to Trade Monster here)
+## Trade block (8.1.0; "Players who fit" and "Looking for" replaced in 8.7.0, see below)
 - Trades → Trade block matches profiles, not Trade Monster's lists (those gave stars for a regular player). For each player on the block:
   what he offers (his category values +0.5 and up), what you're looking for (your swing categories from Analysis Monster team values,
   `M.needs(M.L.me)`), the teams that need what he brings (`teamNeedsAll`), and the players who fit (`blockFits`): other teams' players
@@ -378,3 +378,21 @@ Built after two devil's-advocate reviews with the owner (24 Nov; the logic-revie
   a pickup exactly at the bar is tagged "At your bar".
 - Tests: t_ilback2 (Questionable on the IL), t_render (no drop candidate with an anchor line, every drop candidate clears the
   bar, the card's drop = Who to drop's least-missed free choice, no empty-spot row while over).
+- Fixes after 8.6.0 (owner, 25 Nov; ship with the next feature release): Trades sub-tab labels centred on their buttons; the
+  league tabs are only redrawn when they change, and the panel ignores its own unchanged settings saves (that redraw loop made
+  the header flicker after a tab tap); `scrollbar-gutter: stable`. Trade block button: full width under the player's name, blue
+  off, orange on, a pop when it changes. The label key is a grid of pills.
+
+## 8.7.0 Trade block (owner's logic review, 25 Nov)
+- One verdict line per card (`blockVerdict`): his best realistic deal (Find Trades one-for-one or a multi-player deal), else the best
+  "Worth asking" swap, else "No deal that helps you" with his best free agent ("A free agent does more" only when his roster label says so).
+  "Trade Monster hasn't read him yet" when he has no Find Trades list: never "no swap adds".
+- Looking for = the header's swing categories (the saved bands, `V.grp.swing`, with the date set). Other teams' needs still use team values.
+- Players who fit (`blockFits`): from his own Find Trades list (`tmDeals` `by[id].all`), strong (+0.5) in a swing category, you ≥ 0 and
+  them ≥ your limit (8.1.0's star-for-a-regular case), best for you first, both numbers shown. The made-up rank window is gone.
+- Worth asking: a swap whose only failed check is Yahoo's rank gap shows in the open, with the reason; the rest stay folded as unlikely.
+- Multi-player deals with him: `multiDeals` (shared with the Finder, same filters); realistic in the open, unlikely folded.
+- Find Trades is read for every player of yours (the cap of 16 in `bbmTrades` is gone: 2 to 8 more page loads a day per league).
+- Test: t_render puts every player on the block on the real store (one verdict each, one swing set, fits cost neither side, unread
+  players never get "no swap adds").
+

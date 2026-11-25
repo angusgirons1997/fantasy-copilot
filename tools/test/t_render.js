@@ -93,4 +93,18 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
       const c = tx(frag((r.pages.players || {}).html).querySelector('.card.ctx'));
       ok(!r.errors.length, 'no page errors', r.errors.join('\n    ')); ok(/\+4 of 99 a week over the rest of the season/.test(c), "the card shows Trade Monster's Analyze Add/Drop answer", c.slice(0, 300));
       ok(!/categor(y|ies) (over|this season)/.test(c), "the card has none of the co-pilot's own season numbers", c.slice(0, 300)); } }
+  // the Trade block with every player of yours on it (owner's review 25 Nov): one verdict per card; "Looking for" = the header's
+  // swing categories; every player who fits is in his Find Trades list and costs neither side; a player Trade Monster hasn't read
+  // never gets "no swap adds"
+  { const st = JSON.parse(JSON.stringify(base)); const yk = Object.keys(st).find(k => k.startsWith('yr:') && st[k] && st[k].league === st.activeLeague) || Object.keys(st).find(k => k.startsWith('yr:') && st[k] && st[k].lid);
+    const lg = st[yk].league, lid = st[yk].lid; st.activeLeague = lg; const ids = Object.keys((st['bbmfa:' + lid] || {}).by || {}); st['sset:' + lg] = Object.assign(st['sset:' + lg] || {}, { block: ids });
+    const r = await render(st, { now: rep.at }); const b = r.pages['trades:block']; console.log(`\n=== Trade block, ${ids.length} players on it`);
+    if (!b || !ids.length) console.log('  - skipped: no Trade block or no Find Free Agents in this store');
+    else { const d = frag(b.html); const cards = [...d.querySelectorAll('.blkc')]; const tm = (st['bbmtm:' + lid] || {}).by || {};
+      ok(!r.errors.length && cards.length, 'renders ' + cards.length + ' cards with no page errors', r.errors.join('\n    '));
+      ok(cards.every(c => c.querySelectorAll('.bverd').length === 1), 'every card has one verdict line');
+      const look = cards.map(c => [...c.querySelectorAll('.mvl')].map(tx).find(x => /^Looking for/.test(x))); ok(new Set(look).size === 1, 'every card looks for the same swing categories', [...new Set(look)].join(' | '));
+      const fitsBad = []; cards.forEach(c => c.querySelectorAll(':scope > details.pr').forEach(p => { const m = tx(p).match(/Trade Monster ?you ([+−]?)(\d+), them ([+−]?)(\d+)/); if (!m || (m[1] === '−' && +m[2] > 0) || (m[3] === '−' && +m[4] > 1)) fitsBad.push(tx(p.querySelector('.l1 b'))); }));
+      ok(!fitsBad.length, 'every player who fits shows Trade Monster numbers where you lose nothing and they lose at most 1', fitsBad.join(', '));
+      const unread = cards.filter(c => /hasn't read him yet/.test(tx(c.querySelector('.bverd')))); ok(unread.every(c => !/No Trade Monster swap for him adds/.test(tx(c))), 'an unread player never gets "no swap adds" (' + unread.length + ' unread of ' + Object.keys(tm).length + ' read)'); } }
   console.log(bad ? `\n${bad} FAILED` : '\nall passed'); process.exit(bad ? 1 : 0); })();

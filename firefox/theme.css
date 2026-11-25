@@ -659,3 +659,17 @@ details.sfold>summary::after{content:"";margin-left:auto;flex:none;width:8px;hei
 details.sfold[open]>summary::after{transform:rotate(225deg)}details.sfold[open]>summary{margin-bottom:12px}
 details.sfold[open]>summary~*{animation:rise var(--d3) var(--spring) both}
 @media (prefers-reduced-motion: reduce){details.rgrp[open]>summary~*,details.sfold[open]>summary~*,#syncNow.done svg{animation:none}}
+/* 8.6.1 (owner, 25 Nov) */
+html{scrollbar-gutter:stable} /* a scrollbar appearing on a longer tab no longer shifts the header sideways */
+.seg.trtabs.stabs button{display:flex;align-items:center;justify-content:center;text-align:center} /* labels centred on their buttons */
+/* trade block: a full-width button under the player's name, blue off and orange on, with a pop when it changes */
+.blk.wide{display:block;width:100%;margin:8px 0 4px;padding:8px 12px;border:0;border-radius:999px;font:600 13px/1.2 var(--disp);text-align:center;background:var(--soft);color:var(--ink);cursor:pointer}
+.blk.wide.on{background:var(--accent-soft);color:var(--link)}
+.blk.wide.popon{animation:blkOn .5s var(--spring)}.blk.wide.popoff{animation:blkOff .35s var(--ease)}
+@keyframes blkOn{0%{transform:scale(.94)}55%{transform:scale(1.03);box-shadow:0 0 0 6px rgba(242,107,29,.28)}100%{transform:scale(1);box-shadow:0 0 0 0 rgba(242,107,29,0)}}
+@keyframes blkOff{0%{transform:scale(1.02)}45%{transform:scale(.96)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.blk.wide.popon,.blk.wide.popoff{animation:none}}
+/* the label key: a grid of pills, so each label stays whole instead of running on as one line of text */
+.legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px;margin:4px 0 12px}
+.legend span{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:var(--r-sm);background:var(--track);font-size:12px;line-height:1.25;color:var(--ink2)}
+.legend span .fd{flex:none;margin:0}

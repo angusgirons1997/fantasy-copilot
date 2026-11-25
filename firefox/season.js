@@ -537,7 +537,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
           if (ra && rb && Math.abs(ra - rb) > gap) why.push('Yahoo ranks them ' + ra + ' and ' + rb);
           return { id: r.id, give, you, them, tid, ra, rb, why }; });
         const score = d => Math.min(d.you, d.them); const clear = deals.filter(d => d.you >= bar);
-        by[give] = { ok: clear.filter(d => !d.why.length).sort((a, b) => score(b) - score(a) || b.you - a.you), no: clear.filter(d => d.why.length).sort((a, b) => b.you - a.you), n: rows.length }; });
+        by[give] = { ok: clear.filter(d => !d.why.length).sort((a, b) => score(b) - score(a) || b.you - a.you), no: clear.filter(d => d.why.length).sort((a, b) => b.you - a.you), all: deals, n: rows.length }; });
       const tgt = {}, k = d => (d.why.length ? 0 : 1000) + d.you; Object.values(by).forEach(x => x.ok.concat(x.no).forEach(d => { if (!tgt[d.id] || k(d) > k(tgt[d.id])) tgt[d.id] = d; }));
       return { ts: tm.ts, by, tgt, bar, tmin, gap }; }); }
   // one Trade Monster swap as a line: their player, both teams' numbers, Yahoo rank, injury, why it's unlikely. For a one-for-one
@@ -1326,7 +1326,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const BW = { punt: ['Punted', 'n'], dead: ['Lost', 'n'], swing: ['Swing', 'a'], safe: ['Winning', 'gr'], locked: ['Locked', 'g'] };
     // one player: a coloured read in words; the stats behind it on tap
     const playerRow = (r, o) => { o = o || {}; const words = (o.extra || []).concat(fitWords(r, V, o.grp));
-      return `<details class="pr" data-k="pr${esc(r.id)}"><summary><div class="l1">${r.mine ? dot(r.kind) : ''}<b>${esc(r.n)}</b>${r.mine ? `<span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>` : ''}${r.inj ? `<span class="chip lost">${esc(injChip(r.inj))}</span>` : ''}${tagChip(r.tag)}${o.block != null ? `<button class="lnk blk${o.block ? ' on' : ''}" data-block="${esc(r.id)}">${o.block ? 'On the trade block' : 'Put on the trade block'}</button>` : ''}</div>
+      return `<details class="pr" data-k="pr${esc(r.id)}"><summary><div class="l1">${r.mine ? dot(r.kind) : ''}<b>${esc(r.n)}</b>${r.mine ? `<span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>` : ''}${r.inj ? `<span class="chip lost">${esc(injChip(r.inj))}</span>` : ''}${tagChip(r.tag)}</div>${o.block != null ? `<button class="blk wide${o.block ? ' on' : ''}" data-block="${esc(r.id)}">${o.block ? 'On the trade block · tap to take off' : 'Put on the trade block'}</button>` : ''}
         <div class="l2">${words.map(w => `<div class="ln">${w[0] ? `<span>${esc(w[0])}</span> ` : ''}${esc(w[1])}</div>`).join('')}${r.tg ? `<div class="ln${r.g < 0.6 * r.tg ? ' warnl' : ''}"><span>Plays</span> ${Math.min(r.g, r.tg)} of ${r.tg} games left${r.g < 0.6 * r.tg ? ` (projected to miss ${r.tg - r.g})` : ''}</div>` : ''}${o.owner ? `<div class="ln muted">${owner(r.own)}</div>` : ''}</div></summary>
         <div class="ld">${statsTable(r.p, V.cats)}<div class="sub">${r.g} games left${r.brank ? ' · Basketball Monster rank ' + r.brank : ''}${r.yrank ? ' · Yahoo rank ' + r.yrank : ''}</div>${r.notes.map(n => `<div class="sub">${esc(n.by)} (${esc(n.tag)}${n.tagNote ? ' ' + esc(n.tagNote) : ''}): “${esc(n.text)}”</div>`).join('')}</div></details>`; };
     if (window.STAB === 'build') {
@@ -1388,18 +1388,21 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       // team values) → other teams' players at his Basketball Monster rank who are strong in them, and the teams that need what he brings
       const block = (S(lg).block || []).filter(id => V.mine.some(r => r.id === id)); const LV = V.league.concat(V.mine).reduce((m, x) => (m[x.id] = x, m), {});
       const injT = id => { const st = LV[id] && LV[id].inj; return st ? `<span class="fk r">${esc(injWord(st))}</span>` : ''; };
-      const myNeed = ((M.needs && M.needs(M.L.me)) || {}).need || [];
+      // owner's review, 25 Nov: "Looking for" is the header's swing categories (your saved bands), never a second set
+      const myNeed = V.grp.swing; const TD = tmDeals(lg, M);
       if (!block.length) h += `<div class="strnone">Nobody on the block yet. Tap "Put on the trade block" next to a player under Roster.</div>`;
-      block.forEach(id => { const r = V.mine.find(x => x.id === id); if (!r) return; const T = teamNeedsAll(lg, M, r); const F = blockFits(r, V.league, myNeed, T.map(t => t.tid));
+      block.forEach(id => { const r = V.mine.find(x => x.id === id); if (!r) return; const T = teamNeedsAll(lg, M, r); const F = blockFits(r, LV, myNeed, T.map(t => t.tid), TD && TD.by[r.id], themMin(lg));
         const str = goodAt(r.cv || {}, Object.keys(r.cv || {})).slice(0, 3);
-        h += `<div class="blkc"><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b>${injT(id)}<span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>${r.brank ? `<span class="muted">Basketball Monster rank ${r.brank}</span>` : ''}<button class="lnk blk on" data-block="${esc(r.id)}">Take off the block</button></div>
+        h += `<div class="blkc"><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b>${injT(id)}<span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>${r.brank ? `<span class="muted">Basketball Monster rank ${r.brank}</span>` : ''}</div><button class="blk wide on" data-block="${esc(r.id)}">On the trade block · tap to take off</button>
+          ${blockVerdict(lg, M, r)}
           <div class="mvl"><span>Offering</span>${str.length ? `strong in <b>${esc(andL(str.map(NN)))}</b>` : 'no standout category'}</div>
-          <div class="mvl"><span>Looking for</span>${myNeed.length ? `<b>${esc(andL(myNeed.map(NN)))}</b>, your swing categories` : 'no swing category to target'}</div>
+          <div class="mvl"><span>Looking for</span>${myNeed.length ? `<b>${esc(andL(myNeed.map(NN)))}</b>, your swing categories${V.snap ? ` (bands set ${dt(V.snap.ts)})` : ''}` : 'no swing category to target'}</div>
           <div class="h mvh"><span>Teams that need what he brings</span></div>
           ${T.length ? T.map(t => `<div class="mvl"><span>${owner(t.tid)}</span>needs <b>${esc(andL(t.cats.map(NN)))}</b></div>`).join('') : `<div class="strnone">No team's swing categories match his strengths.</div>`}
-          <div class="h mvh"><span>Players who fit</span><span class="sub">ranked ${F.lo} to ${F.hi} by Basketball Monster, strong (+0.5 or more) in what you need</span></div>
-          ${F.list.length ? F.list.slice(0, 8).map(x => playerRow(x, { owner: true, extra: [['Brings', andL(x.hit.map(NN))]].concat(x.wants ? [['', 'His team needs what ' + r.n + ' brings']] : []) })).join('') : `<div class="strnone">${myNeed.length ? 'Nobody near his rank on another team is strong in ' + esc(andL(myNeed.map(NN))) + '.' : 'Set once Basketball Monster team values show a swing category.'}</div>`}
-          ${tmBlock(lg, M, r, injT)}</div>`; });
+          <div class="h mvh"><span>Players who fit</span><span class="sub">from his Trade Monster "Find Trades" list: strong (+0.5 or more) in what you need; you don't lose, they lose ${Math.abs(themMin(lg))} or less</span></div>
+          ${F.list.length ? F.list.slice(0, 8).map(x => playerRow(x, { owner: true, extra: [['Trade Monster', `you ${of99(x.d.you)}, them ${of99(x.d.them)} of 99`], ['Brings', andL(x.hit.map(NN))]].concat(x.wants ? [['', 'His team needs what ' + r.n + ' brings']] : []) })).join('')
+            : `<div class="strnone">${!F.read ? "Trade Monster hasn't read his Find Trades list yet." : !myNeed.length ? 'No swing category to match.' : 'Nobody in his Find Trades list is strong in ' + esc(andL(myNeed.map(NN))) + ' without costing one side.'}</div>`}
+          ${tmBlock(lg, M, r, injT)}${multiBlock(lg, M, r)}</div>`; });
     } else if (window.STAB === 'finder') {
       const f0 = S(lg).find || {}; const kind = f0.kind === 'all' ? 'all' : 'fits'; const TIER = [[1, 30, 'Stars'], [31, 75, 'Starters'], [76, 130, 'Rotation players'], [131, 9999, 'Depth']]; const TD = tmDeals(lg, M);
       // other teams' players Trade Monster pairs with one of yours, by your gain (realistic only, or any that clears your bar)
@@ -1409,20 +1412,11 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       h += !TD ? `<div class="strnone">Trade Monster hasn't been read for this league yet. It's read once a day with the full sync.</div>` : TIER.map(([a, b, name], ti) => { const T0 = L0.filter(x => (x.brank || 9999) >= a && (x.brank || 9999) <= b); return T0.length ? `<details class="more"${ti < 2 ? ' open' : ''}><summary>${name}: ${T0.length}</summary>${T0.slice(0, 12).map(x => playerRow(x, { owner: true })).join('')}</details>` : ''; }).join('') || '<div class="strnone">Nobody yet.</div>';
       // multi-player deals (8.4.0): Analyze Trade's numbers from the daily sync, only while every player is still where he was.
       // Hidden only by your bar and (Realistic) the other team losing more than your limit; Yahoo's view is a note, never a filter.
-      { const T2 = M.tm2, bar = bar99(lg), tmin = themMin(lg); const own = {}; M.L.teams.forEach(t => t.ids.forEach(id => own[id] = t.tid)); const nm = id => esc((M.P[id] || {}).n || id);
-        const y0 = yrFor(lg), sp = (y0 && ST['ysetp:' + y0.lid]) || {}; const W = window.SYNC && window.SYNC.worthOf && M.bx && M.bx.views ? window.SYNC.worthOf(M.bx.views.ros, M.L.teams.length * ((sp.slots || []).length || 10), (sp.slots || []).length || 10) : null;
-        // Yahoo's view: the same lineup test with each player valued at his Yahoo rank, as the other manager sees the deal. Realistic
-        // needs both views to pass (Basketball Monster's passed before scoring); Any shows the rest with this note.
-        const yahooNote = d => { if (!W || !M.yrank) return ''; const yw = id => W.rank(M.yrank(id) || 999); const t = M.L.teams.find(x => x.tid === own[d.get[0]]); if (!t) return '';
-          const [out, back] = W.lineup(t.ids, yw)(d.get, d.give);
-          return out > 0 && back < fairMin(lg) * out ? `Yahoo's ranks make this look uneven to them: they'd see ${Math.round(back / out * 100)}% of what they give back` : ''; };
-        const D = ((T2 && T2.deals) || []).filter(d => d.you >= bar && (kind === 'all' || (d.them >= tmin && !yahooNote(d))) && d.give.every(id => own[id] === M.L.me) && d.get.every(id => own[id] && own[id] === own[d.get[0]] && own[id] !== M.L.me)).sort((a, b) => b.you - a.you || b.them - a.them);
-        const spot = d => d.get.length === d.give.length ? '' : d.add ? `Includes adding ${nm(d.add)} (free agent) to fill the open spot` : d.drop ? `Includes dropping ${nm(d.drop)} to make room` : d.get.length < d.give.length ? 'The open roster spot isn\'t counted' : 'The extra player you\'d have to drop isn\'t counted';
+      { const { T2, D, row } = multiDeals(lg, M, kind), bar = bar99(lg);
         h += `<div class="h mvh"><span>Multi-player deals</span><span class="sub">2-for-1 to 3-for-3, ${of99(bar)} of 99 or more</span></div>`;
         if (!T2) h += `<div class="strnone">Not scored yet. Trade Monster's Analyze Trade scores them once a day with the full sync.</div>`;
         else if (T2.err) h += `<div class="strnone">Couldn't score deals with Trade Monster today (${esc(T2.err)}). It tries again with the next full sync.</div>`;
-        else h += (D.length ? D.slice(0, 15).map(d => { const A = anchorDrops(lg, M, d.give, d.get), yn = yahooNote(d), sp1 = spot(d);
-          return `<div class="mvl tmd"><span>${esc(M.teamName(own[d.get[0]]))} <i>${d.give.length}-for-${d.get.length}${d.upgrade ? ' · upgrade' : ''}</i></span><b class="plus">You ${of99(d.you)}</b> · <b class="${d.them >= 0 ? 'plus' : 'minus'}">them ${of99(d.them)}</b> <i>of 99</i><div class="sub">Get ${d.get.map(nm).join(', ')} · give ${d.give.map(nm).join(', ')}</div>${sp1 ? `<div class="sub">${sp1}</div>` : ''}${d.them < tmin ? `<div class="sub">Unlikely: they lose ${Math.abs(d.them)} of 99</div>` : ''}${yn ? `<div class="sub">${esc(yn)}</div>` : ''}${A.length ? `<div class="sub minus">Warning: after this trade ${esc(dropWords(A))}</div>` : ''}</div>`; }).join('')
+        else h += (D.length ? D.slice(0, 15).map(row).join('')
           : `<div class="strnone">None of the ${T2.deals.length} deals Trade Monster scored clears ${of99(bar)}${kind === 'all' ? '' : ' as a realistic deal'}.</div>`)
           + `<div class="sub tcf">Scored by Trade Monster's Analyze Trade (${esc(ago(T2.ts))}): ${T2.tried || 0} new today${T2.fails ? `, ${T2.fails} couldn't be scored` : ''}. Only deals where the other team gets back at least ${Math.round(fairMin(lg) * 100)}% of what they give (on Basketball Monster's values, as their best lineup) are asked about.</div>`; }
     } else if (window.STAB === 'how') h += howItWorks(lg, V);
@@ -1430,19 +1424,54 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return `<div class="card strat">${h}</div>`; }
   // ---- one block player's Trade Monster swaps, as Best trades showed them before 8.2.0: the teams with a realistic deal (best deal
   // first, then how many of the categories they need he brings), up to three deals each; then the ones good for you only ----
+  // multi-player deals (8.4.0) as the Finder lists them: Analyze Trade's numbers, only while every player is still where he was.
+  // Hidden only by your bar and (Realistic) the other team losing more than your limit or Yahoo's view failing. The Finder and the
+  // Trade block (8.7.0) both read this, so a deal can't pass on one page and fail on the other.
+  function multiDeals(lg, M, kind) { const T2 = M.tm2, bar = bar99(lg), tmin = themMin(lg); const own = {}; M.L.teams.forEach(t => t.ids.forEach(id => own[id] = t.tid)); const nm = id => esc((M.P[id] || {}).n || id);
+    const y0 = yrFor(lg), sp = (y0 && ST['ysetp:' + y0.lid]) || {}; const W = window.SYNC && window.SYNC.worthOf && M.bx && M.bx.views ? window.SYNC.worthOf(M.bx.views.ros, M.L.teams.length * ((sp.slots || []).length || 10), (sp.slots || []).length || 10) : null;
+    // Yahoo's view: the same lineup test with each player valued at his Yahoo rank, as the other manager sees the deal
+    const yahooNote = d => { if (!W || !M.yrank) return ''; const yw = id => W.rank(M.yrank(id) || 999); const t = M.L.teams.find(x => x.tid === own[d.get[0]]); if (!t) return '';
+      const [out, back] = W.lineup(t.ids, yw)(d.get, d.give);
+      return out > 0 && back < fairMin(lg) * out ? `Yahoo's ranks make this look uneven to them: they'd see ${Math.round(back / out * 100)}% of what they give back` : ''; };
+    const real = d => d.them >= tmin && !yahooNote(d);
+    const D = ((T2 && !T2.err && T2.deals) || []).filter(d => d.you >= bar && (kind === 'all' || real(d)) && d.give.every(id => own[id] === M.L.me) && d.get.every(id => own[id] && own[id] === own[d.get[0]] && own[id] !== M.L.me)).sort((a, b) => b.you - a.you || b.them - a.them);
+    const spot = d => d.get.length === d.give.length ? '' : d.add ? `Includes adding ${nm(d.add)} (free agent) to fill the open spot` : d.drop ? `Includes dropping ${nm(d.drop)} to make room` : d.get.length < d.give.length ? 'The open roster spot isn\'t counted' : 'The extra player you\'d have to drop isn\'t counted';
+    const row = d => { const A = anchorDrops(lg, M, d.give, d.get), yn = yahooNote(d), sp1 = spot(d);
+      return `<div class="mvl tmd"><span>${esc(M.teamName(own[d.get[0]]))} <i>${d.give.length}-for-${d.get.length}${d.upgrade ? ' · upgrade' : ''}</i></span><b class="plus">You ${of99(d.you)}</b> · <b class="${d.them >= 0 ? 'plus' : 'minus'}">them ${of99(d.them)}</b> <i>of 99</i><div class="sub">Get ${d.get.map(nm).join(', ')} · give ${d.give.map(nm).join(', ')}</div>${sp1 ? `<div class="sub">${sp1}</div>` : ''}${d.them < tmin ? `<div class="sub">Unlikely: they lose ${Math.abs(d.them)} of 99</div>` : ''}${yn ? `<div class="sub">${esc(yn)}</div>` : ''}${A.length ? `<div class="sub minus">Warning: after this trade ${esc(dropWords(A))}</div>` : ''}</div>`; };
+    return { T2, D, row, real }; }
+  // a block player's one verdict (owner's review, 25 Nov): his best realistic deal on Trade Monster (one-for-one or multi-player),
+  // else the best one worth asking about, else his best free agent. Every number is Basketball Monster's.
+  function blockVerdict(lg, M, r) { const TD = tmDeals(lg, M), X = TD && TD.by[r.id], MD = multiDeals(lg, M, 'all'); const nm = id => (M.P[id] || {}).n || id;
+    const multi = MD.D.filter(d => d.give.includes(r.id)); const one = X ? X.ok[0] : null; const m1 = multi.find(MD.real);
+    const best = [one && { you: one.you, them: one.them, w: nm(one.id) + ' (' + esc(M.teamName(one.tid)) + ')' }, m1 && { you: m1.you, them: m1.them, w: m1.get.map(nm).join(' + ') + ' for ' + m1.give.map(nm).join(' + ') }].filter(Boolean).sort((a, b) => b.you - a.you)[0];
+    if (best) return `<div class="mvl bverd"><span>Verdict</span>Best deal: <b>${esc(best.w)}</b>: <b class="plus">you ${of99(best.you)}</b>, <b class="${best.them >= 0 ? 'plus' : 'minus'}">them ${of99(best.them)}</b> of 99</div>`;
+    const ask = X ? X.no.filter(rankOnly)[0] : null;
+    if (ask) return `<div class="mvl bverd"><span>Verdict</span>No realistic deal yet. Worth asking: <b>${esc(nm(ask.id))}</b>, <b class="plus">you ${of99(ask.you)}</b>, them ${of99(ask.them)} of 99</div>`;
+    const fa = r.read && r.read.best; const pb = pick99(lg);
+    const faW = fa && fa.you != null ? ` His best free agent, ${esc(nm(fa.id))}: ${of99(fa.you)} of 99 (your pickup bar ${of99(pb)})${r.kind === 'costs' ? '. A free agent does more: see Who to drop on Pickups.' : '.'}` : '';
+    return `<div class="mvl bverd"><span>Verdict</span>${!TD || !X ? "Trade Monster hasn't read him yet." : 'No deal that helps you was found.'}${faW}</div>`; }
+  // a swap whose only failed check is Yahoo's rank gap: Basketball Monster says the other team doesn't lose, so it's worth asking
+  const rankOnly = d => d.tid && d.why.length === 1 && /^Yahoo ranks/.test(d.why[0]);
   function tmBlock(lg, M, r, injT) { const TD = tmDeals(lg, M), bar = bar99(lg); const X = TD && TD.by[r.id];
     if (!TD) return `<div class="strnone">Trade Monster hasn't been read for this league yet. It's read once a day with the full sync.</div>`;
     const tn = tid => esc(((M.L.teams.find(t => t.tid === tid) || {}).name) || 'another team'); const dealRow = d => { const D = anchorDrops(lg, M, d.give, d.id); return tmLine(M, d, injT, { warn: D.length ? 'after this swap ' + dropWords(D) : '' }); };
     let h = `<div class="h mvh"><span>Trade Monster's swaps</span><span class="sub">"Find Trades" · category matchups won out of 99 a week · bar ${of99(bar)} · read ${esc(ago(TD.ts))}</span></div>`;
-    if (!X || !(X.ok.length || X.no.length)) return h + `<div class="strnone">No Trade Monster swap for him adds ${of99(bar)} of 99 or more.</div>`;
+    if (!X) return h + `<div class="strnone">Trade Monster hasn't read his "Find Trades" list yet. Every player of yours is read once a day with the full sync.</div>`;
+    if (!(X.ok.length || X.no.length)) return h + `<div class="strnone">No Trade Monster swap for him adds ${of99(bar)} of 99 or more.</div>`;
     const str = goodAt(r.cv || {}, Object.keys(r.cv || {})).slice(0, 3); const teams = {}; X.ok.forEach(d => (teams[d.tid] = teams[d.tid] || []).push(d));
     const fit = tid => { const N = M.needs && M.needs(tid); return N ? N.need.filter(c => str.includes(c)) : []; };
     const order = Object.keys(teams).sort((a, b) => Math.min(teams[b][0].you, teams[b][0].them) - Math.min(teams[a][0].you, teams[a][0].them) || fit(b).length - fit(a).length);
     const team = tid => { const nf = fit(tid); return `<div class="tmteam"><div class="mvl"><span>${tn(tid)}</span>${nf.length ? `needs <b>${esc(andL(nf.map(NN)))}</b>, which he brings` : 'gains from the swap'}</div>${teams[tid].slice(0, 3).map(dealRow).join('')}</div>`; };
     h += order.length ? order.slice(0, 4).map(team).join('') : `<div class="strnone">No realistic deal: every swap that clears the bar fails a check below.</div>`;
     if (order.length > 4) h += `<details class="more"><summary>${order.length - 4} more team${order.length - 4 === 1 ? '' : 's'}</summary>${order.slice(4).map(team).join('')}</details>`;
-    if (X.no.length) h += `<details class="more"><summary>Good for you, unlikely to be accepted (${X.no.length})</summary>${X.no.slice(0, 10).map(dealRow).join('')}</details>`;
+    // owner's review, 25 Nov: Yahoo's rank gap alone doesn't hide a swap Basketball Monster says they don't lose on
+    const ask = X.no.filter(rankOnly), no = X.no.filter(d => !rankOnly(d));
+    if (ask.length) h += `<div class="h mvh"><span>Worth asking</span><span class="sub">they don't lose on Basketball Monster, but Yahoo ranks the two more than ${rankGap(lg)} apart, so they may not see it that way</span></div>${ask.slice(0, 5).map(dealRow).join('')}`;
+    if (no.length) h += `<details class="more"><summary>Good for you, unlikely to be accepted (${no.length})</summary>${no.slice(0, 10).map(dealRow).join('')}</details>`;
     return h; }
+  // the multi-player deals that include him (Finder's list, Any: each unlikely one says why)
+  function multiBlock(lg, M, r) { const { T2, D, row, real } = multiDeals(lg, M, 'all'); if (!T2 || T2.err) return ''; const mine = D.filter(d => d.give.includes(r.id)); const ok = mine.filter(real), no = mine.filter(d => !real(d));
+    return `<div class="h mvh"><span>Multi-player deals with him</span><span class="sub">Trade Monster's Analyze Trade, ${of99(bar99(lg))} of 99 or more</span></div>` + (mine.length ? ok.slice(0, 5).map(row).join('') + (no.length ? `<details class="more"><summary>Good for you, unlikely to be accepted (${no.length})</summary>${no.slice(0, 5).map(row).join('')}</details>` : '') :`<div class="strnone">${(n => n ? `None of the ${n} deal${n === 1 ? '' : 's'} Trade Monster scored with him clears ${of99(bar99(lg))}.` : 'Trade Monster scored no multi-player deal with him today.')(T2.deals.filter(d => d.give.includes(r.id)).length)}</div>`); }
   // the rules behind every read, in plain words (the same thresholds the code uses)
   function howItWorks(lg, V) { const th = V.th; const pc = x => Math.round(x * 100); const PK = pickOf(lg);
     return `<div class="how"><p><b>Where the numbers come from.</b> Basketball Monster's rest-of-season projections (they already take in this season's games), its Analysis Monster team projections, and Yahoo's rosters, injury statuses and league settings. Nothing else, and no forecasts of the co-pilot's own.</p>
@@ -1459,6 +1488,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <li><i class="fd g"></i><b>${FIT.anchor[1]}</b>: the remove-him test. Swap his Basketball Monster output for his best free agent's in your Analysis Monster totals and count the teams you'd beat again: if any category drops a band (won to contested, or contested to lost), he's holding it up. An anchor is never a sell; a keeper who is one shows it among his reasons, and any trade that drops a band shows a warning naming the category. A drop inside a band (locked to winning) doesn't count: that lead is the surplus you can trade from.</li>
       <li><i class="fd g"></i><b>${FIT.keep[1]}</b>: none of the above. Every player shows his best free agent's number next to your pickup bar, so you can see how close each one is. An anchor is only ever a keep or a sell, never a drop candidate.</li></ul>
       <p><b>Other teams' players</b> (Finder, trade block, Yahoo's trade page): Trade Monster's one-for-one with the player of yours it pairs him with.</p>
+      <p><b>Trade block</b>: each player starts with one verdict: his best realistic deal on Trade Monster (one-for-one or multi-player), else the best swap worth asking about, else his best free agent. <b>Players who fit</b> come from his own Find Trades list: strong in your swing categories (the bands above), and neither side loses more than your limits. <b>Worth asking</b>: Basketball Monster says they don't lose, but Yahoo ranks the two more than ${rankGap(lg)} apart.</p>
       <p><b>Your punt doesn't suit your best players</b> appears when two or more of your top four by Basketball Monster value are sells: the build may be wrong, not the players. Compare builds before selling.</p>
       <p><b>Analyst tags</b> (Sell High, Buy Low, Droppable…) are Basketball Monster's view of general fantasy value, not your build. They're shown in grey and never change a read.</p>
       <p><button class="lnk" data-openset="build">Change these in Settings</button></p></div>`; }
@@ -1481,12 +1511,13 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   function resetBands(lg) { const l = leaguesKnown().find(x => x.league === lg); const M = modelFor(lg); if (!l || !M || !window.STRAT) return; const win = window.STRAT.catWin(ST['bbmstand:' + l.lid], M.ctx.cats);
     const sk = 'strat:' + l.lid; const old = ST[sk]; if (!win && !old) return; ST[sk] = window.STRAT.snapshot(M, win || old.win, M.ctx.punt || []); browser.storage.local.set({ [sk]: ST[sk] }); DV++; }
   // teams fighting for (swing band) a category the player is good at
-  // other teams' players at the block player's Basketball Monster rank or a little below (5 places above to 20 below) who are strong
-  // in your needs; most needs met first, then those on a team that needs what he brings, then their category values in your needs
-  function blockFits(r, league, need, wantTids) { const b = r.brank || 9999, lo = Math.max(1, b - 5), hi = b + 20;
-    const list = league.filter(x => x.brank && x.brank >= lo && x.brank <= hi).map(x => Object.assign({}, x, { hit: goodAt(x.cv || {}, need), wants: wantTids.includes(x.own), sum: need.reduce((s, c) => s + Math.max(0, (x.cv || {})[c] || 0), 0) }))
-      .filter(x => x.hit.length).sort((a, c) => c.hit.length - a.hit.length || c.wants - a.wants || c.sum - a.sum);
-    return { lo, hi, list }; }
+  // players who fit (owner's review, 25 Nov; was a made-up rank window): the other teams' players in his Trade Monster "Find Trades"
+  // list (Basketball Monster's own similar-value pool) who are strong in your swing categories and don't cost you, best for you first
+  function blockFits(r, LV, need, wantTids, X, tmin) { if (!X) return { read: false, list: [] };
+    // them ≥ your limit too: 8.1.0's complaint (a star offered for a regular) is a swap the other team loses badly on
+    const list = X.all.filter(d => d.tid && d.you >= 0 && d.them >= tmin && LV[d.id]).map(d => { const x = LV[d.id]; return Object.assign({}, x, { d, hit: goodAt(x.cv || {}, need), wants: wantTids.includes(x.own) }); })
+      .filter(x => x.hit.length).sort((a, c) => c.d.you - a.d.you || c.d.them - a.d.them || c.hit.length - a.hit.length);
+    return { read: true, list }; }
   function teamNeedsAll(lg, M, r) { return M.L.teams.filter(t => t.tid !== M.L.me).map(t => { const N = teamNeeds(lg, M, t.tid); if (!N) return null; const cats = N.need.filter(c => (r.cv[c] || 0) >= 0.5); return cats.length ? { tid: t.tid, cats } : null; }).filter(Boolean).sort((a, b) => b.cats.length - a.cats.length).slice(0, 4); }
   function wireStrategy(lg, M) { const o = $('out'); const s0 = S(lg);
     o.querySelectorAll('[data-stab]').forEach(b => b.onclick = () => { window.STAB = b.dataset.stab; render(); });
@@ -1503,7 +1534,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     o.querySelectorAll('[data-tryp]').forEach(b => b.onclick = () => { const c = b.dataset.tryp; const L = (s0.tryPunt || []).slice(); const i = L.indexOf(c); if (i >= 0) L.splice(i, 1); else L.push(c); s0.tryPunt = L; saveS(lg); render(); });
     o.querySelectorAll('[data-gotab]').forEach(b => b.onclick = () => { ST.uiTab = b.dataset.gotab; browser.storage.local.set({ uiTab: ST.uiTab }); render(); window.scrollTo(0, 0); });
     o.querySelectorAll('[data-fkind]').forEach(b => b.onclick = () => { s0.find = { kind: b.dataset.fkind }; saveS(lg); render(); });
-    o.querySelectorAll('[data-block]').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); const id = b.dataset.block; const L = (s0.block || []).slice(); const i = L.indexOf(id); if (i >= 0) L.splice(i, 1); else L.push(id); s0.block = L; saveS(lg); render(); const nm0 = M.P[id] ? M.P[id].n : 'Player'; toast(i >= 0 ? `${nm0} taken off the trade block` : `${nm0} is on the trade block`, i >= 0 ? '' : 'ok'); }); }
+    o.querySelectorAll('[data-block]').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); const id = b.dataset.block; const L = (s0.block || []).slice(); const i = L.indexOf(id); if (i >= 0) L.splice(i, 1); else L.push(id); s0.block = L; saveS(lg); render(); requestAnimationFrame(() => document.querySelectorAll(`[data-block="${CSS.escape(id)}"]`).forEach(x => x.classList.add(i >= 0 ? 'popoff' : 'popon'))); const nm0 = M.P[id] ? M.P[id].n : 'Player'; toast(i >= 0 ? `${nm0} taken off the trade block` : `${nm0} is on the trade block`, i >= 0 ? '' : 'ok'); }); }
   // links that open a trade on Yahoo: in the Yahoo tab you're looking at (a new tab only if that isn't possible)
   function wireTrades(lg, M) { const o = $('out');
     o.querySelectorAll('[data-yurl]').forEach(b => b.onclick = e => { if (!browser.tabs || !browser.tabs.query) return; e.preventDefault(); browser.tabs.query({ active: true, currentWindow: true }).then(ts => { const t = ts && ts[0]; if (t && /fantasysports\.yahoo\.com/.test(t.url || '')) return browser.tabs.update(t.id, { url: b.dataset.yurl }); return browser.tabs.create({ url: b.dataset.yurl }); }).catch(() => window.open(b.dataset.yurl, '_blank')); }); }
@@ -1712,8 +1743,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   function render() {
     const ls = leaguesKnown(); const lg = league();
     const yoL = yahooOn(); // the other league gets a dot when it's the one on your Yahoo screen (the panel doesn't switch by itself)
-    $('lgTabs').innerHTML = ls.map(l => `<button data-lg="${esc(l.league)}" class="${l.league === lg ? 'on' : ''}" title="${esc(l.league)}${yoL && yoL.league === l.league && l.league !== lg ? ' · on Yahoo now' : ''}"><span>${esc(l.league)}</span>${yoL && yoL.league === l.league && l.league !== lg ? '<i class="ldot"></i>' : ''}</button>`).join('');
-    $('lgTabs').querySelectorAll('[data-lg]').forEach(b => b.onclick = () => { ST.activeLeague = b.dataset.lg; browser.storage.local.set({ activeLeague: b.dataset.lg }); render(); });
+    const lgT = ls.map(l => `<button data-lg="${esc(l.league)}" class="${l.league === lg ? 'on' : ''}" title="${esc(l.league)}${yoL && yoL.league === l.league && l.league !== lg ? ' · on Yahoo now' : ''}"><span>${esc(l.league)}</span>${yoL && yoL.league === l.league && l.league !== lg ? '<i class="ldot"></i>' : ''}</button>`).join('');
+    // only redrawn when it changes: rebuilding it on every redraw made the league tabs flicker (owner, 25 Nov)
+    if (lgT !== window.__lgT) { window.__lgT = lgT; $('lgTabs').innerHTML = lgT; $('lgTabs').querySelectorAll('[data-lg]').forEach(b => b.onclick = () => { ST.activeLeague = b.dataset.lg; browser.storage.local.set({ activeLeague: b.dataset.lg }); render(); }); }
     syncBar();
     // no leagues yet: the background finds them on Yahoo by itself (your teams are in Yahoo's top bar); only a Yahoo sign-in needs you
     if (!ls.length) { const found = Object.keys(ST.ymine || {}).length; const busy = syncing || (ST.syncLock && Date.now() - ST.syncLock.ts < 4 * 60e3);
@@ -1739,6 +1771,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   setInterval(() => { if (window.SYNC && window.SYNC.newsCheck) window.SYNC.newsCheck().catch(() => {}); }, 15 * 60e3);
   browser.storage.onChanged.addListener((ch, area) => {
     if (area !== 'local') return; let re = false;
+    // the panel's own settings saves come back here: when nothing changed they don't redraw the page again (that loop made the
+    // header flicker a few times after every tab tap, owner 25 Nov)
+    Object.keys(ch).forEach(k => { if (/^sset:/.test(k) && JSON.stringify(ST[k]) === JSON.stringify(ch[k].newValue)) delete ch[k]; }); if (!Object.keys(ch).length) return;
     // you've just left a Yahoo add/drop page (a pickup made or cancelled): read your roster now, so the plan and the day markers follow
     if (ch.ypage) { const a = ch.ypage.newValue, b = ch.ypage.oldValue; if (b && b.kind === 'add' && (!a || a.url !== b.url)) { const l = leaguesKnown().find(x => String(x.lid) === String(b.lid)); if (l) setTimeout(() => rosterNow(l.league, 'after add/drop'), 1500); } }
     if (ch.ydate && ch.ydate.newValue) { ST.ydate = ch.ydate.newValue; if (Object.keys(ch).length === 1) { render(); return; } }

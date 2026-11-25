@@ -472,7 +472,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return give ? { give, rows } : null; }
   async function bbmTrades(y0, max) { const d0 = await bbmOpen(TM, y0.league, 'Trade Monster'); const out = {};
     // your players as Trade Monster lists them (best first); the first few are the ones worth asking about
-    const mine = [...d0.querySelectorAll('select[name^="DD1"]')].map(s => s.getAttribute('name').slice(3)).filter(x => /^\d+$/.test(x)).slice(0, max || 16);
+    const mine = [...d0.querySelectorAll('select[name^="DD1"]')].map(s => s.getAttribute('name').slice(3)).filter(x => /^\d+$/.test(x)).slice(0, max || undefined); // every player (owner's review, 25 Nov: the old cap of 16 left the ones you'd shop unread)
     for (const id of mine) { try { const r = parseTM(await postAt(TM, d0, { ['DD1' + id]: 'Trade', DD2: '0' }, ['FINDTRADES', 'Find Trades'], 'Trade Monster ' + id)); if (r) out[r.give] = r.rows; } catch (e) { if (e.auth) throw e; trace('Trade Monster ' + id, false, e.message); } }
     trace('Trade Monster', Object.keys(out).length > 0, Object.keys(out).length + ' of ' + mine.length + ' players'); return { ts: Date.now(), by: out }; }
   // ---- multi-player deals (8.4.0), 2-for-1 to 3-for-3. Every number shown is Trade Monster's Analyze Trade; the add-on only picks

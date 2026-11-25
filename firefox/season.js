@@ -522,24 +522,28 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     return { m, W, play, fas, n: seen.size }; }
   // ---- trades start from Basketball Monster (7.50.0): Trade Monster's "Find Trades" list for each of your players and its Win% change
   // for both teams, as category matchups won out of 99 (Win% x 99: 11 opponents x 9 categories, or 9 x 11). The co-pilot only checks
-  // them: your gain clears the bar (+1 or +2 is inside forecast noise), they don't lose more than themMin, and Yahoo ranks the two
-  // players within rankGap of each other. Deals that clear the bar but fail a check are kept, with the reason. ----
+  // them: your gain clears the bar (+1 or +2 is inside forecast noise), they don't lose more than themMin, and the two
+  // players' Yahoo ranks look fair to the other manager (yahooFair). Deals that clear the bar but fail a check are kept, with the reason. ----
+  // Yahoo's view of a one-for-one (owner, 25 Nov: Yahoo's rank is often all other managers look at): yours (ra) times the fairness
+  // setting must be no worse than theirs (rb). Directional and relative: 105 for 93 is close, 105 for 5 isn't, 105 for 200 they'd take.
+  // Within one draft round (n = teams) always counts as fair: ratios twitch at the top (6 for 4). No Yahoo rank: not judged.
+  const yahooFair = (lg, ra, rb, n) => !ra || !rb || ra * fairMin(lg) <= rb || ra - rb < n;
   const fairMin = lg => S(lg).fairMin != null ? +S(lg).fairMin : 0.8; // multi-player deals: the share of what they give that they must get back
-  const bar99 = lg => S(lg).bar99 != null ? +S(lg).bar99 : 3, themMin = lg => S(lg).themMin != null ? +S(lg).themMin : -1, rankGap = lg => S(lg).rankGap != null ? +S(lg).rankGap : 15;
+  const bar99 = lg => S(lg).bar99 != null ? +S(lg).bar99 : 3, themMin = lg => S(lg).themMin != null ? +S(lg).themMin : -1;
   const of99 = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v);
-  function tmDeals(lg, M) { const tm = M && M.tm; if (!tm || !tm.by) return null; const bar = bar99(lg), tmin = themMin(lg), gap = rankGap(lg);
-    return memo('tm|' + lg + '|' + tm.ts + '|' + bar + '|' + tmin + '|' + gap, () => {
+  function tmDeals(lg, M) { const tm = M && M.tm; if (!tm || !tm.by) return null; const bar = bar99(lg), tmin = themMin(lg), fm = fairMin(lg);
+    return memo('tm|' + lg + '|' + tm.ts + '|' + bar + '|' + tmin + '|' + fm, () => {
       const own = {}; M.L.teams.forEach(t => t.ids.forEach(id => own[id] = t.tid)); const mine = new Set((M.L.teams.find(t => t.tid === M.L.me) || {}).ids || []);
       const yr = id => (M.yrank && M.yrank(id)) || null; const by = {};
       Object.entries(tm.by).forEach(([give, rows]) => { if (!mine.has(give)) return; // traded away since Trade Monster was read
         const deals = rows.map(r => { const you = Math.round(r.t1 * 0.99), them = Math.round(r.t2 * 0.99), tid = own[r.id] && own[r.id] !== M.L.me ? own[r.id] : null; const ra = yr(give), rb = yr(r.id); const why = [];
           if (!tid) why.push('not on another team any more'); if (them < tmin) why.push('they lose ' + Math.abs(them) + ' of 99');
-          if (ra && rb && Math.abs(ra - rb) > gap) why.push('Yahoo ranks them ' + ra + ' and ' + rb);
+          if (!yahooFair(lg, ra, rb, M.L.teams.length)) why.push('Yahoo ranks yours ' + ra + ', theirs ' + rb);
           return { id: r.id, give, you, them, tid, ra, rb, why }; });
         const score = d => Math.min(d.you, d.them); const clear = deals.filter(d => d.you >= bar);
         by[give] = { ok: clear.filter(d => !d.why.length).sort((a, b) => score(b) - score(a) || b.you - a.you), no: clear.filter(d => d.why.length).sort((a, b) => b.you - a.you), all: deals, n: rows.length }; });
       const tgt = {}, k = d => (d.why.length ? 0 : 1000) + d.you; Object.values(by).forEach(x => x.ok.concat(x.no).forEach(d => { if (!tgt[d.id] || k(d) > k(tgt[d.id])) tgt[d.id] = d; }));
-      return { ts: tm.ts, by, tgt, bar, tmin, gap }; }); }
+      return { ts: tm.ts, by, tgt, bar, tmin }; }); }
   // one Trade Monster swap as a line: their player, both teams' numbers, Yahoo rank, injury, why it's unlikely. For a one-for-one
   // Basketball Monster's category gain is his category values less yours; when one category carries over 70% of it, say so.
   function tmLine(M, d, injT, o) { o = o || {}; const p = M.P[d.id] || {}, q = M.P[d.give] || {}; const a = (p.ros || {}).cv || {}, b = (q.ros || {}).cv || {};
@@ -698,7 +702,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const title = { trade: 'Trade', add: 'Pickup', players: 'Player list' }[yp.kind];
     if (!M) return `<div class="card ctx"><div class="h"><span>${title}</span></div><div class="sub">${ctxRefreshing[yp.lid] || busy ? 'Fetching the latest Basketball Monster projections (the first time takes about 30 seconds)…<span class="skel" style="width:80%"></span><span class="skel" style="width:55%"></span>' : (bx && bx.err ? 'Couldn\'t get Basketball Monster projections: ' + esc(bx.err) : 'Basketball Monster projections not loaded yet. Sign in at basketballmonster.com, then press Sync.')}</div></div>`;
     // the long-term part of every verdict on Yahoo's pages uses the panel's own season measure (one mechanism)
-    M.board = boardFor(l.league); M.pickBar = pick99(l.league); M.bar99 = bar99(l.league); M.themMin = themMin(l.league); M.rankGap = rankGap(l.league);
+    M.board = boardFor(l.league); M.pickBar = pick99(l.league); M.bar99 = bar99(l.league); M.themMin = themMin(l.league); M.fairMin = fairMin(l.league);
     // the deal as ticked, asked live of Trade Monster (a few seconds); the card shows "Asking…" until it answers
     M.ana = (them, give, get) => { const k = [yp.lid, them, give.slice().sort(), get.slice().sort()].join('|'); if (tmAsk[k]) return tmAsk[k];
       if (!window.SYNC || !window.SYNC.bbmAnalyze || window.PHONE_V) return { err: 'Trade Monster can only be asked from Firefox on the PC' };
@@ -912,9 +916,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <div class="row" style="margin-top:8px"><label><input type="checkbox" id="spare" ${A.spare ? 'checked' : ''}> Keep one add spare for injuries until Saturday</label></div>
       <div class="row" style="margin-top:8px">Trade bar<span style="margin-left:auto"><input class="thin" id="bar99" type="number" step="1" min="1" value="${bar99(lg)}"> of 99</span></div>
       <div class="row" style="margin-top:4px">They lose at most<span style="margin-left:auto"><input class="thin" id="themMin" type="number" step="1" max="0" value="${-themMin(lg)}"> of 99</span></div>
-      <div class="row" style="margin-top:4px">Yahoo ranks within<span style="margin-left:auto"><input class="thin" id="rankGap" type="number" step="1" min="1" value="${rankGap(lg)}"> places</span></div>
-      <div class="row" style="margin-top:4px">Multi-player deals: they get back at least<span style="margin-left:auto"><input class="thin" id="fairMin" type="number" step="5" min="50" max="100" value="${Math.round(fairMin(lg) * 100)}"> %</span></div>
-      <div class="sub">Trades start from Basketball Monster's Trade Monster. Its Win% change × 99 is category matchups won out of 99. A swap is shown when it adds at least the bar for you; it's realistic when the other team loses no more than the second number and Yahoo ranks the two players within the third.</div>
+      <div class="row" style="margin-top:4px">On Yahoo's ranks they get back at least<span style="margin-left:auto"><input class="thin" id="fairMin" type="number" step="5" min="50" max="100" value="${Math.round(fairMin(lg) * 100)}"> %</span></div>
+      <div class="sub">Trades start from Basketball Monster's Trade Monster. Its Win% change × 99 is category matchups won out of 99. A swap is shown when it adds at least the bar for you; it's realistic when the other team loses no more than the second number and, on Yahoo's ranks (often all the other manager looks at), your player is no more than the last number below theirs: with 80%, a player Yahoo ranks 105 fits one ranked 84 or lower. Within one draft round (as many places as teams) always counts as fair. Multi-player deals use the same share on each side's best lineup.</div>
       <div class="sub" style="margin-top:8px"><button class="lnk" id="setReset">Reset advice and bands to the defaults</button></div></details>`;
     // 4. display
     h += `${fold('display', 'Display')}
@@ -935,7 +938,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     [['thDead', 'dead'], ['thSafe', 'safe'], ['thLock', 'locked']].forEach(([id, k]) => { const e = $(id); if (e) e.onchange = () => set(() => { s.th = Object.assign({}, s.th || {}, { [k]: Math.max(0, Math.min(100, +e.value || 0)) / 100 }); }); });
     const b9 = $('bar99'); if (b9) b9.onchange = e => set(() => { const v = Math.round(+e.target.value); s.bar99 = v >= 1 ? v : null; });
     const tmn = $('themMin'); if (tmn) tmn.onchange = e => set(() => { const v = Math.round(Math.abs(+e.target.value)); s.themMin = isNaN(v) ? null : -v; });
-    const rg = $('rankGap'); if (rg) rg.onchange = e => set(() => { const v = Math.round(+e.target.value); s.rankGap = v >= 1 ? v : null; });
+    
     const fm = $('fairMin'); if (fm) fm.onchange = e => set(() => { const v = Math.round(+e.target.value); s.fairMin = v >= 50 && v <= 100 ? v / 100 : null; });
     const rs = $('setReset'); if (rs) rs.onclick = () => { set(() => { delete s.pick; delete s.fit; delete s.th; delete s.tradeBar; delete s.bar99; delete s.themMin; delete s.rankGap; delete s.fairMin; }); toast('Advice and bands back to the defaults', 'ok'); };
     const br = $('bandsReset'); if (br) br.onclick = () => { const M = modelFor(lg); const l = leaguesKnown().find(x => x.league === lg); const win = l && window.STRAT && M ? window.STRAT.catWin(ST['bbmstand:' + l.lid], M.ctx.cats) : null; if (!win) { br.textContent = 'Waiting for Basketball Monster…'; return; } const sk = 'strat:' + l.lid; ST[sk] = window.STRAT.snapshot(M, win, M.ctx.punt || []); browser.storage.local.set({ [sk]: ST[sk] }); DV++; render(); };
@@ -1394,12 +1397,12 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       block.forEach(id => { const r = V.mine.find(x => x.id === id); if (!r) return; const T = teamNeedsAll(lg, M, r); const F = blockFits(r, LV, myNeed, T.map(t => t.tid), TD && TD.by[r.id], themMin(lg));
         const str = goodAt(r.cv || {}, Object.keys(r.cv || {})).slice(0, 3);
         h += `<div class="blkc"><div class="l1">${dot(r.kind)}<b>${esc(r.n)}</b>${injT(id)}<span class="fk ${FIT[r.kind][0]}">${FIT[r.kind][1]}</span>${r.brank ? `<span class="muted">Basketball Monster rank ${r.brank}</span>` : ''}</div><button class="blk wide on" data-block="${esc(r.id)}">On the trade block · tap to take off</button>
-          ${blockVerdict(lg, M, r)}
+          ${blockVerdict(lg, M, r)}${chipNote(lg, r, M.L.teams.length)}
           <div class="mvl"><span>Offering</span>${str.length ? `strong in <b>${esc(andL(str.map(NN)))}</b>` : 'no standout category'}</div>
           <div class="mvl"><span>Looking for</span>${myNeed.length ? `<b>${esc(andL(myNeed.map(NN)))}</b>, your swing categories${V.snap ? ` (bands set ${dt(V.snap.ts)})` : ''}` : 'no swing category to target'}</div>
           <div class="h mvh"><span>Teams that need what he brings</span></div>
           ${T.length ? T.map(t => `<div class="mvl"><span>${owner(t.tid)}</span>needs <b>${esc(andL(t.cats.map(NN)))}</b></div>`).join('') : `<div class="strnone">No team's swing categories match his strengths.</div>`}
-          <div class="h mvh"><span>Players who fit</span><span class="sub">from his Trade Monster "Find Trades" list: strong (+0.5 or more) in what you need; you don't lose, they lose ${Math.abs(themMin(lg))} or less</span></div>
+          <div class="h mvh"><span>Players who fit</span><span class="sub">from his Trade Monster "Find Trades" list: strong (+0.5 or more) in what you need; you gain, they lose ${Math.abs(themMin(lg))} or less and Yahoo's ranks look fair</span></div>
           ${F.list.length ? F.list.slice(0, 8).map(x => playerRow(x, { owner: true, extra: [['Trade Monster', `you ${of99(x.d.you)}, them ${of99(x.d.them)} of 99`], ['Brings', andL(x.hit.map(NN))]].concat(x.wants ? [['', 'His team needs what ' + r.n + ' brings']] : []) })).join('')
             : `<div class="strnone">${!F.read ? "Trade Monster hasn't read his Find Trades list yet." : !myNeed.length ? 'No swing category to match.' : 'Nobody in his Find Trades list is strong in ' + esc(andL(myNeed.map(NN))) + ' without costing one side.'}</div>`}
           ${tmBlock(lg, M, r, injT)}${multiBlock(lg, M, r)}</div>`; });
@@ -1445,13 +1448,20 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     const multi = MD.D.filter(d => d.give.includes(r.id)); const one = X ? X.ok[0] : null; const m1 = multi.find(MD.real);
     const best = [one && { you: one.you, them: one.them, w: nm(one.id) + ' (' + esc(M.teamName(one.tid)) + ')' }, m1 && { you: m1.you, them: m1.them, w: m1.get.map(nm).join(' + ') + ' for ' + m1.give.map(nm).join(' + ') }].filter(Boolean).sort((a, b) => b.you - a.you)[0];
     if (best) return `<div class="mvl bverd"><span>Verdict</span>Best deal: <b>${esc(best.w)}</b>: <b class="plus">you ${of99(best.you)}</b>, <b class="${best.them >= 0 ? 'plus' : 'minus'}">them ${of99(best.them)}</b> of 99</div>`;
-    const ask = X ? X.no.filter(rankOnly)[0] : null;
-    if (ask) return `<div class="mvl bverd"><span>Verdict</span>No realistic deal yet. Worth asking: <b>${esc(nm(ask.id))}</b>, <b class="plus">you ${of99(ask.you)}</b>, them ${of99(ask.them)} of 99</div>`;
+    const ask = X ? X.no.filter(askable)[0] : null;
+    if (ask) return `<div class="mvl bverd"><span>Verdict</span>No realistic deal yet. Worth asking: <b>${esc(nm(ask.id))}</b>, <b class="plus">you ${of99(ask.you)}</b>, them ${of99(ask.them)} of 99 (fair on Yahoo's ranks)</div>`;
     const fa = r.read && r.read.best; const pb = pick99(lg);
     const faW = fa && fa.you != null ? ` His best free agent, ${esc(nm(fa.id))}: ${of99(fa.you)} of 99 (your pickup bar ${of99(pb)})${r.kind === 'costs' ? '. A free agent does more: see Who to drop on Pickups.' : '.'}` : '';
     return `<div class="mvl bverd"><span>Verdict</span>${!TD || !X ? "Trade Monster hasn't read him yet." : 'No deal that helps you was found.'}${faW}</div>`; }
-  // a swap whose only failed check is Yahoo's rank gap: Basketball Monster says the other team doesn't lose, so it's worth asking
-  const rankOnly = d => d.tid && d.why.length === 1 && /^Yahoo ranks/.test(d.why[0]);
+  // worth asking (owner, 25 Nov): Yahoo's ranks make it look fair to them (often all they look at), though Basketball Monster
+  // says they lose more than your limit
+  const askable = d => d.tid && d.why.length === 1 && /^they lose/.test(d.why[0]);
+  // his trade chip value (owner, 25 Nov): Yahoo's rank is what other managers see, Basketball Monster's what he's worth to you.
+  // Out by more than the fairness share either way gets a note; it never changes a verdict.
+  function chipNote(lg, r, n) { const b = r.brank, y = r.yrank, f = fairMin(lg); if (!b || !y || Math.abs(y - b) < n) return ''; // within a draft round: no note
+    if (y * f > b) return `<div class="mvl"><span>Trade chip</span>weak: Yahoo ranks him ${y}, Basketball Monster ${b}. Other managers will likely value him below what he's worth to you.</div>`;
+    if (b * f > y) return `<div class="mvl"><span>Trade chip</span>strong: Yahoo ranks him ${y}, Basketball Monster ${b}. Other managers will likely value him above what he's worth to you: a good time to sell.</div>`;
+    return ''; }
   function tmBlock(lg, M, r, injT) { const TD = tmDeals(lg, M), bar = bar99(lg); const X = TD && TD.by[r.id];
     if (!TD) return `<div class="strnone">Trade Monster hasn't been read for this league yet. It's read once a day with the full sync.</div>`;
     const tn = tid => esc(((M.L.teams.find(t => t.tid === tid) || {}).name) || 'another team'); const dealRow = d => { const D = anchorDrops(lg, M, d.give, d.id); return tmLine(M, d, injT, { warn: D.length ? 'after this swap ' + dropWords(D) : '' }); };
@@ -1465,8 +1475,8 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     h += order.length ? order.slice(0, 4).map(team).join('') : `<div class="strnone">No realistic deal: every swap that clears the bar fails a check below.</div>`;
     if (order.length > 4) h += `<details class="more"><summary>${order.length - 4} more team${order.length - 4 === 1 ? '' : 's'}</summary>${order.slice(4).map(team).join('')}</details>`;
     // owner's review, 25 Nov: Yahoo's rank gap alone doesn't hide a swap Basketball Monster says they don't lose on
-    const ask = X.no.filter(rankOnly), no = X.no.filter(d => !rankOnly(d));
-    if (ask.length) h += `<div class="h mvh"><span>Worth asking</span><span class="sub">they don't lose on Basketball Monster, but Yahoo ranks the two more than ${rankGap(lg)} apart, so they may not see it that way</span></div>${ask.slice(0, 5).map(dealRow).join('')}`;
+    const ask = X.no.filter(askable), no = X.no.filter(d => !askable(d));
+    if (ask.length) h += `<div class="h mvh"><span>Worth asking</span><span class="sub">Yahoo's ranks make these look fair to them, though Basketball Monster says they lose more than ${Math.abs(themMin(lg))} of 99</span></div>${ask.slice(0, 5).map(dealRow).join('')}`;
     if (no.length) h += `<details class="more"><summary>Good for you, unlikely to be accepted (${no.length})</summary>${no.slice(0, 10).map(dealRow).join('')}</details>`;
     return h; }
   // the multi-player deals that include him (Finder's list, Any: each unlikely one says why)
@@ -1478,7 +1488,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <p><b>One measure, every page.</b> Your expected categories won a week over the rest of the season, through the end of your playoffs, against every other team in your league, on Basketball Monster's projections (games each player is expected to play, times his per-game stats). Punted categories count as a usual loss, whatever the move. Every decision is a change in that one number: Matchup, Lineup, Pickups, Trades and the cards on Yahoo's pages all read the same result, so they can't disagree. Changes are shown as categories over the rest of the season.</p>
       <ul><li><b>A player's value to you</b>: what the number loses without him. A player who holds up a category you win is worth a lot to you even if his overall rank is modest, because taking him out costs that category.</li>
       <li><b>A pickup</b> comes from Basketball Monster's Trade Monster, not this measure: "Find Free Agents" with each of your players as the drop, every 6 hours. The number is your projected Win% change × 99: category matchups won out of 99 a week over the rest of the season. Each free agent shows with the drop that leaves you best off (never a player in an injured-list spot, one you chose to keep, or one you added in the last two weeks). The Pickups page lists the top 30, with a guard, forward and centre filter.</li>
-      <li><b>A trade</b> comes from Basketball Monster's Trade Monster, not this measure: "Find Trades" for each of your players once a day, and "Analyze Trade" for the deal you tick on Yahoo. Both teams' Win% change is shown as category matchups won out of 99 a week. A swap shows when you gain ${of99(bar99(lg))} or more; it's realistic when they lose no more than ${Math.abs(themMin(lg))} and Yahoo ranks the two players within ${rankGap(lg)} of each other.</li>
+      <li><b>A trade</b> comes from Basketball Monster's Trade Monster, not this measure: "Find Trades" for each of your players once a day, and "Analyze Trade" for the deal you tick on Yahoo. Both teams' Win% change is shown as category matchups won out of 99 a week. A swap shows when you gain ${of99(bar99(lg))} or more; it's realistic when they lose no more than ${Math.abs(themMin(lg))} and Yahoo's ranks look fair to them: your player's Yahoo rank is no more than ${Math.round(fairMin(lg) * 100)}% below theirs (105 for 84, not 105 for 5; 105 for 200 is a win in their eyes), or the two are within one draft round.</li>
       <li><b>Multi-player deals</b> (Finder): once a day the co-pilot builds 2-for-1 to 3-for-3 deals for every team and asks Trade Monster's Analyze Trade to score them, counting the free agent that fills an open spot or the player you'd drop. It only asks about deals the other manager could take seriously: on Basketball Monster's values, their best lineup gets back at least ${Math.round(fairMin(lg) * 100)}% of what it loses. The number shown is always Trade Monster's.</li></ul>
       <p><b>Pickups</b> (${esc(PK.t)}). ${esc(PK.w)} <b>Best pickup</b> is the list's number 1 when it clears that bar. <b>Wait until Monday</b>: it clears the bar but the drop has more games left this week than the pickup in Matchup Monster, or you have no adds left. <b>In play this week</b>: the categories Matchup Monster gives you a 20 to 80% chance to win. Each free agent's row shows his games left this week and which of those he fills (Basketball Monster category value +0.5 or more). That is timing only: it never changes the order. Matchup Monster's own picks that aren't in your season list are added at the end as <b>This week only</b>. <b>Who to drop</b> (above the list): every player of yours, least missed first, each measured against the same free agents in Find Free Agents so the free agent cancels out. Over Yahoo's limit it starts with the steps to fix your roster. Protected players and recent adds are listed with the reason but never chosen for you. <b>Stream this week only</b> still comes from the week planner until the Matchup phase.</p>
       <p><b>Your build.</b> For each category, the co-pilot counts how many teams Basketball Monster projects you to beat from here. <i class="fd n"></i>Lost: under ${pc(th.dead)}% of teams. <i class="fd a"></i>Swing: up to ${pc(th.safe)}%. <i class="fd gr"></i>Winning: up to ${pc(th.locked)}%. <i class="fd g"></i>Locked: above that. Categories you punt always count as lost. The bands describe your team; the reads below come from the one measure.</p>
@@ -1488,7 +1498,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       <li><i class="fd g"></i><b>${FIT.anchor[1]}</b>: the remove-him test. Swap his Basketball Monster output for his best free agent's in your Analysis Monster totals and count the teams you'd beat again: if any category drops a band (won to contested, or contested to lost), he's holding it up. An anchor is never a sell; a keeper who is one shows it among his reasons, and any trade that drops a band shows a warning naming the category. A drop inside a band (locked to winning) doesn't count: that lead is the surplus you can trade from.</li>
       <li><i class="fd g"></i><b>${FIT.keep[1]}</b>: none of the above. Every player shows his best free agent's number next to your pickup bar, so you can see how close each one is. An anchor is only ever a keep or a sell, never a drop candidate.</li></ul>
       <p><b>Other teams' players</b> (Finder, trade block, Yahoo's trade page): Trade Monster's one-for-one with the player of yours it pairs him with.</p>
-      <p><b>Trade block</b>: each player starts with one verdict: his best realistic deal on Trade Monster (one-for-one or multi-player), else the best swap worth asking about, else his best free agent. <b>Players who fit</b> come from his own Find Trades list: strong in your swing categories (the bands above), and neither side loses more than your limits. <b>Worth asking</b>: Basketball Monster says they don't lose, but Yahoo ranks the two more than ${rankGap(lg)} apart.</p>
+      <p><b>Trade block</b>: each player starts with one verdict: his best realistic deal on Trade Monster (one-for-one or multi-player), else the best swap worth asking about, else his best free agent. <b>Players who fit</b> come from his own Find Trades list: strong in your swing categories (the bands above), and neither side loses more than your limits. <b>Worth asking</b>: Yahoo's ranks make it look fair to them, though Basketball Monster says they lose more than your limit. <b>Trade chip</b>: when Yahoo ranks your player well below Basketball Monster, other managers will value him less than he's worth to you; well above, he sells for more than he's worth. Well means past the fairness share and more than a draft round apart.</p>
       <p><b>Your punt doesn't suit your best players</b> appears when two or more of your top four by Basketball Monster value are sells: the build may be wrong, not the players. Compare builds before selling.</p>
       <p><b>Analyst tags</b> (Sell High, Buy Low, Droppable…) are Basketball Monster's view of general fantasy value, not your build. They're shown in grey and never change a read.</p>
       <p><button class="lnk" data-openset="build">Change these in Settings</button></p></div>`; }
@@ -1515,7 +1525,7 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   // list (Basketball Monster's own similar-value pool) who are strong in your swing categories and don't cost you, best for you first
   function blockFits(r, LV, need, wantTids, X, tmin) { if (!X) return { read: false, list: [] };
     // them ≥ your limit too: 8.1.0's complaint (a star offered for a regular) is a swap the other team loses badly on
-    const list = X.all.filter(d => d.tid && d.you >= 0 && d.them >= tmin && LV[d.id]).map(d => { const x = LV[d.id]; return Object.assign({}, x, { d, hit: goodAt(x.cv || {}, need), wants: wantTids.includes(x.own) }); })
+    const list = X.all.filter(d => d.tid && d.you > 0 && d.them >= tmin && !d.why.some(w => /^Yahoo/.test(w)) && LV[d.id]).map(d => { const x = LV[d.id]; return Object.assign({}, x, { d, hit: goodAt(x.cv || {}, need), wants: wantTids.includes(x.own) }); })
       .filter(x => x.hit.length).sort((a, c) => c.d.you - a.d.you || c.d.them - a.d.them || c.hit.length - a.hit.length);
     return { read: true, list }; }
   function teamNeedsAll(lg, M, r) { return M.L.teams.filter(t => t.tid !== M.L.me).map(t => { const N = teamNeeds(lg, M, t.tid); if (!N) return null; const cats = N.need.filter(c => (r.cv[c] || 0) >= 0.5); return cats.length ? { tid: t.tid, cats } : null; }).filter(Boolean).sort((a, b) => b.cats.length - a.cats.length).slice(0, 4); }

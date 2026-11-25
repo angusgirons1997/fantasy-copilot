@@ -73,7 +73,7 @@
     const hot = n => { const t = trend(n); if (!t) return ''; if (t.hot) return 'most added on Yahoo today (+' + t.net.toLocaleString('en-US') + ')'; if (t.delta >= 5) return 'rising: +' + Math.round(t.delta) + '% rostered on Yahoo'; return ''; };
     const com = (n, t) => (bx.com || {})[nk(n) + '|' + tc(t)] || (bx.com || {})[nk(n) + '|' + String(t || '').toUpperCase()] || Object.entries(bx.com || {}).find(([k]) => k.split('|')[0] === nk(n)) && Object.entries(bx.com || {}).find(([k]) => k.split('|')[0] === nk(n))[1] || null;
     // Yahoo's ranking for every rostered player (from the team pages), for judging what other managers will accept
-    const yrk = {}; ((lg && lg.teams) || []).forEach(t => Object.entries(t.ranks || {}).forEach(([n, r]) => { const id = find(n); if (id) yrk[id] = r; }));
+    const yrk = {}; ((lg && lg.rk === 'current' && lg.teams) || []).forEach(t => Object.entries(t.ranks || {}).forEach(([n, r]) => { const id = find(n); if (id) yrk[id] = r; }));
     // Yahoo player ids: from the league's team pages, then anything seen on Yahoo pages (players you've looked at, trends)
     const yidOf = {}; ((lg && lg.teams) || []).forEach(t => Object.entries(t.yids || {}).forEach(([n, y]) => { const id = find(n); if (id) yidOf[id] = y; }));
     Object.entries(yidmap).forEach(([y, id]) => { if (!yidOf[id]) yidOf[id] = y; }); Object.entries((ST['ytrend:' + lid] || {}).players || {}).forEach(([n, v]) => { const id = v.yid && find(n); if (id && !yidOf[id]) yidOf[id] = v.yid; });
@@ -120,9 +120,9 @@
     if (!A || A.pending) return sides + `<div class="sub">Asking Basketball Monster's Trade Monster (Analyze Trade)…</div><span class="skel" style="width:70%"></span>`;
     if (A.err) return sides + `<div class="sub minus">Couldn't ask Trade Monster: ${esc(A.err)}</div>`;
     if (A.miss) return sides + `<div class="sub minus">Trade Monster doesn't list ${esc(and(A.miss.map(id => (M.P[id] || {}).n || id)))} on these rosters (an injured-list spot, or a move it hasn't seen yet).</div>`;
-    const bar = M.bar99 != null ? M.bar99 : 3, tmin = M.themMin != null ? M.themMin : -1, gap = M.rankGap != null ? M.rankGap : 15;
+    const bar = M.bar99 != null ? M.bar99 : 3, tmin = M.themMin != null ? M.themMin : -1, fm = M.fairMin != null ? M.fairMin : 0.8;
     const why = []; if (A.them < tmin) why.push('they lose ' + Math.abs(A.them) + ' of 99');
-    if (give.length === 1 && get.length === 1) { const ra = M.yrank && M.yrank(give[0]), rb = M.yrank && M.yrank(get[0]); if (ra && rb && Math.abs(ra - rb) > gap) why.push('Yahoo ranks them ' + ra + ' and ' + rb); }
+    if (give.length === 1 && get.length === 1) { const ra = M.yrank && M.yrank(give[0]), rb = M.yrank && M.yrank(get[0]); if (ra && rb && ra * fm > rb && ra - rb >= M.L.teams.length) why.push('Yahoo ranks yours ' + ra + ', theirs ' + rb); }
     let h = `<div class="vd ${A.you >= bar ? 'good' : A.you < 0 ? 'bad' : ''}">You ${o99(A.you)} · them ${o99(A.them)} <small>of 99 per week</small></div>`;
     h += `<div class="sub">${A.you >= bar ? `Clears your ${o99(bar)} bar` : A.you > 0 ? `Under your ${o99(bar)} bar (+1 or +2 is inside forecast noise)` : A.you === 0 ? 'No change for you' : 'Costs you'}${offer ? '' : why.length ? ` · <b>unlikely to be accepted:</b> ${esc(why.join('; '))}` : A.you >= bar ? ` · realistic: ${A.them > 0 ? 'they gain too' : A.them === 0 ? 'even for them' : 'they lose only ' + Math.abs(A.them)}` : ''}</div>` + sides;
     // Basketball Monster's own category gains (what you get less what you give, in its category values)

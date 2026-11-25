@@ -109,7 +109,7 @@ the rate is Analysis Monster's as given. Checked by hand against the 16 Nov Mad 
 Every trade number is Basketball Monster's: both teams' Win% change in Trade Monster, shown as category matchups won out of 99 a
 week (Win% x 99). The co-pilot has no trade maths of its own (`trade.js` and `H2H.side`'s "for them" were removed in 7.51.0).
 - **Find Trades** (`bbmTrades` in `sync.js`, daily with the full sync, `bbmtm:<lid>`): each of your players' one-for-ones.
-  `tmDeals` in `season.js` applies the bar (`bar99`, +3), the acceptance checks (`themMin` −1, `rankGap` 15) and indexes the
+  `tmDeals` in `season.js` applies the bar (`bar99`, +3), the acceptance checks (`themMin` −1, `yahooFair`: see 8.8.0) and indexes the
   deals by your player (`by`) and by theirs (`tgt`). Best trades, the Trade block, Finder, the Roster trade lines and its sell
   labels (a sell = a realistic swap that clears the bar) all read it.
 - **Analyze Trade** (`bbmAnalyze` in `sync.js`, asked live via `M.ana` in `ctxBlock`): the deal ticked on Yahoo's trade or offer
@@ -143,7 +143,7 @@ week (Win% x 99). The co-pilot has no trade maths of its own (`trade.js` and `H2
 - No Matchup Monster week (a failed read or a synthetic week): the card says so instead of showing numbers.
 - Still the old measure, on purpose: the forecast logs (`h2hfc`, `lgfc`) that feed the forecast check.
 
-**Basketball Monster first (7.50.0, owner's founding rule):** advice starts from BBM's own outputs. The add-on's existing logic sifts and adds detail to them, but never replaces them with its own numbers. Nothing existing is removed. Trades: sync.js `bbmTrades` runs Trade Monster's "Find Trades" (button FINDTRADES, DD2 blank = whole league) for each of your players once a day, stored as `bbmtm:<lid>`. `tmDeals` in season.js turns Team1+/Team2+ (Win% points) into category matchups out of 99 (× 0.99). A swap is shown when you gain at least `bar99` (default +3). It's realistic when they lose at most `themMin` (default −1) and the Yahoo ranks are within `rankGap` (default 15). Otherwise it goes under "Good for you, unlikely to be accepted", with the reason. All three are per-league settings. Best trades shows the profile you're selling, then the teams he fits (their needs from teamNeeds) and their players. The co-pilot's own category breakdown only adds the ">70% in one category" note. Do next names your player only. Next phases: Pickups from Matchup Monster's "Free Agents to Consider" and BBM weekly projections (fill the week's category holes), then Matchup, then Lineup.
+**Basketball Monster first (7.50.0, owner's founding rule):** advice starts from BBM's own outputs. The add-on's existing logic sifts and adds detail to them, but never replaces them with its own numbers. Nothing existing is removed. Trades: sync.js `bbmTrades` runs Trade Monster's "Find Trades" (button FINDTRADES, DD2 blank = whole league) for each of your players once a day, stored as `bbmtm:<lid>`. `tmDeals` in season.js turns Team1+/Team2+ (Win% points) into category matchups out of 99 (× 0.99). A swap is shown when you gain at least `bar99` (default +3). It's realistic when they lose at most `themMin` (default −1) and Yahoo's ranks look fair to them (`yahooFair`, 8.8.0; was a 15-place gap). Otherwise it goes under "Good for you, unlikely to be accepted", with the reason. All three are per-league settings. Best trades shows the profile you're selling, then the teams he fits (their needs from teamNeeds) and their players. The co-pilot's own category breakdown only adds the ">70% in one category" note. Do next names your player only. Next phases: Pickups from Matchup Monster's "Free Agents to Consider" and BBM weekly projections (fill the week's category holes), then Matchup, then Lineup.
 
 **Sixth Man brand (7.54.0, locked by the owner):** the add-on is called Sixth Man (the gecko id stays the same, or updates break).
 - Colours: court navy #0E1A2B, ball orange #F26B1D, orange for text on cream #C24E0C, hardwood cream #F5F1EA. Light theme = cream,
@@ -390,9 +390,33 @@ Built after two devil's-advocate reviews with the owner (24 Nov; the logic-revie
 - Looking for = the header's swing categories (the saved bands, `V.grp.swing`, with the date set). Other teams' needs still use team values.
 - Players who fit (`blockFits`): from his own Find Trades list (`tmDeals` `by[id].all`), strong (+0.5) in a swing category, you ≥ 0 and
   them ≥ your limit (8.1.0's star-for-a-regular case), best for you first, both numbers shown. The made-up rank window is gone.
-- Worth asking: a swap whose only failed check is Yahoo's rank gap shows in the open, with the reason; the rest stay folded as unlikely.
+- Worth asking: replaced in 8.8.0 (below).
 - Multi-player deals with him: `multiDeals` (shared with the Finder, same filters); realistic in the open, unlikely folded.
 - Find Trades is read for every player of yours (the cap of 16 in `bbmTrades` is gone: 2 to 8 more page loads a day per league).
 - Test: t_render puts every player on the block on the real store (one verdict each, one swing set, fits cost neither side, unread
   players never get "no swap adds").
+
+## 8.8.0 trade model: Yahoo's view (owner, 25 Nov: Yahoo's rank is often all other managers look at)
+Built after a devil's-advocate pass on real data (Suggs: Basketball Monster 79, Yahoo 105; the 8.7.0 block offered Giannis for him).
+- One-for-one Yahoo check (`yahooFair` in season.js, the same in context.js for Yahoo's trade page): your player's Yahoo rank x the
+  fairness setting (`fairMin`, 80%) must be no worse than theirs, or the two within one draft round (as many places as teams). It's
+  directional (105 for 200 is a win in their eyes, so it passes) and relative (105 for 93 is close; 105 for 5 isn't). No Yahoo rank: not judged.
+  Rejected designs: the 15-place gap (both directions, same size at rank 5 and 200); Basketball Monster's lineup worth at the Yahoo rank
+  (72 of 78 Mad dogs swaps failed: worth is ~0 near replacement); BBM value at the Yahoo rank (negative below ~60, so absurd swaps passed).
+  The "Yahoo ranks within" setting is gone; the 80% setting now reads "On Yahoo's ranks they get back at least". Multi-player deals keep
+  their lineup test on Yahoo ranks with the same share.
+- Trade block: Players who fit need you > 0, them within your limit and Yahoo fair. Worth asking = Yahoo fair but Basketball Monster says
+  they lose more than your limit (often all they'll look at). Unfair on Yahoo = folded as unlikely.
+- Trade chip note (`chipNote`): Yahoo rank vs Basketball Monster rank, past the fairness share and more than a draft round apart: "weak"
+  (Yahoo ranks him lower: others value him below what he's worth to you) or "strong" (a good time to sell). Information only, never a verdict.
+- Yahoo rank = the team page's Current rank ONLY. Owner's rule (25 Nov): NEVER the Pre-Season rank, not even as a fallback (`parseRanks` fell back to
+  it, so Suggs read 105 = Pre-Season; his Current is 223). Current = the column labelled Current, else the rank column beside Pre-Season in
+  the Rank group; none = no rank (the Yahoo checks then skip, and the sync status shows "Yahoo Current ranks" failing). Test: t_yahoo.
+- Where Current comes from (owner, 25 Nov: essential, must ALWAYS come through): the team page's "Average Stats" view, not the default
+  "Stats" view. `yLeague` reads each team page, and when it has no Current rank follows Yahoo's own "Average Stats" link (found by its
+  words), else `?stat1=AS&stat2=AS_<season year>` (unverified address). Every Yahoo rank on every page (trades, Yahoo's trade page,
+  pickups) comes from this one read (`lgscan.teams[].ranks`).
+- `lgscan.rk = 'current'` marks a copy read this way; the panel (`context.js` yrank) ignores ranks without it. Until Current ranks arrive
+  the roster read runs on any sync, at most hourly (`rkTry`), not just the 6-hourly full sync. `selfTest` fails "Yahoo Current ranks"
+  (status line + one Firefox notification) when fewer than 50 players have one.
 

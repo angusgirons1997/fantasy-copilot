@@ -62,7 +62,7 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
       ok(nm && has(step, nm), 'over the limit: the card drops the least-missed free choice (' + nm + ')', step);
       ok(![...pl.querySelectorAll('details.pr.fa .l2')].some(r => /empty spot/.test(tx(r))), 'over the limit: no free agent row claims an empty spot'); }
     else console.log('  - over-the-limit checks skipped: the roster fits'); }
-  if (finder) { const fa = faNames.filter(n => has(finder.text, n)); ok(!fa.length, 'Finder shows rostered players only', 'free agents in Finder: ' + fa.join(', ')); }
+  if (finder) { const rowsF = [...frag(finder.html).querySelectorAll('details.pr .l1 b')].map(tx).join(' | '); const fa = faNames.filter(n => has(rowsF, n)); /* player rows only: a multi-player deal may name the free agent it adds */ ok(!fa.length, 'Finder shows rostered players only', 'free agents in Finder: ' + fa.join(', ')); }
   if (roster) ok(!roster.broken, 'Roster renders'); }
   // the Matchup hero (7.53.0): Basketball Monster's Matchup Monster as given, expected categories = the sum of its category chances
   { const st = JSON.parse(JSON.stringify(base)); Object.keys(st).filter(k => k.startsWith('ylive:')).forEach(k => delete st[k]);
@@ -104,7 +104,8 @@ const SELL = ['Surplus in won categories', 'Value in lost categories']; const LA
       ok(!r.errors.length && cards.length, 'renders ' + cards.length + ' cards with no page errors', r.errors.join('\n    '));
       ok(cards.every(c => c.querySelectorAll('.bverd').length === 1), 'every card has one verdict line');
       const look = cards.map(c => [...c.querySelectorAll('.mvl')].map(tx).find(x => /^Looking for/.test(x))); ok(new Set(look).size === 1, 'every card looks for the same swing categories', [...new Set(look)].join(' | '));
-      const fitsBad = []; cards.forEach(c => c.querySelectorAll(':scope > details.pr').forEach(p => { const m = tx(p).match(/Trade Monster ?you ([+−]?)(\d+), them ([+−]?)(\d+)/); if (!m || (m[1] === '−' && +m[2] > 0) || (m[3] === '−' && +m[4] > 1)) fitsBad.push(tx(p.querySelector('.l1 b'))); }));
-      ok(!fitsBad.length, 'every player who fits shows Trade Monster numbers where you lose nothing and they lose at most 1', fitsBad.join(', '));
+      const fitsBad = []; cards.forEach(c => c.querySelectorAll(':scope > details.pr').forEach(p => { const m = tx(p).match(/Trade Monster ?you ([+−]?)(\d+), them ([+−]?)(\d+)/); if (!m || m[1] === '−' || +m[2] === 0 || (m[3] === '−' && +m[4] > 1)) fitsBad.push(tx(p.querySelector('.l1 b'))); }));
+      const chips = cards.filter(c => /Trade chip/.test(tx(c))).length; console.log('  trade chip notes: ' + chips + ' of ' + cards.length);
+      ok(!fitsBad.length, 'every player who fits shows Trade Monster numbers where you gain and they lose at most 1', fitsBad.join(', '));
       const unread = cards.filter(c => /hasn't read him yet/.test(tx(c.querySelector('.bverd')))); ok(unread.every(c => !/No Trade Monster swap for him adds/.test(tx(c))), 'an unread player never gets "no swap adds" (' + unread.length + ' unread of ' + Object.keys(tm).length + ' read)'); } }
   console.log(bad ? `\n${bad} FAILED` : '\nall passed'); process.exit(bad ? 1 : 0); })();

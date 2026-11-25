@@ -257,11 +257,16 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
     try { const t = await req(`${YH}/nba/${lid}/matchup?week=${week}&mid1=${tid}`, null, 'Yahoo next opponent');
       const m = t.match(new RegExp('mid1=' + tid + '(?:&|&amp;)mid2=(\\d+)')) || t.match(new RegExp('mid2=(\\d+)(?:&|&amp;)mid1=' + tid)); trace('Yahoo next opponent', !!m, m ? 'team ' + m[1] : 'not found'); return m ? m[1] : null; } catch (e) { return null; }
   }
-  // Yahoo's own ranking of each player on a team page (Current, else Pre-Season): what other managers see when judging a trade
+  // Yahoo's own ranking of each player on a team page: the Current rank, what other managers see when judging a trade.
+  // Owner's rule (25 Nov): NEVER the Pre-Season rank, not even as a fallback. Current = the column labelled Current, else the rank
+  // column beside Pre-Season (the "Rank" group in the header row above); none found = no Yahoo rank.
   function parseRanks(d) { const out = {}; [...d.querySelectorAll('table')].filter(t => /Pre-Season/.test((t.querySelector('thead') || {}).textContent || '')).forEach(tb => {
-      const hd = [...[...tb.querySelectorAll('thead tr')].pop().querySelectorAll('th')].flatMap(th => Array(+th.getAttribute('colspan') || 1).fill((th.textContent || '').replace(/\s+/g, ' ').trim())); const iC = hd.indexOf('Current'), iP = hd.indexOf('Pre-Season');
+      const flat = tr => [...tr.querySelectorAll('th')].flatMap(th => Array(+th.getAttribute('colspan') || 1).fill((th.textContent || '').replace(/\s+/g, ' ').trim()));
+      const rows = [...tb.querySelectorAll('thead tr')]; const hd = flat(rows[rows.length - 1]), top = rows.length > 1 ? flat(rows[rows.length - 2]) : [];
+      const iP = hd.indexOf('Pre-Season'); let iC = hd.findIndex(x => /^current/i.test(x));
+      if (iC < 0) iC = [iP - 1, iP + 1].find(i => i >= 0 && top[i] === top[iP] && /rank/i.test(top[iP] || '') && !/pre-?season/i.test(hd[i] || '')); if (iC == null) iC = -1;
       tb.querySelectorAll('tbody tr').forEach(tr => { const a = tr.querySelector('a.name, .ysf-player-name a'); if (!a) return; const tds = tr.querySelectorAll('td'); const num = i => i >= 0 && tds[i] ? +((tds[i].textContent || '').replace(/[^\d]/g, '')) || null : null;
-        const r = num(iC) || num(iP); if (r) out[(a.getAttribute('title') || a.textContent || '').trim()] = r; }); }); return out; }
+        const r = num(iC); if (r) out[(a.getAttribute('title') || a.textContent || '').trim()] = r; }); }); return out; }
   // every team's roster (names + Yahoo ids) for league-wide category strength
   // one Yahoo team page → its players (names + Yahoo ids) and ranks. Player links are the ones to a player's own page
   // (…/players/6512): note icons (…/players/6512/news), "Video Forecast" (#) and the rest sit in the same cell, and since
@@ -275,8 +280,14 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
   async function yLeague(lid, teams) {
     const out = [];
     for (const tm of teams) {
-      try { const d = html(await req(`${YH}/nba/${lid}/${tm.tid}`, null, 'Yahoo roster ' + tm.tid));
-        out.push(Object.assign({ tid: tm.tid, name: tm.name }, teamPage(d))); } catch (e) { out.push({ tid: tm.tid, name: tm.name, players: [], err: e.message }); }
+      try { const d = html(await req(`${YH}/nba/${lid}/${tm.tid}`, null, 'Yahoo roster ' + tm.tid)); const t = teamPage(d);
+        // owner's rule (25 Nov): Yahoo's Current rank only, never Pre-Season. It's on the team page's "Average Stats" view: follow
+        // Yahoo's own link to it (by its words), else the same view by its address. Every Yahoo rank the add-on uses comes from here.
+        if (!Object.keys(t.ranks).length) { const a = [...d.querySelectorAll('a')].find(x => /^\s*Average Stats\s*$/i.test(x.textContent || '')); const href = a && a.getAttribute('href');
+          const now = new Date(), season = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+          const urls = [href && !/^(#|javascript:)/i.test(href) ? new URL(href, YH + '/').href : null, `${YH}/nba/${lid}/${tm.tid}?stat1=AS&stat2=AS_${season}`].filter(Boolean);
+          for (const u of urls) { try { const r = parseRanks(html(await req(u, null, 'Yahoo average stats ' + tm.tid))); if (Object.keys(r).length) { t.ranks = r; break; } } catch (e) { if (e.auth) throw e; } } }
+        out.push(Object.assign({ tid: tm.tid, name: tm.name }, t)); } catch (e) { out.push({ tid: tm.tid, name: tm.name, players: [], err: e.message }); }
       await new Promise(z => setTimeout(z, 250));
     }
     trace('Yahoo league rosters', out.filter(t => t.players.length >= 10).length >= teams.length - 1, out.map(t => t.tid + ':' + t.players.length).join(' '));
@@ -699,13 +710,18 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
         if (on) { try { const n = await bbmWeek({ league: y.league, myTid: y.tid, oppTid: on, start: nStart, end: nEnd }, 'Next week'); await put({ [nextKey]: n }); st.next = { opp: n.opp }; } catch (e) { st.nextErr = e.message; } }
         else st.nextErr = 'next opponent not found on Yahoo';
       }
-      if (mode === 'full') {
-        if (old('lgscan:' + y.lid) || !(all['lgscan:' + y.lid].teams || []).some(t => t.players && t.players.length)) { log('league rosters'); let teams = null;
+      // league rosters and Yahoo's Current ranks: every full sync when 6 hours old; with no Current ranks yet, any sync (at most hourly)
+      { const sc0 = all['lgscan:' + y.lid], noRk = !sc0 || sc0.rk !== 'current';
+        if ((mode === 'full' && (old('lgscan:' + y.lid) || noRk || !(sc0.teams || []).some(t => t.players && t.players.length))) || (noRk && (!sc0 || !sc0.rkTry || Date.now() - sc0.rkTry > 3600e3))) { log('league rosters'); let teams = null;
           { const tl = m.teams && m.teams.length ? m.teams : ((all['ystand:' + y.lid] || {}).teams || []).map(t => ({ tid: String(t.tid), name: t.name })); if (tl.length) teams = await yLeague(y.lid, tl); }
           // a scan where most teams came back short (Yahoo changed the page) never replaces the last good one
           const okScan = teams && teams.filter(t => t.players.length >= 10).length >= Math.max(4, teams.length - 1);
-          if (okScan || (teams && !all['lgscan:' + y.lid])) await put({ ['lgscan:' + y.lid]: { ts: Date.now(), league: y.league, teams, myTid: y.tid } });
-          else if (teams) await put({ ['lgscan:' + y.lid]: Object.assign({}, all['lgscan:' + y.lid], { bad: teams.map(t => t.players.length).join(' ') }) }); }
+          // loud: with no Current rank every trade's Yahoo check is skipped (never fall back to Pre-Season)
+          const nr = teams ? teams.reduce((a, t) => a + Object.keys(t.ranks || {}).length, 0) : 0; if (teams) trace('Yahoo Current ranks', nr > 0, nr + ' players ranked' + (nr ? '' : ": no Current rank found on Yahoo's team pages (Average Stats)"));
+          // rk: the ranks are Yahoo's Current (older copies held Pre-Season, which the panel never uses); rkTry paces the retries
+          if (okScan || (teams && !sc0)) await put({ ['lgscan:' + y.lid]: { ts: Date.now(), league: y.league, teams, myTid: y.tid, rk: nr ? 'current' : null, rkTry: Date.now() } });
+          else await put({ ['lgscan:' + y.lid]: Object.assign({}, sc0, { rkTry: Date.now() }, teams ? { bad: teams.map(t => t.players.length).join(' ') } : {}) }); } }
+      if (mode === 'full') {
         // last week's result for the track record (once, after the week ends)
         const prev = (y.weeks || []).find(w => w.end === addDay(start, -1)); const pStart = prev ? prev.start : addDay(start, -7), pEnd = prev ? prev.end : addDay(start, -1), tk = 'track:' + m.league + ':' + pStart;
         if (all[tk] && !all[tk].actual) { try { log('last week result'); const lw = await bbmWeek({ league: y.league, myTid: y.tid, oppTid: all[tk].oppTid, start: pStart, end: pEnd, noImport: true }, 'Last week');
@@ -814,6 +830,9 @@ if (!globalThis.browser && globalThis.chrome) globalThis.browser = chrome;
       ck(l.league + ': BBM projections', big.length > 300 && big.some(r => r.st && r.st.p > 20) && big.some(r => r.st && r.st.r > 8), rest.length + ' this week, ' + nx.length + ' next week');
       const tot = Object.values(bx.tot || {}); ck(l.league + ': BBM season file', tot.length > 300 && tot.some(r => r.g > 0), tot.length + ' players');
       const y = all['yr:' + l.lid]; ck(l.league + ': Yahoo roster', y && y.rows && y.rows.length >= 10, y && y.rows ? y.rows.length + ' players' : 'missing');
+      // owner's rule (25 Nov): trades are judged on Yahoo's Current rank, never Pre-Season; without it the Yahoo checks can't run
+      { const sc = all['lgscan:' + l.lid] || {}; const nr = (sc.teams || []).reduce((a, t) => a + Object.keys(t.ranks || {}).length, 0);
+        ck(l.league + ': Yahoo Current ranks', sc.rk === 'current' && nr >= 50, sc.rk === 'current' ? nr + ' players' : "not read yet from Yahoo's Average Stats view"); }
       // this week's Matchup Monster copy: both rosters, and the free agents the pickups are chosen from
       const t0 = usToday(); const m = Object.keys(all).filter(k => k.startsWith('mmw:' + l.league + ':') && all[k] && all[k].start <= t0 && all[k].end >= t0).map(k => all[k]).sort((a, b) => b.ts - a.ts)[0] || all['mm:' + l.league];
       const ros = m && m.players ? m.players.filter(p => p.type !== 'fa').length : 0, fas = m && m.players ? m.players.filter(p => p.type === 'fa').length : 0;

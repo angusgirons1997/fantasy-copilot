@@ -10,8 +10,16 @@ const html = f => new w.DOMParser().parseFromString(fs.readFileSync(path.join(__
 const t = global.SYNC.teamPage(html('yahoo-team.html'));
 assert.deepStrictEqual(t.players, ['Cade Cunningham', 'Tyler Herro', 'Jalen Brunson'], 'players: ' + JSON.stringify(t.players));
 assert.deepStrictEqual(t.yids, { 'Cade Cunningham': '6512', 'Tyler Herro': '6175', 'Jalen Brunson': '6044' });
-assert.deepStrictEqual(t.ranks, { 'Cade Cunningham': 9, 'Tyler Herro': 57, 'Jalen Brunson': 23 }, 'ranks: ' + JSON.stringify(t.ranks));
-console.log('✓ team page: 3 players, ids and ranks (note icons and Video Forecast skipped)');
+// owner's rule (25 Nov): never the Pre-Season rank. The saved page is from before the season (Pre-Season only): no ranks at all.
+assert.deepStrictEqual(t.ranks, {}, 'a Pre-Season-only page gives no ranks: ' + JSON.stringify(t.ranks));
+// in season Yahoo adds the Current rank beside Pre-Season in the "Rank" group: read that one, labelled Current or not
+for (const label of ['Current', 'Curr']) { const d = html('yahoo-team.html'); const tb = [...d.querySelectorAll('table')].find(x => /Pre-Season/.test(x.querySelector('thead').textContent));
+  const hr = [...tb.querySelectorAll('thead tr')]; const rk = [...hr[0].querySelectorAll('th')].find(th => /Rank/.test(th.textContent)); rk.setAttribute('colspan', '2');
+  const pre = [...hr[1].querySelectorAll('th')].find(th => /Pre-Season/.test(th.textContent)); const th = d.createElement('th'); th.textContent = label; pre.after(th);
+  const cur = { 'Cade Cunningham': 31, 'Tyler Herro': 223, 'Jalen Brunson': 12 };
+  tb.querySelectorAll('tbody tr').forEach(tr => { const a = tr.querySelector('a.name, .ysf-player-name a'); if (!a) return; const td = d.createElement('td'); td.textContent = cur[(a.getAttribute('title') || a.textContent).trim()]; tr.querySelectorAll('td')[5].after(td); });
+  const r = global.SYNC.teamPage(d).ranks; assert.deepStrictEqual(r, cur, label + ' column: ' + JSON.stringify(r)); }
+console.log('✓ team page: 3 players, ids; ranks are Yahoo\'s Current only (never Pre-Season), labelled Current or not');
 // Yahoo's API roster. shortcut: the fixture follows Yahoo's documented format, not a captured response; replace it with a real
 // one (trimmed) after the first live connection.
 const Y = require('../../firefox/yapi.js');
